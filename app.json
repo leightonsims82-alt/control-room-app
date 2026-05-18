@@ -1,0 +1,1 @@
+{"expo":{"name":"SiteProg","slug":"siteprog-app","version":"1.0.0","orientation":"default","scheme":"siteprog","userInterfaceStyle":"automatic","newArchEnabled":true,"web":{"bundler":"metro","output":"single"},"plugins":["expo-router"]}}
