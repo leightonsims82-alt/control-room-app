@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 import { plotProgrammes as demoPlots, plotStages as demoStages } from './demoData';
-import { PlotProgramme, PlotStage, StageStatus } from '../types/models';
+import { BedroomSize, PlotProgramme, PlotStage, StageStatus } from '../types/models';
 import { generateStagesForPlot } from '../utils/stageGeneration';
 
 const PLOTS_KEY = 'siteprog:plot-programmes:v1';
@@ -11,6 +11,7 @@ export type CreatePlotInput = {
   plotName: string;
   phase: string;
   houseTypeId: string;
+  bedroomSize?: BedroomSize;
   startDate: string;
   endDate: string;
   mode: 'forward' | 'reverse';
@@ -67,7 +68,11 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
   const createPlot = async (input: CreatePlotInput) => {
     const plotId = `plot-${Date.now()}`;
     const anchorDate = input.mode === 'reverse' ? input.endDate : input.startDate;
-    const generatedStages = generateStagesForPlot(plotId, anchorDate, input.mode);
+    const generatedStages = generateStagesForPlot(plotId, anchorDate, {
+      mode: input.mode,
+      bedroomSize: input.bedroomSize,
+      houseTypeId: input.houseTypeId,
+    });
     const firstStage = generatedStages[0];
     const lastStage = generatedStages[generatedStages.length - 1];
     const newPlot: PlotProgramme = {
@@ -75,8 +80,8 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
       plotName: input.plotName.trim(),
       phase: input.phase.trim().toUpperCase(),
       houseTypeId: input.houseTypeId,
-      startDate: input.startDate || firstStage?.startDate || anchorDate,
-      endDate: input.endDate || lastStage?.endDate || anchorDate,
+      startDate: firstStage?.startDate || input.startDate || anchorDate,
+      endDate: lastStage?.endDate || input.endDate || anchorDate,
       mode: input.mode,
       isLocked: true,
       sharedWithUserIds: [],
