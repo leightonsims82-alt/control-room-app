@@ -1,67 +1,107 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { plotProgrammes, plotStages as demoPlotStages } from './demoData';
-import { PlotStage, StageStatus } from '../types/models';
+import { plotProgrammes as demoPlots, plotStages as demoStages } from './demoData';
+import { PlotProgramme, PlotStage, StageStatus } from '../types/models';
+import { generateStagesForPlot } from '../utils/stageGeneration';
 
-const STORAGE_KEY = 'siteprog:plot-stages:v1';
+const PLOTS_KEY = 'siteprog:plot-programmes:v1';
+const STAGES_KEY = 'siteprog:plot-stages:v1';
+
+export type CreatePlotInput = {
+  plotName: string;
+  phase: string;
+  houseTypeId: string;
+  startDate: string;
+  endDate: string;
+  mode: 'forward' | 'reverse';
+};
 
 type ProgrammeStore = {
-  plotProgrammes: typeof plotProgrammes;
+  plotProgrammes: PlotProgramme[];
   plotStages: PlotStage[];
   isLoaded: boolean;
+  createPlot: (input: CreatePlotInput) => Promise<PlotProgramme>;
   updateStageStatus: (stageId: string, status: StageStatus) => Promise<void>;
 };
 
 const ProgrammeContext = createContext<ProgrammeStore | undefined>(undefined);
 
+async function readArray<T>(key: string, fallback: T[]) {
+  const stored = await AsyncStorage.getItem(key);
+  if (!stored) {
+    await AsyncStorage.setItem(key, JSON.stringify(fallback));
+    return fallback;
+  }
+  return JSON.parse(stored) as T[];
+}
+
 export function ProgrammeDataProvider({ children }: PropsWithChildren) {
-  const [plotStages, setPlotStages] = useState<PlotStage[]>(demoPlotStages);
+  const [plotProgrammes, setPlotProgrammes] = useState<PlotProgramme[]>(demoPlots);
+  const [plotStages, setPlotStages] = useState<PlotStage[]>(demoStages);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadPlotStages() {
+    let mounted = true;
+    async function loadData() {
       try {
-        const storedStages = await AsyncStorage.getItem(STORAGE_KEY);
-
-        if (storedStages) {
-          const parsedStages = JSON.parse(storedStages) as PlotStage[];
-          if (isMounted) setPlotStages(parsedStages);
-          return;
+        const [plots, stages] = await Promise.all([
+          readArray<PlotProgramme>(PLOTS_KEY, demoPlots),
+          readArray<PlotStage>(STAGES_KEY, demoStages),
+        ]);
+        if (mounted) {
+          setPlotProgrammes(plots);
+          setPlotStages(stages);
         }
-
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(demoPlotStages));
-        if (isMounted) setPlotStages(demoPlotStages);
       } catch (error) {
-        console.warn('Unable to load stored plot stages', error);
-        if (isMounted) setPlotStages(demoPlotStages);
+        console.warn('Unable to load programme data', error);
       } finally {
-        if (isMounted) setIsLoaded(true);
+        if (mounted) setIsLoaded(true);
       }
     }
-
-    loadPlotStages();
-
+    loadData();
     return () => {
-      isMounted = false;
+      mounted = false;
     };
   }, []);
+
+  const createPlot = async (input: CreatePlotInput) => {
+    const plotId = `plot-${Date.now()}`;
+    const anchorDate = input.mode === 'reverse' ? input.endDate : input.startDate;
+    const generatedStages = generateStagesForPlot(plotId, anchorDate, input.mode);
+    const firstStage = generatedStages[0];
+    const lastStage = generatedStages[generatedStages.length - 1];
+    const newPlot: PlotProgramme = {
+      id: plotId,
+      plotName: input.plotName.trim(),
+      phase: input.phase.trim().toUpperCase(),
+      houseTypeId: input.houseTypeId,
+      startDate: input.startDate || firstStage?.startDate || anchorDate,
+      endDate: input.endDate || lastStage?.endDate || anchorDate,
+      mode: input.mode,
+      isLocked: true,
+      sharedWithUserIds: [],
+      holdStatus: 'Active',
+    };
+    const nextPlots = [...plotProgrammes, newPlot];
+    const nextStages = [...plotStages, ...generatedStages];
+    setPlotProgrammes(nextPlots);
+    setPlotStages(nextStages);
+    await Promise.all([
+      AsyncStorage.setItem(PLOTS_KEY, JSON.stringify(nextPlots)),
+      AsyncStorage.setItem(STAGES_KEY, JSON.stringify(nextStages)),
+    ]);
+    return newPlot;
+  };
 
   const updateStageStatus = async (stageId: string, status: StageStatus) => {
     const nextStages = plotStages.map((stage) => (stage.id === stageId ? { ...stage, status } : stage));
     setPlotStages(nextStages);
-
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextStages));
-    } catch (error) {
-      console.warn('Unable to save plot stage status', error);
-    }
+    await AsyncStorage.setItem(STAGES_KEY, JSON.stringify(nextStages));
   };
 
   const value = useMemo(
-    () => ({ plotProgrammes, plotStages, isLoaded, updateStageStatus }),
-    [plotStages, isLoaded],
+    () => ({ plotProgrammes, plotStages, isLoaded, createPlot, updateStageStatus }),
+    [plotProgrammes, plotStages, isLoaded],
   );
 
   return <ProgrammeContext.Provider value={value}>{children}</ProgrammeContext.Provider>;
@@ -69,10 +109,6 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
 
 export function useProgrammeData() {
   const context = useContext(ProgrammeContext);
-
-  if (!context) {
-    throw new Error('useProgrammeData must be used within ProgrammeDataProvider');
-  }
-
+  if (!context) throw new Error('useProgrammeData must be used within ProgrammeDataProvider');
   return context;
 }
