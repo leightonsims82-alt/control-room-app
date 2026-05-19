@@ -50,6 +50,7 @@ export default function NewPlotScreen() {
         plotName: plotName.trim(),
         phase,
         houseTypeId: matchingHouseType.id,
+        bedroomSize,
         startDate,
         endDate,
         mode,
