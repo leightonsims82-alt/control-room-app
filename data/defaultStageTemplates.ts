@@ -1,48 +1,70 @@
-import { StageTemplate } from '../types/models';
+import { BedroomSize, StageTemplate } from '../types/models';
 
 export const defaultHouseTypeId = 'default-template';
+export const bedroomOptions = [2, 3, 4, 5] as const;
 
-const stageRows = [
-  ['Substructure', 'Groundworks', 5, true],
-  ['Drainage', 'Groundworks', 3, false],
-  ['Oversite / Slab', 'Groundworks', 3, true],
-  ['First lift brickwork', 'Brickwork', 6, false],
-  ['First lift scaffold', 'Scaffold', 1, false],
-  ['Second lift brickwork', 'Brickwork', 6, false],
-  ['Second lift scaffold', 'Scaffold', 1, false],
-  ['Joist and flooring', 'Joinery', 2, true],
-  ['Third lift brickwork', 'Brickwork', 6, false],
-  ['Third lift scaffold', 'Scaffold', 1, false],
-  ['Roof structure / trusses', 'Roofing', 3, true],
-  ['Roof covering', 'Roofing', 4, false],
-  ['Strip bird cage', 'Scaffold', 1, false],
-  ['Windows and doors', 'Joinery', 2, true],
-  ['First fix carpentry', 'Joinery', 4, false],
-  ['First fix plumbing', 'Plumbing', 3, false],
-  ['First fix electrics', 'Electrical', 3, false],
-  ['Insulation', 'Drylining', 2, true],
-  ['Drylining', 'Drylining', 4, false],
-  ['Plastering', 'Plastering', 5, false],
-  ['Patching', 'Plastering', 2, false],
-  ['Decoration', 'Decoration', 6, false],
-  ['Second fix carpentry', 'Joinery', 4, false],
-  ['Second fix plumbing', 'Plumbing', 3, false],
-  ['Second fix electrics', 'Electrical', 3, false],
-  ['Flooring', 'Flooring', 2, false],
-  ['Decoration after flooring', 'Decoration', 2, false],
-  ['Build clean', 'Finishing', 1, false],
-  ['Snag patch', 'Finishing', 2, false],
-  ['Snag decoration', 'Decoration', 2, false],
-  ['Sparkle clean', 'Finishing', 1, false],
-  ['Pre-handover paint touch-ups', 'Finishing', 1, true],
-] as const;
+type BedroomCount = (typeof bedroomOptions)[number];
+type StageDurationMap = Record<BedroomCount, number>;
 
-export const defaultStageTemplates: StageTemplate[] = stageRows.map((row, index) => ({
-  id: `tpl-${String(index + 1).padStart(3, '0')}`,
-  name: row[0],
-  trade: row[1],
-  durationDays: row[2],
-  order: index + 1,
-  houseTypeId: defaultHouseTypeId,
-  isKeyStage: row[3],
-}));
+type BedroomStageRow = {
+  name: string;
+  trade: string;
+  durations: StageDurationMap;
+  isKeyStage?: boolean;
+};
+
+const stageRows: BedroomStageRow[] = [
+  { name: 'Substructure', trade: 'Groundworks', durations: { 2: 5, 3: 5, 4: 6, 5: 7 }, isKeyStage: true },
+  { name: 'Drainage', trade: 'Groundworks', durations: { 2: 3, 3: 3, 4: 4, 5: 4 } },
+  { name: 'Oversite / Slab', trade: 'Groundworks', durations: { 2: 3, 3: 3, 4: 4, 5: 5 }, isKeyStage: true },
+  { name: 'First lift brickwork', trade: 'Brickwork', durations: { 2: 5, 3: 6, 4: 7, 5: 8 } },
+  { name: 'First lift scaffold', trade: 'Scaffold', durations: { 2: 1, 3: 1, 4: 1, 5: 2 } },
+  { name: 'Second lift brickwork', trade: 'Brickwork', durations: { 2: 5, 3: 6, 4: 7, 5: 8 } },
+  { name: 'Second lift scaffold', trade: 'Scaffold', durations: { 2: 1, 3: 1, 4: 1, 5: 2 } },
+  { name: 'Joist and flooring', trade: 'Joinery', durations: { 2: 2, 3: 2, 4: 3, 5: 3 }, isKeyStage: true },
+  { name: 'Third lift brickwork', trade: 'Brickwork', durations: { 2: 5, 3: 6, 4: 7, 5: 8 } },
+  { name: 'Third lift scaffold', trade: 'Scaffold', durations: { 2: 1, 3: 1, 4: 1, 5: 2 } },
+  { name: 'Roof structure / trusses', trade: 'Roofing', durations: { 2: 3, 3: 3, 4: 4, 5: 5 }, isKeyStage: true },
+  { name: 'Roof covering', trade: 'Roofing', durations: { 2: 3, 3: 4, 4: 5, 5: 6 } },
+  { name: 'Strip bird cage', trade: 'Scaffold', durations: { 2: 1, 3: 1, 4: 1, 5: 1 } },
+  { name: 'Windows and doors', trade: 'Joinery', durations: { 2: 2, 3: 2, 4: 3, 5: 3 }, isKeyStage: true },
+  { name: 'First fix carpentry', trade: 'Joinery', durations: { 2: 3, 3: 4, 4: 5, 5: 6 } },
+  { name: 'First fix plumbing', trade: 'Plumbing', durations: { 2: 3, 3: 3, 4: 4, 5: 5 } },
+  { name: 'First fix electrics', trade: 'Electrical', durations: { 2: 3, 3: 3, 4: 4, 5: 5 } },
+  { name: 'Insulation', trade: 'Drylining', durations: { 2: 2, 3: 2, 4: 3, 5: 3 }, isKeyStage: true },
+  { name: 'Drylining', trade: 'Drylining', durations: { 2: 3, 3: 4, 4: 5, 5: 6 } },
+  { name: 'Plastering', trade: 'Plastering', durations: { 2: 4, 3: 5, 4: 6, 5: 7 } },
+  { name: 'Patching', trade: 'Plastering', durations: { 2: 2, 3: 2, 4: 3, 5: 3 } },
+  { name: 'Decoration', trade: 'Decoration', durations: { 2: 5, 3: 6, 4: 7, 5: 8 } },
+  { name: 'Second fix carpentry', trade: 'Joinery', durations: { 2: 3, 3: 4, 4: 5, 5: 6 } },
+  { name: 'Second fix plumbing', trade: 'Plumbing', durations: { 2: 2, 3: 3, 4: 3, 5: 4 } },
+  { name: 'Second fix electrics', trade: 'Electrical', durations: { 2: 2, 3: 3, 4: 3, 5: 4 } },
+  { name: 'Flooring', trade: 'Flooring', durations: { 2: 2, 3: 2, 4: 3, 5: 3 } },
+  { name: 'Decoration after flooring', trade: 'Decoration', durations: { 2: 2, 3: 2, 4: 3, 5: 3 } },
+  { name: 'Build clean', trade: 'Finishing', durations: { 2: 1, 3: 1, 4: 1, 5: 2 } },
+  { name: 'Snag patch', trade: 'Finishing', durations: { 2: 2, 3: 2, 4: 3, 5: 3 } },
+  { name: 'Snag decoration', trade: 'Decoration', durations: { 2: 2, 3: 2, 4: 3, 5: 3 } },
+  { name: 'Sparkle clean', trade: 'Finishing', durations: { 2: 1, 3: 1, 4: 1, 5: 1 } },
+  { name: 'Pre-handover / paint touch-ups', trade: 'Finishing', durations: { 2: 1, 3: 1, 4: 1, 5: 2 }, isKeyStage: true },
+];
+
+function bedroomCountFromSize(bedroomSize?: BedroomSize | number): BedroomCount {
+  const parsed = typeof bedroomSize === 'number' ? bedroomSize : Number(String(bedroomSize ?? '3').replace(/\D/g, ''));
+  return bedroomOptions.includes(parsed as BedroomCount) ? (parsed as BedroomCount) : 3;
+}
+
+export function getDefaultStageTemplates(bedroomSize?: BedroomSize | number, houseTypeId = defaultHouseTypeId): StageTemplate[] {
+  const bedroomCount = bedroomCountFromSize(bedroomSize);
+
+  return stageRows.map((row, index) => ({
+    id: `tpl-${String(index + 1).padStart(3, '0')}`,
+    name: row.name,
+    trade: row.trade,
+    durationDays: row.durations[bedroomCount],
+    order: index + 1,
+    houseTypeId,
+    isKeyStage: Boolean(row.isKeyStage),
+  }));
+}
+
+export const defaultStageTemplates: StageTemplate[] = getDefaultStageTemplates(3);
