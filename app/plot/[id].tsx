@@ -35,9 +35,9 @@ export default function PlotDetailScreen() {
       <Link href="/(tabs)/plots" style={styles.backLink}>‹ Back to plots</Link>
 
       <View style={styles.hero}>
-        <View>
-          <Text style={styles.title}>{plot.plotName}</Text>
-          <Text style={styles.subtitle}>{plot.phase} · {houseType?.name ?? 'House type pending'}</Text>
+        <View style={styles.heroTextWrap}>
+          <Text style={styles.heroTitle}>{plot.plotName}</Text>
+          <Text style={styles.heroSubtitle}>{plot.phase} · {houseType?.name ?? 'House type pending'}</Text>
         </View>
         <View style={styles.progressCircle}>
           <Text style={styles.progressValue}>{progress}%</Text>
@@ -71,20 +71,24 @@ export default function PlotDetailScreen() {
         </View>
       </SectionCard>
 
-      <SectionCard title="Stage Timeline" subtitle="Programme stages imported from the current demo data">
+      <SectionCard title="Stage Timeline" subtitle="Tap a status button to update the live view">
         {stages.map((stage) => (
           <View key={stage.id} style={styles.stageRow}>
             <View style={styles.orderBadge}>
               <Text style={styles.orderText}>{stage.order}</Text>
             </View>
             <View style={styles.stageMain}>
-              <Text style={styles.stageName}>{stage.stageName}</Text>
-              <Text style={styles.stageMeta}>{stage.trade} · {stage.startDate} to {stage.endDate}</Text>
+              <View style={styles.stageHeaderRow}>
+                <View style={styles.stageHeaderText}>
+                  <Text style={styles.stageName}>{stage.stageName}</Text>
+                  <Text style={styles.stageMeta}>{stage.trade} · {stage.startDate} to {stage.endDate}</Text>
+                </View>
+                <StageStatusPill status={stage.status} />
+              </View>
               {stage.delayDays > 0 ? <Text style={styles.delayText}>{stage.delayDays} day delay: {stage.delayReason}</Text> : null}
               {stage.inspectionStatus !== 'Not applicable' ? <Text style={styles.inspectionText}>Inspection: {stage.inspectionStatus}</Text> : null}
               <StageStatusControls stage={stage} onChange={updateStageStatus} />
             </View>
-            <StageStatusPill status={stage.status} />
           </View>
         ))}
       </SectionCard>
@@ -133,8 +137,10 @@ function StageStatusControls({
 const styles = StyleSheet.create({
   backLink: { color: '#2563eb', fontWeight: '900', fontSize: 14 },
   hero: { backgroundColor: '#0f172a', borderRadius: 24, padding: 24, flexDirection: 'row', justifyContent: 'space-between', gap: 20, alignItems: 'center' },
+  heroTextWrap: { flex: 1 },
+  heroTitle: { color: '#ffffff', fontSize: 30, fontWeight: '900' },
+  heroSubtitle: { color: '#cbd5e1', marginTop: 4 },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
-  subtitle: { color: '#64748b', marginTop: 4 },
   progressCircle: { width: 96, height: 96, borderRadius: 48, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center' },
   progressValue: { color: '#2563eb', fontSize: 24, fontWeight: '900' },
   progressLabel: { color: '#64748b', fontSize: 11, fontWeight: '800' },
@@ -151,14 +157,16 @@ const styles = StyleSheet.create({
   stageRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
   orderBadge: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' },
   orderText: { color: '#2563eb', fontWeight: '900' },
-  stageMain: { flex: 1 },
+  stageMain: { flex: 1, gap: 8 },
+  stageHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' },
+  stageHeaderText: { flex: 1 },
   stageName: { color: '#0f172a', fontWeight: '900' },
   stageMeta: { color: '#64748b', fontSize: 12, marginTop: 3 },
-  delayText: { color: '#c2410c', fontSize: 12, marginTop: 5, fontWeight: '800' },
-  inspectionText: { color: '#2563eb', fontSize: 12, marginTop: 5, fontWeight: '800' },
-  statusControls: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
-  statusButton: { borderRadius: 999, borderWidth: 1, borderColor: '#cbd5e1', paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ffffff' },
-  statusButtonSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  statusButtonText: { color: '#475569', fontSize: 11, fontWeight: '900' },
-  statusButtonTextSelected: { color: '#ffffff' },
+  delayText: { color: '#c2410c', fontSize: 12, fontWeight: '800' },
+  inspectionText: { color: '#2563eb', fontSize: 12, fontWeight: '800' },
+  statusControls: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  statusButton: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: '#ffffff' },
+  statusButtonSelected: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
+  statusButtonText: { color: '#64748b', fontWeight: '800', fontSize: 12 },
+  statusButtonTextSelected: { color: '#2563eb' },
 });
