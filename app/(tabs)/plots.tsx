@@ -2,10 +2,11 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { PlotCard } from '../../components/PlotCard';
 import { SectionCard } from '../../components/SectionCard';
-import { plotProgrammes, plotStages } from '../../data/demoData';
+import { useProgrammeData } from '../../data/programmeStore';
 import { getDelayedStages, getHeldPlots } from '../../utils/programmeLogic';
 
 export default function PlotsScreen() {
+  const { plotProgrammes, plotStages } = useProgrammeData();
   const heldPlots = getHeldPlots(plotProgrammes);
   const delayedStages = getDelayedStages(plotStages);
 
