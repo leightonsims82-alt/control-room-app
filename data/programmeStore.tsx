@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, PropsWithChildren, useContext, useCallback, useEffect, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { plotProgrammes as demoPlotProgrammes, plotStages as demoPlotStages, stageTemplates } from './demoData';
 import { PlotProgramme, PlotStage, StageStatus } from '../types/models';
 
@@ -33,7 +33,7 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadPlotStages() {
+    async function loadProgrammeData() {
       try {
         const [storedPlots, storedStages] = await Promise.all([
           AsyncStorage.getItem(PLOTS_STORAGE_KEY),
@@ -51,21 +51,22 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
         if (storedStages) {
           const parsedStages = JSON.parse(storedStages) as PlotStage[];
           if (isMounted) setPlotStages(parsedStages);
-          return;
+        } else {
+          await AsyncStorage.setItem(STAGES_STORAGE_KEY, JSON.stringify(demoPlotStages));
+          if (isMounted) setPlotStages(demoPlotStages);
         }
-
-        await AsyncStorage.setItem(STAGES_STORAGE_KEY, JSON.stringify(demoPlotStages));
-        if (isMounted) setPlotStages(demoPlotStages);
       } catch (error) {
         console.warn('Unable to load stored programme data', error);
-        if (isMounted) setPlotProgrammes(demoPlotProgrammes);
-        if (isMounted) setPlotStages(demoPlotStages);
+        if (isMounted) {
+          setPlotProgrammes(demoPlotProgrammes);
+          setPlotStages(demoPlotStages);
+        }
       } finally {
         if (isMounted) setIsLoaded(true);
       }
     }
 
-    loadPlotStages();
+    loadProgrammeData();
 
     return () => {
       isMounted = false;
