@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Link } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { PlotProgramme, PlotStage } from '../types/models';
 import { getActiveStage, getPlotProgress } from '../utils/programmeLogic';
@@ -9,40 +10,43 @@ export function PlotCard({ plot, stages }: { plot: PlotProgramme; stages: PlotSt
   const isHeld = plot.holdStatus === 'On hold';
 
   return (
-    <View style={styles.card}>
-      <View style={styles.topRow}>
-        <View>
-          <Text style={styles.plotName}>{plot.plotName}</Text>
-          <Text style={styles.phase}>{plot.phase}</Text>
+    <Link href={`/plot/${plot.id}`} asChild>
+      <View style={styles.card}>
+        <View style={styles.topRow}>
+          <View>
+            <Text style={styles.plotName}>{plot.plotName}</Text>
+            <Text style={styles.phase}>{plot.phase}</Text>
+          </View>
+          <View style={[styles.statusBadge, isHeld ? styles.heldBadge : styles.activeBadge]}>
+            <Text style={[styles.statusText, isHeld ? styles.heldText : styles.activeText]}>{plot.holdStatus}</Text>
+          </View>
         </View>
-        <View style={[styles.statusBadge, isHeld ? styles.heldBadge : styles.activeBadge]}>
-          <Text style={[styles.statusText, isHeld ? styles.heldText : styles.activeText]}>{plot.holdStatus}</Text>
+
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${progress}%` }]} />
         </View>
-      </View>
+        <Text style={styles.progressText}>{progress}% complete</Text>
 
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${progress}%` }]} />
-      </View>
-      <Text style={styles.progressText}>{progress}% complete</Text>
-
-      <View style={styles.detailRow}>
-        <Ionicons name="construct-outline" size={18} color="#2563eb" />
-        <View style={styles.detailTextWrap}>
-          <Text style={styles.detailLabel}>Current stage</Text>
-          <Text style={styles.detailValue}>{activeStage?.stageName ?? 'No stages found'}</Text>
+        <View style={styles.detailRow}>
+          <Ionicons name="construct-outline" size={18} color="#2563eb" />
+          <View style={styles.detailTextWrap}>
+            <Text style={styles.detailLabel}>Current stage</Text>
+            <Text style={styles.detailValue}>{activeStage?.stageName ?? 'No stages found'}</Text>
+          </View>
         </View>
-      </View>
 
-      <View style={styles.detailRow}>
-        <Ionicons name="calendar-outline" size={18} color="#64748b" />
-        <View style={styles.detailTextWrap}>
-          <Text style={styles.detailLabel}>Programme window</Text>
-          <Text style={styles.detailValue}>{plot.startDate} to {plot.endDate}</Text>
+        <View style={styles.detailRow}>
+          <Ionicons name="calendar-outline" size={18} color="#64748b" />
+          <View style={styles.detailTextWrap}>
+            <Text style={styles.detailLabel}>Programme window</Text>
+            <Text style={styles.detailValue}>{plot.startDate} to {plot.endDate}</Text>
+          </View>
         </View>
-      </View>
 
-      {isHeld ? <Text style={styles.holdReason}>{plot.holdReason}</Text> : null}
-    </View>
+        {isHeld ? <Text style={styles.holdReason}>{plot.holdReason}</Text> : null}
+        <Text style={styles.openText}>Open plot details</Text>
+      </View>
+    </Link>
   );
 }
 
@@ -136,5 +140,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 10,
     fontWeight: '700',
+  },
+  openText: {
+    color: '#2563eb',
+    fontWeight: '900',
+    fontSize: 12,
   },
 });
