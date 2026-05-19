@@ -1,4 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Link } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { PlotCard } from '../../components/PlotCard';
 import { SectionCard } from '../../components/SectionCard';
@@ -13,8 +15,16 @@ export default function PlotsScreen() {
   return (
     <AppScreen>
       <View style={styles.header}>
-        <Text style={styles.title}>Plots</Text>
-        <Text style={styles.subtitle}>Live plot status, current stage and programme progress</Text>
+        <View>
+          <Text style={styles.title}>Plots</Text>
+          <Text style={styles.subtitle}>Live plot status, current stage and programme progress</Text>
+        </View>
+        <Link href="/plot/new" asChild>
+          <Pressable style={styles.newPlotButton}>
+            <Ionicons name="add-circle-outline" size={18} color="#ffffff" />
+            <Text style={styles.newPlotButtonText}>New Plot</Text>
+          </Pressable>
+        </Link>
       </View>
 
       <View style={styles.summaryGrid}>
@@ -42,17 +52,19 @@ export default function PlotsScreen() {
         ))}
       </View>
 
-      <SectionCard title="Next improvement" subtitle="This screen is ready for click-through plot detail pages">
-        <Text style={styles.note}>The next build step is to make each plot open into a full plot detail screen with editable stages, hold status and inspection notes.</Text>
+      <SectionCard title="Plot setup" subtitle="Create a new local plot programme from the default template">
+        <Text style={styles.note}>Use New Plot to set up a plot, choose a house type and generate the first programme stages locally.</Text>
       </SectionCard>
     </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { gap: 4 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
   subtitle: { color: '#64748b', fontSize: 14 },
+  newPlotButton: { backgroundColor: '#2563eb', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', gap: 8, alignItems: 'center' },
+  newPlotButtonText: { color: '#ffffff', fontWeight: '900', fontSize: 13 },
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   summaryCard: { flex: 1, minWidth: 140, backgroundColor: '#ffffff', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', padding: 16 },
   summaryValue: { color: '#0f172a', fontSize: 26, fontWeight: '900' },
