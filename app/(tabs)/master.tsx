@@ -2,10 +2,12 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { StageStatusPill } from '../../components/StageStatusPill';
-import { plotProgrammes, plotStages } from '../../data/demoData';
+import { useProgrammeData } from '../../data/programmeStore';
 import { getPlotProgress, getStagesForPlot } from '../../utils/programmeLogic';
 
 export default function MasterProgrammeScreen() {
+  const { plotProgrammes, plotStages } = useProgrammeData();
+
   return (
     <AppScreen>
       <View style={styles.header}>

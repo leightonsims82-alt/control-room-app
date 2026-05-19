@@ -1,14 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { StageStatusPill } from '../../components/StageStatusPill';
-import { houseTypes, plotProgrammes, plotStages } from '../../data/demoData';
+import { houseTypes } from '../../data/demoData';
+import { useProgrammeData } from '../../data/programmeStore';
+import { PlotStage, StageStatus } from '../../types/models';
 import { getActiveStage, getPlotProgress, getStagesForPlot } from '../../utils/programmeLogic';
+
+const stageStatuses: StageStatus[] = ['Not started', 'In progress', 'Complete'];
 
 export default function PlotDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { plotProgrammes, plotStages, updateStageStatus } = useProgrammeData();
   const plot = plotProgrammes.find((item) => item.id === id);
 
   if (!plot) {
@@ -77,6 +82,7 @@ export default function PlotDetailScreen() {
               <Text style={styles.stageMeta}>{stage.trade} · {stage.startDate} to {stage.endDate}</Text>
               {stage.delayDays > 0 ? <Text style={styles.delayText}>{stage.delayDays} day delay: {stage.delayReason}</Text> : null}
               {stage.inspectionStatus !== 'Not applicable' ? <Text style={styles.inspectionText}>Inspection: {stage.inspectionStatus}</Text> : null}
+              <StageStatusControls stage={stage} onChange={updateStageStatus} />
             </View>
             <StageStatusPill status={stage.status} />
           </View>
@@ -92,6 +98,34 @@ function InfoTile({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap
       <Ionicons name={icon} size={20} color="#2563eb" />
       <Text style={styles.infoLabel}>{label}</Text>
       <Text style={styles.infoValue}>{value}</Text>
+    </View>
+  );
+}
+
+function StageStatusControls({
+  stage,
+  onChange,
+}: {
+  stage: PlotStage;
+  onChange: (stageId: string, status: StageStatus) => Promise<void>;
+}) {
+  return (
+    <View style={styles.statusControls}>
+      {stageStatuses.map((status) => {
+        const isSelected = stage.status === status;
+
+        return (
+          <Pressable
+            key={status}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSelected }}
+            onPress={() => onChange(stage.id, status)}
+            style={[styles.statusButton, isSelected ? styles.statusButtonSelected : null]}
+          >
+            <Text style={[styles.statusButtonText, isSelected ? styles.statusButtonTextSelected : null]}>{status}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -122,4 +156,9 @@ const styles = StyleSheet.create({
   stageMeta: { color: '#64748b', fontSize: 12, marginTop: 3 },
   delayText: { color: '#c2410c', fontSize: 12, marginTop: 5, fontWeight: '800' },
   inspectionText: { color: '#2563eb', fontSize: 12, marginTop: 5, fontWeight: '800' },
+  statusControls: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  statusButton: { borderRadius: 999, borderWidth: 1, borderColor: '#cbd5e1', paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ffffff' },
+  statusButtonSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  statusButtonText: { color: '#475569', fontSize: 11, fontWeight: '900' },
+  statusButtonTextSelected: { color: '#ffffff' },
 });

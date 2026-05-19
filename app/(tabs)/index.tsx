@@ -2,10 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { StatCard } from '../../components/StatCard';
-import { plotProgrammes, plotStages } from '../../data/demoData';
+import { useProgrammeData } from '../../data/programmeStore';
 import { getDelayedStages, getHeldPlots, getKeyStages, getTradePerformance } from '../../utils/programmeLogic';
 
 export default function DashboardScreen() {
+  const { plotProgrammes, plotStages } = useProgrammeData();
   const heldPlots = getHeldPlots(plotProgrammes);
   const delayedStages = getDelayedStages(plotStages);
   const keyStages = getKeyStages(plotStages).slice(0, 5);
@@ -47,7 +48,7 @@ export default function DashboardScreen() {
       </View>
 
       <View style={styles.keyPanel}>
-        <Text style={styles.keyTitle}>This Week's Key Stages</Text>
+        <Text style={styles.keyTitle}>{"This Week's Key Stages"}</Text>
         <Text style={styles.keySubtitle}>Priority stages requiring focus</Text>
         {keyStages.map((stage) => (
           <View key={stage.id} style={styles.keyRow}>
