@@ -1,4 +1,4 @@
-import { HouseType, PlotProgramme, PlotStage, Supervisor } from '../types/models';
+import { HouseType, PlotProgramme, PlotStage, StageTemplate, Supervisor } from '../types/models';
 
 export const houseTypes: HouseType[] = [
   { id: 'ht-001', name: 'Oakmere', bedroomSize: '3 Bed', buildType: 'Traditional' },
@@ -11,6 +11,54 @@ export const supervisors: Supervisor[] = [
   { id: 'sup-002', supervisorName: 'Brickwork Lead', trade: 'Brickwork' },
   { id: 'sup-003', supervisorName: 'Roofing Lead', trade: 'Roofing' },
   { id: 'sup-004', supervisorName: 'Finishing Lead', trade: 'Finishing' },
+];
+
+export const stageTemplates: StageTemplate[] = [
+  {
+    id: 'tpl-001',
+    name: 'Foundations complete',
+    trade: 'Groundworks',
+    durationDays: 5,
+    order: 1,
+    houseTypeId: 'default',
+    isKeyStage: true,
+  },
+  {
+    id: 'tpl-002',
+    name: 'Superstructure to wall plate',
+    trade: 'Brickwork',
+    durationDays: 20,
+    order: 2,
+    houseTypeId: 'default',
+    isKeyStage: true,
+  },
+  {
+    id: 'tpl-003',
+    name: 'Roof structure',
+    trade: 'Roofing',
+    durationDays: 10,
+    order: 3,
+    houseTypeId: 'default',
+    isKeyStage: true,
+  },
+  {
+    id: 'tpl-004',
+    name: 'First fix',
+    trade: 'Internal trades',
+    durationDays: 15,
+    order: 4,
+    houseTypeId: 'default',
+    isKeyStage: false,
+  },
+  {
+    id: 'tpl-005',
+    name: 'Finishing and handover',
+    trade: 'Finishing',
+    durationDays: 10,
+    order: 5,
+    houseTypeId: 'default',
+    isKeyStage: true,
+  },
 ];
 
 export const plotProgrammes: PlotProgramme[] = [
