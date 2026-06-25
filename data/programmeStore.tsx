@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 import { plotProgrammes as demoPlots, plotStages as demoStages } from './demoData';
 import { getInspectionTemplateForStage } from '../utils/inspectionTemplateResolver';
+import { DabsBriefingItem, UpdateDabsBriefingItemInput } from '../types/dabs';
 import {
   BedroomSize,
   ChecklistAnswer,
@@ -20,6 +21,7 @@ const PLOTS_KEY = 'siteprog:plot-programmes:v1';
 const STAGES_KEY = 'siteprog:plot-stages:v1';
 const INSPECTIONS_KEY = 'siteprog:inspections:v1';
 const DEFECTS_KEY = 'siteprog:defects:v1';
+const DABS_KEY = 'siteprog:dabs-briefings:v1';
 
 export type CreatePlotInput = {
   plotName: string;
@@ -52,6 +54,7 @@ type ProgrammeStore = {
   plotStages: PlotStage[];
   inspections: InspectionRecord[];
   defects: DefectAction[];
+  dabsBriefings: DabsBriefingItem[];
   isLoaded: boolean;
   createPlot: (input: CreatePlotInput) => Promise<PlotProgramme>;
   updateStageStatus: (stageId: string, status: StageStatus) => Promise<void>;
@@ -59,6 +62,7 @@ type ProgrammeStore = {
   updateInspectionItem: (inspectionId: string, itemId: string, input: UpdateInspectionItemInput) => Promise<void>;
   completeInspection: (inspectionId: string) => Promise<void>;
   updateDefect: (defectId: string, input: UpdateDefectInput) => Promise<void>;
+  upsertDabsBriefing: (plotProgrammeId: string, briefingDate: string, input: UpdateDabsBriefingItemInput) => Promise<void>;
 };
 
 const ProgrammeContext = createContext<ProgrammeStore | undefined>(undefined);
@@ -118,28 +122,50 @@ function getInspectionStatusFromItems(items: InspectionChecklistItem[]): Inspect
   return 'Passed';
 }
 
+function createBlankDabsItem(plot: PlotProgramme, briefingDate: string, stage?: PlotStage): DabsBriefingItem {
+  return {
+    id: `dabs-${briefingDate}-${plot.id}`,
+    briefingDate,
+    plotProgrammeId: plot.id,
+    plotStageId: stage?.id,
+    liveTomorrow: true,
+    plannedActivity: stage?.stageName ?? '',
+    expectedTrade: stage?.trade ?? '',
+    inspectionDue: Boolean(stage && getInspectionTemplateForStage(stage.stageName)),
+    accessReady: 'Not checked',
+    materialsReady: 'Not checked',
+    programmeRisk: false,
+    notesFor8am: '',
+    briefingComplete: false,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export function ProgrammeDataProvider({ children }: PropsWithChildren) {
   const [plotProgrammes, setPlotProgrammes] = useState<PlotProgramme[]>(demoPlots);
   const [plotStages, setPlotStages] = useState<PlotStage[]>(demoStages);
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);
   const [defects, setDefects] = useState<DefectAction[]>([]);
+  const [dabsBriefings, setDabsBriefings] = useState<DabsBriefingItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     async function loadData() {
       try {
-        const [plots, stages, storedInspections, storedDefects] = await Promise.all([
+        const [plots, stages, storedInspections, storedDefects, storedDabs] = await Promise.all([
           readArray<PlotProgramme>(PLOTS_KEY, demoPlots),
           readArray<PlotStage>(STAGES_KEY, demoStages),
           readArray<InspectionRecord>(INSPECTIONS_KEY, []),
           readArray<DefectAction>(DEFECTS_KEY, []),
+          readArray<DabsBriefingItem>(DABS_KEY, []),
         ]);
         if (mounted) {
           setPlotProgrammes(plots);
           setPlotStages(stages);
           setInspections(storedInspections);
           setDefects(storedDefects);
+          setDabsBriefings(storedDabs);
         }
       } catch (error) {
         console.warn('Unable to load programme data', error);
@@ -277,12 +303,30 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
     await AsyncStorage.setItem(DEFECTS_KEY, JSON.stringify(nextDefects));
   };
 
+  const upsertDabsBriefing = async (plotProgrammeId: string, briefingDate: string, input: UpdateDabsBriefingItemInput) => {
+    const plot = plotProgrammes.find((item) => item.id === plotProgrammeId);
+    if (!plot) return;
+    const stage = input.plotStageId ? plotStages.find((item) => item.id === input.plotStageId) : plotStages.find((item) => item.plotProgrammeId === plotProgrammeId && item.status !== 'Complete');
+    const existing = dabsBriefings.find((item) => item.plotProgrammeId === plotProgrammeId && item.briefingDate === briefingDate);
+    const updated: DabsBriefingItem = {
+      ...(existing ?? createBlankDabsItem(plot, briefingDate, stage)),
+      ...input,
+      updatedAt: new Date().toISOString(),
+    };
+    const nextDabs = existing
+      ? dabsBriefings.map((item) => (item.id === existing.id ? updated : item))
+      : [...dabsBriefings, updated];
+    setDabsBriefings(nextDabs);
+    await AsyncStorage.setItem(DABS_KEY, JSON.stringify(nextDabs));
+  };
+
   const value = useMemo(
     () => ({
       plotProgrammes,
       plotStages,
       inspections,
       defects,
+      dabsBriefings,
       isLoaded,
       createPlot,
       updateStageStatus,
@@ -290,8 +334,9 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
       updateInspectionItem,
       completeInspection,
       updateDefect,
+      upsertDabsBriefing,
     }),
-    [plotProgrammes, plotStages, inspections, defects, isLoaded],
+    [plotProgrammes, plotStages, inspections, defects, dabsBriefings, isLoaded],
   );
 
   return <ProgrammeContext.Provider value={value}>{children}</ProgrammeContext.Provider>;
