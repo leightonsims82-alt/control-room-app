@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { getInspectionTemplateForStage } from '../../data/keyStageInspectionTemplates';
-import { useProgrammeData } from '../../data/programmeStore';
+import { UpdateInspectionItemInput, useProgrammeData } from '../../data/programmeStore';
 import { ChecklistAnswer, InspectionChecklistItem } from '../../types/models';
 
 const answers: ChecklistAnswer[] = ['Yes', 'No', 'N/A'];
@@ -98,7 +98,7 @@ function ChecklistRow({
 }: {
   item: InspectionChecklistItem;
   inspectionId: string;
-  update: (inspectionId: string, itemId: string, input: Partial<InspectionChecklistItem>) => Promise<void>;
+  update: (inspectionId: string, itemId: string, input: UpdateInspectionItemInput) => Promise<void>;
 }) {
   return (
     <View style={[styles.itemCard, item.compliant === 'No' ? styles.itemCardFailed : null]}>
