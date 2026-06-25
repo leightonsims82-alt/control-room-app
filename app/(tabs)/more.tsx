@@ -2,8 +2,11 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { houseTypes, plotProgrammes, plotStages } from '../../data/demoData';
+import { useProgrammeData } from '../../data/programmeStore';
 
 export default function MoreScreen() {
+  const { dabsBriefings, defects, inspections } = useProgrammeData();
+
   return (
     <AppScreen>
       <View style={styles.header}>
@@ -17,14 +20,23 @@ export default function MoreScreen() {
         <InfoRow label="Plots loaded" value={`${plotProgrammes.length}`} />
         <InfoRow label="Stages loaded" value={`${plotStages.length}`} />
         <InfoRow label="House types" value={`${houseTypes.length}`} />
+        <InfoRow label="Inspections saved" value={`${inspections.length}`} />
+        <InfoRow label="Trade actions" value={`${defects.length}`} />
+        <InfoRow label="DABS briefings" value={`${dabsBriefings.length}`} />
+      </SectionCard>
+
+      <SectionCard title="Modules now added" subtitle="Current site control layer">
+        <Text style={styles.item}>Stage inspection checklists</Text>
+        <Text style={styles.item}>Failed checks create trade actions</Text>
+        <Text style={styles.item}>DABS Daily Activity Briefings</Text>
+        <Text style={styles.item}>Brickwork inspections for 1st, 2nd, 3rd, 4th lift and gables</Text>
       </SectionCard>
 
       <SectionCard title="Next Modules" subtitle="Planned build sequence">
-        <Text style={styles.item}>Plot detail screen</Text>
-        <Text style={styles.item}>Stage editing and status updates</Text>
-        <Text style={styles.item}>Create new plot programme</Text>
-        <Text style={styles.item}>Base44 stage template import</Text>
-        <Text style={styles.item}>Local save and sync-ready storage</Text>
+        <Text style={styles.item}>8am site walk from DABS</Text>
+        <Text style={styles.item}>Proper camera/photo upload</Text>
+        <Text style={styles.item}>Trade action export and copy message</Text>
+        <Text style={styles.item}>Regenerate programme for existing plots</Text>
       </SectionCard>
     </AppScreen>
   );
