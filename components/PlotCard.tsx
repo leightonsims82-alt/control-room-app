@@ -36,6 +36,22 @@ export function PlotCard({ plot, stages }: { plot: PlotProgramme; stages: PlotSt
         </View>
 
         <View style={styles.detailRow}>
+          <Ionicons name="document-text-outline" size={18} color="#2563eb" />
+          <View style={styles.detailTextWrap}>
+            <Text style={styles.detailLabel}>Regulation route</Text>
+            <Text style={styles.detailValue}>{plot.jurisdiction ?? 'England'} Building Regulations</Text>
+          </View>
+        </View>
+
+        <View style={styles.detailRow}>
+          <Ionicons name="layers-outline" size={18} color="#2563eb" />
+          <View style={styles.detailTextWrap}>
+            <Text style={styles.detailLabel}>Foundation route</Text>
+            <Text style={styles.detailValue}>{plot.foundationType ?? 'Unknown'}</Text>
+          </View>
+        </View>
+
+        <View style={styles.detailRow}>
           <Ionicons name="calendar-outline" size={18} color="#64748b" />
           <View style={styles.detailTextWrap}>
             <Text style={styles.detailLabel}>Programme window</Text>
