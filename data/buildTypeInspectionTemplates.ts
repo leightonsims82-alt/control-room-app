@@ -1,5 +1,21 @@
 import { KeyStageInspectionTemplate } from '../types/models';
 
+const nhbc62 = {
+  id: 'nhbc-6-2-8',
+  source: 'NHBC Standards 2026' as const,
+  jurisdiction: 'Both' as const,
+  partOrChapter: 'Chapter 6.2',
+  title: 'External timber framed walls, differential movement',
+};
+
+const nhbc31 = {
+  id: 'nhbc-3-1-9-3',
+  source: 'NHBC Standards 2026' as const,
+  jurisdiction: 'Both' as const,
+  partOrChapter: 'Chapter 3.1',
+  title: 'Concrete and its reinforcement, concrete cover',
+};
+
 export const timberFrameInspectionTemplates: KeyStageInspectionTemplate[] = [
   {
     id: 'timber-frame-substructure-interface',
@@ -13,6 +29,26 @@ export const timberFrameInspectionTemplates: KeyStageInspectionTemplate[] = [
       { id: 'tf-sub-004', trade: 'Groundworks', check: 'Holding down strap, anchor or fixing positions prepared where required' },
       { id: 'tf-sub-005', trade: 'Groundworks', check: 'Service penetrations set out and protected before frame installation' },
       { id: 'tf-sub-006', trade: 'Groundworks', check: 'Frame delivery and crane/access requirements considered' },
+      {
+        id: 'tf-sub-007',
+        trade: 'Groundworks',
+        check: 'Concrete cover to reinforcement checked where reinforcement is present and not engineer-designed',
+        references: [nhbc31],
+        tolerance: {
+          ruleId: 'concrete-cover-not-engineered',
+          label: 'Concrete cover to reinforcement',
+          prompt: 'Is the measured concrete cover equal to or greater than the required minimum cover for the concrete position?',
+          unit: 'mm',
+          measurementRequired: true,
+          values: {
+            'In contact with the ground': '75mm minimum cover',
+            'External conditions': '50mm minimum cover',
+            'Cast against DPM on sand blinding': '40mm minimum cover',
+            'Against adequate blinding concrete': '40mm minimum cover',
+            'Protected or internal conditions': '25mm minimum cover',
+          },
+        },
+      },
     ],
   },
   {
@@ -29,6 +65,29 @@ export const timberFrameInspectionTemplates: KeyStageInspectionTemplate[] = [
       { id: 'tf-frame-006', trade: 'Timber Frame', check: 'Cavity barriers and fire stopping installed at required locations' },
       { id: 'tf-frame-007', trade: 'Timber Frame', check: 'Openings formed correctly and ready for windows and doors' },
       { id: 'tf-frame-008', trade: 'Timber Frame', check: 'Frame protected from weather and standing water' },
+      {
+        id: 'tf-frame-009',
+        trade: 'Timber Frame',
+        check: 'Differential movement gap allowed at window heads, window sills, eaves, verges and masonry cladding interfaces',
+        references: [nhbc62],
+        tolerance: {
+          ruleId: 'tf-differential-movement-masonry-cladding',
+          label: 'Differential movement gap with masonry cladding',
+          prompt: 'Is the measured differential movement gap within the required allowance for the storey level and joist type?',
+          unit: 'mm',
+          measurementRequired: true,
+          values: {
+            'Ground floor or lowest level': '5mm solid timber joists / 5mm engineered I-joists',
+            'First floor': '20mm solid timber joists / 15mm engineered I-joists',
+            'Second floor': '35mm solid timber joists / 25mm engineered I-joists',
+            'Third floor': '45mm solid timber joists / 35mm engineered I-joists',
+            'Fourth floor': '45mm solid timber joists / check project design where table assumptions do not apply',
+            'Fifth floor': 'Specialist/project calculations may be required',
+            'Sixth floor and above': 'Specialist calculations to be submitted to NHBC',
+            'Eaves/verge': 'Add 5mm to the gap dimension at the level below',
+          },
+        },
+      },
     ],
   },
   {
