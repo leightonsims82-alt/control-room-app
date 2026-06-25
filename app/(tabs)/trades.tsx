@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { TradeLookaheadGrid } from '../../components/TradeLookaheadGrid';
 import { TradeWorkList } from '../../components/TradeWorkList';
 import { supervisors } from '../../data/demoData';
 import { useProgrammeData } from '../../data/programmeStore';
+import { createTradeLookaheadCsv } from '../../utils/tradeLookaheadExport';
 import { getTradePerformance } from '../../utils/programmeLogic';
 
 export default function TradesScreen() {
@@ -25,6 +26,11 @@ export default function TradesScreen() {
       }))
       .filter((item): item is { stage: typeof plotStages[number]; plot: typeof plotProgrammes[number] } => Boolean(item.plot));
   }, [activeTrade, plotProgrammes, plotStages]);
+
+  const csvExport = useMemo(
+    () => createTradeLookaheadCsv({ trade: activeTrade, plotProgrammes, plotStages, defects }),
+    [activeTrade, defects, plotProgrammes, plotStages],
+  );
 
   const activeDefects = defects.filter((defect) => defect.trade === activeTrade && defect.status !== 'Verified fixed');
 
@@ -51,6 +57,10 @@ export default function TradesScreen() {
 
       <SectionCard title="Trade 2-Week Lookahead" subtitle={activeTrade ? `Spreadsheet view for ${activeTrade}` : 'Select a trade'}>
         <TradeLookaheadGrid trade={activeTrade} plotProgrammes={plotProgrammes} plotStages={plotStages} defects={defects} />
+      </SectionCard>
+
+      <SectionCard title="CSV Export" subtitle="Copy this into Excel, email or a shared file during the pilot">
+        <TextInput value={csvExport} editable={false} multiline style={styles.csvBox} />
       </SectionCard>
 
       <SectionCard title="Open Trade Actions" subtitle={activeTrade ? `Inspection defects assigned to ${activeTrade}` : 'Select a trade'}>
@@ -120,6 +130,7 @@ const styles = StyleSheet.create({
   tradeChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   tradeChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
   tradeChipTextActive: { color: '#ffffff' },
+  csvBox: { minHeight: 180, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
   empty: { color: '#64748b' },
   actionRow: { borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12, gap: 10 },
   main: { flex: 1 },
