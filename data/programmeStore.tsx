@@ -14,8 +14,10 @@ import {
   InspectionStatus,
   PlotProgramme,
   PlotStage,
+  RegulationsJurisdiction,
   StageStatus,
 } from '../types/models';
+import { FoundationType } from '../types/regulations';
 import { generateStagesForPlot } from '../utils/stageGeneration';
 
 const PLOTS_KEY = 'siteprog:plot-programmes:v1';
@@ -32,6 +34,8 @@ export type CreatePlotInput = {
   startDate: string;
   endDate: string;
   mode: 'forward' | 'reverse';
+  jurisdiction?: RegulationsJurisdiction;
+  foundationType?: FoundationType;
 };
 
 export type UpdateInspectionItemInput = {
@@ -78,14 +82,23 @@ async function readArray<T>(key: string, fallback: T[]) {
   return JSON.parse(stored) as T[];
 }
 
+function getPlotForStage(stage: PlotStage, plots: PlotProgramme[]) {
+  return plots.find((item) => item.id === stage.plotProgrammeId);
+}
+
 function getBuildTypeForStage(stage: PlotStage, plots: PlotProgramme[]): BuildType | undefined {
-  const plot = plots.find((item) => item.id === stage.plotProgrammeId);
+  const plot = getPlotForStage(stage, plots);
   const houseType = demoHouseTypes.find((item) => item.id === plot?.houseTypeId);
   return houseType?.buildType;
 }
 
-function createChecklistItems(stage: PlotStage, buildType?: BuildType): InspectionChecklistItem[] {
-  const template = getInspectionTemplateForStage(stage.stageName, buildType);
+function getFoundationTypeForStage(stage: PlotStage, plots: PlotProgramme[]) {
+  const plot = getPlotForStage(stage, plots);
+  return plot?.foundationType;
+}
+
+function createChecklistItems(stage: PlotStage, buildType?: BuildType, foundationType?: string): InspectionChecklistItem[] {
+  const template = getInspectionTemplateForStage(stage.stageName, buildType, foundationType);
   if (!template) return [];
 
   return template.items.map((item) => ({
@@ -135,6 +148,7 @@ function getInspectionStatusFromItems(items: InspectionChecklistItem[]): Inspect
 }
 
 function createBlankDabsItem(plot: PlotProgramme, briefingDate: string, stage?: PlotStage): DabsBriefingItem {
+  const buildType = stage ? getBuildTypeForStage(stage, [plot]) : undefined;
   return {
     id: `dabs-${briefingDate}-${plot.id}`,
     briefingDate,
@@ -143,7 +157,7 @@ function createBlankDabsItem(plot: PlotProgramme, briefingDate: string, stage?: 
     liveTomorrow: true,
     plannedActivity: stage?.stageName ?? '',
     expectedTrade: stage?.trade ?? '',
-    inspectionDue: Boolean(stage && getInspectionTemplateForStage(stage.stageName)),
+    inspectionDue: Boolean(stage && getInspectionTemplateForStage(stage.stageName, buildType, plot.foundationType)),
     accessReady: 'Not checked',
     materialsReady: 'Not checked',
     programmeRisk: false,
@@ -212,7 +226,8 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
       isLocked: true,
       sharedWithUserIds: [],
       holdStatus: 'Active',
-      jurisdiction: 'England',
+      jurisdiction: input.jurisdiction ?? 'England',
+      foundationType: input.foundationType ?? 'Unknown',
     };
     const nextPlots = [...plotProgrammes, newPlot];
     const nextStages = [...plotStages, ...generatedStages];
@@ -235,7 +250,8 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
     const stage = plotStages.find((item) => item.id === stageId);
     if (!stage) return undefined;
     const buildType = getBuildTypeForStage(stage, plotProgrammes);
-    const template = getInspectionTemplateForStage(stage.stageName, buildType);
+    const foundationType = getFoundationTypeForStage(stage, plotProgrammes);
+    const template = getInspectionTemplateForStage(stage.stageName, buildType, foundationType);
     if (!template) return undefined;
 
     const existing = inspections.find((inspection) => inspection.plotStageId === stageId);
@@ -249,7 +265,7 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
       templateName: template.keyStageName,
       startedAt: new Date().toISOString(),
       status: 'Inspection in progress',
-      items: createChecklistItems(stage, buildType),
+      items: createChecklistItems(stage, buildType, foundationType),
     };
 
     const nextInspections = [...inspections, inspection];
