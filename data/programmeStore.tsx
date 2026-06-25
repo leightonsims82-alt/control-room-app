@@ -1,10 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { plotProgrammes as demoPlots, plotStages as demoStages } from './demoData';
+import { houseTypes as demoHouseTypes, plotProgrammes as demoPlots, plotStages as demoStages } from './demoData';
 import { getInspectionTemplateForStage } from '../utils/inspectionTemplateResolver';
 import { DabsBriefingItem, UpdateDabsBriefingItemInput } from '../types/dabs';
 import {
   BedroomSize,
+  BuildType,
   ChecklistAnswer,
   DefectAction,
   DefectStatus,
@@ -40,6 +41,7 @@ export type UpdateInspectionItemInput = {
   fixed?: ChecklistAnswer;
   fixedImageUri?: string;
   trade?: string;
+  measuredValue?: string;
 };
 
 export type UpdateDefectInput = {
@@ -76,8 +78,14 @@ async function readArray<T>(key: string, fallback: T[]) {
   return JSON.parse(stored) as T[];
 }
 
-function createChecklistItems(stage: PlotStage): InspectionChecklistItem[] {
-  const template = getInspectionTemplateForStage(stage.stageName);
+function getBuildTypeForStage(stage: PlotStage, plots: PlotProgramme[]): BuildType | undefined {
+  const plot = plots.find((item) => item.id === stage.plotProgrammeId);
+  const houseType = demoHouseTypes.find((item) => item.id === plot?.houseTypeId);
+  return houseType?.buildType;
+}
+
+function createChecklistItems(stage: PlotStage, buildType?: BuildType): InspectionChecklistItem[] {
+  const template = getInspectionTemplateForStage(stage.stageName, buildType);
   if (!template) return [];
 
   return template.items.map((item) => ({
@@ -87,11 +95,15 @@ function createChecklistItems(stage: PlotStage): InspectionChecklistItem[] {
     check: item.check,
     compliant: 'Not checked',
     fixed: 'Not checked',
+    references: item.references,
+    tolerance: item.tolerance,
   }));
 }
 
 function createDefectFromItem(stage: PlotStage, inspection: InspectionRecord, item: InspectionChecklistItem): DefectAction {
   const now = new Date().toISOString();
+  const toleranceNote = item.tolerance ? ` Tolerance/check: ${item.tolerance.prompt}` : '';
+  const measuredNote = item.measuredValue ? ` Measured: ${item.measuredValue}.` : '';
   return {
     id: `defect-${inspection.id}-${item.id}`,
     plotProgrammeId: inspection.plotProgrammeId,
@@ -102,7 +114,7 @@ function createDefectFromItem(stage: PlotStage, inspection: InspectionRecord, it
     stage: stage.stageName,
     trade: item.trade,
     type: 'Quality',
-    description: item.description || item.check,
+    description: `${item.description || item.check}${measuredNote}${toleranceNote}`,
     requiredAction: item.description ? `Rectify: ${item.description}` : `Rectify failed check: ${item.check}`,
     imageUri: item.imageUri,
     priority: 'Medium',
@@ -200,6 +212,7 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
       isLocked: true,
       sharedWithUserIds: [],
       holdStatus: 'Active',
+      jurisdiction: 'England',
     };
     const nextPlots = [...plotProgrammes, newPlot];
     const nextStages = [...plotStages, ...generatedStages];
@@ -221,7 +234,8 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
   const startInspectionForStage = async (stageId: string) => {
     const stage = plotStages.find((item) => item.id === stageId);
     if (!stage) return undefined;
-    const template = getInspectionTemplateForStage(stage.stageName);
+    const buildType = getBuildTypeForStage(stage, plotProgrammes);
+    const template = getInspectionTemplateForStage(stage.stageName, buildType);
     if (!template) return undefined;
 
     const existing = inspections.find((inspection) => inspection.plotStageId === stageId);
@@ -235,7 +249,7 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
       templateName: template.keyStageName,
       startedAt: new Date().toISOString(),
       status: 'Inspection in progress',
-      items: createChecklistItems(stage),
+      items: createChecklistItems(stage, buildType),
     };
 
     const nextInspections = [...inspections, inspection];
