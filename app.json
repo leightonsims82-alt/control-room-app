@@ -1,1 +1,29 @@
-{"expo":{"name":"SiteProg","slug":"siteprog-app","version":"1.0.0","orientation":"default","scheme":"siteprog","userInterfaceStyle":"automatic","newArchEnabled":true,"web":{"bundler":"metro","output":"single"},"plugins":["expo-router"]}}
+{
+  "expo": {
+    "name": "SiteProg",
+    "slug": "siteprog-app",
+    "version": "1.0.0",
+    "orientation": "default",
+    "scheme": "siteprog",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": ["ios", "android", "web"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.siteprog.app"
+    },
+    "android": {
+      "package": "com.siteprog.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "SiteProg",
+      "shortName": "SiteProg"
+    },
+    "plugins": ["expo-router"]
+  }
+}
