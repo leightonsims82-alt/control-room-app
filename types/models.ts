@@ -20,6 +20,7 @@ export type ChecklistAnswer = 'Yes' | 'No' | 'N/A' | 'Not checked';
 export type DefectPriority = 'Low' | 'Medium' | 'High';
 export type DefectStatus = 'Open' | 'Sent to trade' | 'In progress' | 'Fixed awaiting verification' | 'Verified fixed' | 'Rejected';
 export type DefectType = 'Quality' | 'Trade missing' | 'Safety' | 'Delay' | 'Material' | 'Access' | 'Programme risk';
+export type RegulationsJurisdiction = 'England' | 'Wales';
 
 export type HouseType = {
   id: string;
@@ -50,6 +51,8 @@ export type PlotProgramme = {
   sharedWithUserIds?: string[];
   holdStatus: HoldStatus;
   holdReason?: string;
+  jurisdiction?: RegulationsJurisdiction;
+  foundationType?: string;
 };
 
 export type PlotStage = {
@@ -73,10 +76,31 @@ export type PlotStage = {
   inspectionNotes?: string;
 };
 
+export type ChecklistReference = {
+  id: string;
+  source: 'NHBC Standards 2026' | 'Building Regulations' | 'Project design';
+  jurisdiction?: RegulationsJurisdiction | 'Both';
+  partOrChapter: string;
+  title: string;
+  url?: string;
+  note?: string;
+};
+
+export type ChecklistTolerance = {
+  ruleId: string;
+  label: string;
+  prompt: string;
+  unit: 'mm' | 'degrees' | 'ratio' | 'text';
+  measurementRequired: boolean;
+  values?: Record<string, string | number>;
+};
+
 export type KeyStageInspectionTemplateItem = {
   id: string;
   trade: string;
   check: string;
+  references?: ChecklistReference[];
+  tolerance?: ChecklistTolerance;
 };
 
 export type KeyStageInspectionTemplate = {
@@ -97,6 +121,9 @@ export type InspectionChecklistItem = {
   imageUri?: string;
   fixed: ChecklistAnswer;
   fixedImageUri?: string;
+  references?: ChecklistReference[];
+  tolerance?: ChecklistTolerance;
+  measuredValue?: string;
 };
 
 export type InspectionRecord = {
@@ -181,6 +208,7 @@ export type Site = {
   trial_start_date?: string;
   trial_end_date?: string;
   trial_active: boolean;
+  jurisdiction?: RegulationsJurisdiction;
 };
 
 export type IssuedProgramme = {
