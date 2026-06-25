@@ -3,8 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { StageStatusPill } from '../../components/StageStatusPill';
-import { getInspectionTemplateForStage } from '../../data/keyStageInspectionTemplates';
 import { useProgrammeData } from '../../data/programmeStore';
+import { getInspectionTemplateForStage } from '../../utils/inspectionTemplateResolver';
 
 export default function TwoWeekProgrammeScreen() {
   const { plotProgrammes, plotStages, inspections, defects } = useProgrammeData();
