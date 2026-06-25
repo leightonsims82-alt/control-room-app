@@ -1,115 +1,130 @@
-import { useMemo } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
-import { useProgrammeData } from '../../data/programmeStore';
-import { getActiveStage } from '../../utils/programmeLogic';
 
-function getTomorrowDate() {
-  const date = new Date();
-  date.setDate(date.getDate() + 1);
-  return date.toISOString().slice(0, 10);
+const DABS_MEETING_KEY = 'siteprog:dabs-standalone-meetings:v1';
+
+type DabsMeeting = {
+  id: string;
+  meetingDate: string;
+  chair: string;
+  attendees: string;
+  agenda: string;
+  tomorrowFocus: string;
+  risksAndBlockers: string;
+  actionsAgreed: string;
+  meetingNotes: string;
+  completed: boolean;
+  updatedAt: string;
+};
+
+function getTodayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function createBlankMeeting(): DabsMeeting {
+  const today = getTodayDate();
+  return {
+    id: `dabs-${today}`,
+    meetingDate: today,
+    chair: '',
+    attendees: '',
+    agenda: 'Daily activity briefing, programme position, labour, materials, inspections, blockers, safety and quality actions.',
+    tomorrowFocus: '',
+    risksAndBlockers: '',
+    actionsAgreed: '',
+    meetingNotes: '',
+    completed: false,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 export default function DabsScreen() {
-  const { plotProgrammes, plotStages, dabsBriefings, upsertDabsBriefing } = useProgrammeData();
-  const briefingDate = getTomorrowDate();
+  const [meeting, setMeeting] = useState<DabsMeeting>(createBlankMeeting());
+  const [savedMeetings, setSavedMeetings] = useState<DabsMeeting[]>([]);
 
-  const rows = useMemo(() => {
-    return plotProgrammes.map((plot) => {
-      const activeStage = getActiveStage(plot.id, plotStages) ?? plotStages.find((stage) => stage.plotProgrammeId === plot.id && stage.status !== 'Complete');
-      const saved = dabsBriefings.find((item) => item.plotProgrammeId === plot.id && item.briefingDate === briefingDate);
-      return { plot, activeStage, saved };
-    });
-  }, [briefingDate, dabsBriefings, plotProgrammes, plotStages]);
+  useEffect(() => {
+    async function loadMeetings() {
+      const stored = await AsyncStorage.getItem(DABS_MEETING_KEY);
+      const meetings = stored ? (JSON.parse(stored) as DabsMeeting[]) : [];
+      const today = getTodayDate();
+      const todaysMeeting = meetings.find((item) => item.meetingDate === today) ?? createBlankMeeting();
+      setSavedMeetings(meetings);
+      setMeeting(todaysMeeting);
+    }
+    loadMeetings();
+  }, []);
 
-  const completeCount = rows.filter((row) => row.saved?.briefingComplete).length;
-  const riskCount = rows.filter((row) => row.saved?.programmeRisk).length;
+  async function saveMeeting(update: Partial<DabsMeeting>) {
+    const updated = { ...meeting, ...update, updatedAt: new Date().toISOString() };
+    const exists = savedMeetings.some((item) => item.id === updated.id);
+    const nextMeetings = exists ? savedMeetings.map((item) => (item.id === updated.id ? updated : item)) : [updated, ...savedMeetings];
+    setMeeting(updated);
+    setSavedMeetings(nextMeetings);
+    await AsyncStorage.setItem(DABS_MEETING_KEY, JSON.stringify(nextMeetings));
+  }
+
+  const completedCount = savedMeetings.filter((item) => item.completed).length;
 
   return (
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.eyebrow}>DABS</Text>
-        <Text style={styles.title}>Daily Activity Briefings</Text>
-        <Text style={styles.subtitle}>Afternoon setup for {briefingDate}. Prepare tomorrow's 8am walk.</Text>
+        <Text style={styles.title}>Daily Activity Briefing</Text>
+        <Text style={styles.subtitle}>Standalone PM meeting record for programme, trades, blockers, inspections and agreed actions.</Text>
       </View>
 
       <View style={styles.summaryRow}>
-        <Summary label="Plots" value={String(rows.length)} />
-        <Summary label="Briefed" value={`${completeCount}/${rows.length}`} />
-        <Summary label="Risks" value={String(riskCount)} danger={riskCount > 0} />
+        <Summary label="Meetings" value={String(savedMeetings.length || 1)} />
+        <Summary label="Completed" value={String(completedCount)} />
+        <Summary label="Today" value={meeting.completed ? 'Done' : 'Open'} danger={!meeting.completed} />
       </View>
 
-      <SectionCard title="Tomorrow's plot setup" subtitle="Confirm planned activity, expected trade and 8am notes">
-        {rows.map(({ plot, activeStage, saved }) => {
-          const item = saved ?? {
-            liveTomorrow: true,
-            plannedActivity: activeStage?.stageName ?? '',
-            expectedTrade: activeStage?.trade ?? '',
-            programmeRisk: false,
-            notesFor8am: '',
-            briefingComplete: false,
-          };
+      <SectionCard title="PM meeting record" subtitle={`Meeting date: ${meeting.meetingDate}`}>
+        <Field label="Chair">
+          <TextInput style={styles.input} value={meeting.chair} placeholder="Who chaired DABS?" onChangeText={(value) => saveMeeting({ chair: value })} />
+        </Field>
 
-          return (
-            <View key={plot.id} style={styles.plotCard}>
-              <View style={styles.plotHeader}>
-                <View style={styles.plotTitleWrap}>
-                  <Text style={styles.plotName}>{plot.plotName}</Text>
-                  <Text style={styles.plotMeta}>{plot.phase} · {activeStage?.stageName ?? 'No active stage'}</Text>
-                </View>
-                <Pressable
-                  style={[styles.chip, item.liveTomorrow ? styles.chipActive : null]}
-                  onPress={() => upsertDabsBriefing(plot.id, briefingDate, { liveTomorrow: !item.liveTomorrow, plotStageId: activeStage?.id })}
-                >
-                  <Text style={[styles.chipText, item.liveTomorrow ? styles.chipTextActive : null]}>{item.liveTomorrow ? 'Live tomorrow' : 'Not live'}</Text>
-                </Pressable>
-              </View>
+        <Field label="Attendees">
+          <TextInput style={styles.input} value={meeting.attendees} placeholder="Site manager, assistant, trades, contractors" onChangeText={(value) => saveMeeting({ attendees: value })} />
+        </Field>
 
-              <Text style={styles.label}>Planned activity</Text>
-              <TextInput
-                style={styles.input}
-                defaultValue={item.plannedActivity}
-                placeholder="e.g. 2nd lift brickwork"
-                onBlur={(event) => upsertDabsBriefing(plot.id, briefingDate, { plannedActivity: event.nativeEvent.text, plotStageId: activeStage?.id })}
-              />
+        <Field label="Agenda">
+          <TextInput style={[styles.input, styles.notes]} value={meeting.agenda} multiline onChangeText={(value) => saveMeeting({ agenda: value })} />
+        </Field>
 
-              <Text style={styles.label}>Expected trade</Text>
-              <TextInput
-                style={styles.input}
-                defaultValue={item.expectedTrade}
-                placeholder="e.g. Brickwork"
-                onBlur={(event) => upsertDabsBriefing(plot.id, briefingDate, { expectedTrade: event.nativeEvent.text, plotStageId: activeStage?.id })}
-              />
+        <Field label="Tomorrow's focus">
+          <TextInput style={[styles.input, styles.notes]} value={meeting.tomorrowFocus} placeholder="Main activities and priorities for tomorrow" multiline onChangeText={(value) => saveMeeting({ tomorrowFocus: value })} />
+        </Field>
 
-              <Text style={styles.label}>Notes for 8am walk</Text>
-              <TextInput
-                style={[styles.input, styles.notes]}
-                defaultValue={item.notesFor8am}
-                placeholder="What needs checking first thing?"
-                multiline
-                onBlur={(event) => upsertDabsBriefing(plot.id, briefingDate, { notesFor8am: event.nativeEvent.text, plotStageId: activeStage?.id })}
-              />
+        <Field label="Risks and blockers">
+          <TextInput style={[styles.input, styles.notes]} value={meeting.risksAndBlockers} placeholder="Labour, materials, access, scaffold, safety, quality or programme risks" multiline onChangeText={(value) => saveMeeting({ risksAndBlockers: value })} />
+        </Field>
 
-              <View style={styles.actionRow}>
-                <Pressable
-                  style={[styles.chip, item.programmeRisk ? styles.riskChip : null]}
-                  onPress={() => upsertDabsBriefing(plot.id, briefingDate, { programmeRisk: !item.programmeRisk, plotStageId: activeStage?.id })}
-                >
-                  <Text style={[styles.chipText, item.programmeRisk ? styles.chipTextActive : null]}>Programme risk</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.chip, item.briefingComplete ? styles.doneChip : null]}
-                  onPress={() => upsertDabsBriefing(plot.id, briefingDate, { briefingComplete: !item.briefingComplete, plotStageId: activeStage?.id })}
-                >
-                  <Text style={[styles.chipText, item.briefingComplete ? styles.doneText : null]}>{item.briefingComplete ? 'Briefed' : 'Mark briefed'}</Text>
-                </Pressable>
-              </View>
-            </View>
-          );
-        })}
+        <Field label="Actions agreed">
+          <TextInput style={[styles.input, styles.notes]} value={meeting.actionsAgreed} placeholder="Action, owner and target date" multiline onChangeText={(value) => saveMeeting({ actionsAgreed: value })} />
+        </Field>
+
+        <Field label="Meeting notes">
+          <TextInput style={[styles.input, styles.notes]} value={meeting.meetingNotes} placeholder="Additional PM briefing notes" multiline onChangeText={(value) => saveMeeting({ meetingNotes: value })} />
+        </Field>
+
+        <Pressable style={[styles.completeButton, meeting.completed ? styles.completeButtonDone : null]} onPress={() => saveMeeting({ completed: !meeting.completed })}>
+          <Text style={[styles.completeButtonText, meeting.completed ? styles.completeButtonTextDone : null]}>{meeting.completed ? 'DABS complete' : 'Mark DABS complete'}</Text>
+        </Pressable>
       </SectionCard>
     </AppScreen>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      {children}
+    </View>
   );
 }
 
@@ -130,23 +145,15 @@ const styles = StyleSheet.create({
   summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   summary: { flex: 1, minWidth: 120, backgroundColor: '#ffffff', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', padding: 16 },
   summaryDanger: { borderColor: '#fecaca', backgroundColor: '#fff7f7' },
-  summaryValue: { color: '#0f172a', fontSize: 24, fontWeight: '900' },
+  summaryValue: { color: '#0f172a', fontSize: 22, fontWeight: '900' },
   summaryValueDanger: { color: '#dc2626' },
   summaryLabel: { color: '#64748b', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
-  plotCard: { borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 14, gap: 9 },
-  plotHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' },
-  plotTitleWrap: { flex: 1, minWidth: 210 },
-  plotName: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
-  plotMeta: { color: '#64748b', fontSize: 12, marginTop: 3 },
+  field: { gap: 6, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
   label: { color: '#475569', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
   input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', backgroundColor: '#ffffff' },
-  notes: { minHeight: 64, textAlignVertical: 'top' },
-  actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
-  chipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
-  riskChip: { backgroundColor: '#dc2626', borderColor: '#dc2626' },
-  doneChip: { backgroundColor: '#dcfce7', borderColor: '#86efac' },
-  chipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
-  chipTextActive: { color: '#ffffff' },
-  doneText: { color: '#166534' },
+  notes: { minHeight: 76, textAlignVertical: 'top' },
+  completeButton: { alignSelf: 'flex-start', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: '#ffffff' },
+  completeButtonDone: { backgroundColor: '#dcfce7', borderColor: '#86efac' },
+  completeButtonText: { color: '#475569', fontSize: 12, fontWeight: '900' },
+  completeButtonTextDone: { color: '#166534' },
 });
