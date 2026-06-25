@@ -3,9 +3,9 @@ import { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
-import { getInspectionTemplateForStage } from '../../data/keyStageInspectionTemplates';
 import { UpdateInspectionItemInput, useProgrammeData } from '../../data/programmeStore';
 import { ChecklistAnswer, InspectionChecklistItem } from '../../types/models';
+import { getInspectionTemplateForStage } from '../../utils/inspectionTemplateResolver';
 
 const answers: ChecklistAnswer[] = ['Yes', 'No', 'N/A'];
 
