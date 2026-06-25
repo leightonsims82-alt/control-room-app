@@ -5,11 +5,23 @@ import { AppScreen } from '../../components/AppScreen';
 import { GuideBox } from '../../components/GuideBox';
 import { houseTypes } from '../../data/demoData';
 import { useProgrammeData } from '../../data/programmeStore';
-import { BuildType, BedroomSize } from '../../types/models';
+import { BuildType, BedroomSize, RegulationsJurisdiction } from '../../types/models';
+import { FoundationType } from '../../types/regulations';
 
 const phases = ['PH1', 'PH2', 'PH3', 'PH4'];
 const bedrooms: BedroomSize[] = ['2 Bed', '3 Bed', '4 Bed', '5 Bed', '6 Bed'];
 const buildTypes: BuildType[] = ['Traditional', 'Timber Frame', 'Steel Frame'];
+const jurisdictions: RegulationsJurisdiction[] = ['England', 'Wales'];
+const foundationTypes: FoundationType[] = [
+  'Strip foundation',
+  'Trench fill foundation',
+  'Raft foundation',
+  'Piled foundation',
+  'Pier and beam foundation',
+  'Engineered fill foundation',
+  'Ground improvement foundation',
+  'Unknown',
+];
 
 export default function NewPlotScreen() {
   const { createPlot } = useProgrammeData();
@@ -17,6 +29,8 @@ export default function NewPlotScreen() {
   const [phase, setPhase] = useState('PH1');
   const [bedroomSize, setBedroomSize] = useState<BedroomSize>('3 Bed');
   const [buildType, setBuildType] = useState<BuildType>('Traditional');
+  const [jurisdiction, setJurisdiction] = useState<RegulationsJurisdiction>('England');
+  const [foundationType, setFoundationType] = useState<FoundationType>('Unknown');
   const [mode, setMode] = useState<'forward' | 'reverse'>('forward');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -54,6 +68,8 @@ export default function NewPlotScreen() {
         startDate,
         endDate,
         mode,
+        jurisdiction,
+        foundationType,
       });
       router.replace(`/plot/${plot.id}`);
     } catch (err) {
@@ -69,12 +85,17 @@ export default function NewPlotScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>Plot Setup</Text>
         <Text style={styles.title}>New Plot Programme</Text>
-        <Text style={styles.subtitle}>Base44-style setup for a local-first plot programme</Text>
+        <Text style={styles.subtitle}>Create a programme with build type, regulation route and foundation checklist route</Text>
       </View>
 
       <GuideBox
         title="How to Create a Plot"
-        items={['Assign plots to a phase such as PH1 or PH2.', 'Choose bedroom size and build type.', 'Generate from a start date or work backwards from completion.']}
+        items={[
+          'Assign plots to a phase such as PH1 or PH2.',
+          'Choose bedroom size, build type and regulation route.',
+          'Select the foundation type so the right foundation checklist is used.',
+          'Generate from a start date or work backwards from completion.',
+        ]}
       />
 
       <View style={styles.card}>
@@ -95,6 +116,17 @@ export default function NewPlotScreen() {
 
         <Field label="Build Type">
           <OptionRow values={buildTypes} value={buildType} onChange={setBuildType} />
+          <Text style={styles.helpText}>This controls whether traditional, timber frame or steel frame checklists are used.</Text>
+        </Field>
+
+        <Field label="Regulation Route">
+          <OptionRow values={jurisdictions} value={jurisdiction} onChange={setJurisdiction} />
+          <Text style={styles.helpText}>England and Wales use separate Building Regulations guidance routes.</Text>
+        </Field>
+
+        <Field label="Foundation Type">
+          <OptionRow values={foundationTypes} value={foundationType} onChange={setFoundationType} />
+          <Text style={styles.helpText}>This controls the foundation checklist. Unknown falls back to the general foundation checklist.</Text>
         </Field>
 
         <Field label="Schedule From">
