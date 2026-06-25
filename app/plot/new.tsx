@@ -1,36 +1,24 @@
-import { router } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { GuideBox } from '../../components/GuideBox';
 import { houseTypes } from '../../data/demoData';
 import { useProgrammeData } from '../../data/programmeStore';
-import { BuildType, BedroomSize, RegulationsJurisdiction } from '../../types/models';
-import { FoundationType } from '../../types/regulations';
+import { useSiteSettings } from '../../data/siteSettingsStore';
+import { BuildType, BedroomSize } from '../../types/models';
 
 const phases = ['PH1', 'PH2', 'PH3', 'PH4'];
 const bedrooms: BedroomSize[] = ['2 Bed', '3 Bed', '4 Bed', '5 Bed', '6 Bed'];
 const buildTypes: BuildType[] = ['Traditional', 'Timber Frame', 'Steel Frame'];
-const jurisdictions: RegulationsJurisdiction[] = ['England', 'Wales'];
-const foundationTypes: FoundationType[] = [
-  'Strip foundation',
-  'Trench fill foundation',
-  'Raft foundation',
-  'Piled foundation',
-  'Pier and beam foundation',
-  'Engineered fill foundation',
-  'Ground improvement foundation',
-  'Unknown',
-];
 
 export default function NewPlotScreen() {
   const { createPlot } = useProgrammeData();
+  const { settings } = useSiteSettings();
   const [plotName, setPlotName] = useState('');
   const [phase, setPhase] = useState('PH1');
   const [bedroomSize, setBedroomSize] = useState<BedroomSize>('3 Bed');
   const [buildType, setBuildType] = useState<BuildType>('Traditional');
-  const [jurisdiction, setJurisdiction] = useState<RegulationsJurisdiction>('England');
-  const [foundationType, setFoundationType] = useState<FoundationType>('Unknown');
   const [mode, setMode] = useState<'forward' | 'reverse'>('forward');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -68,8 +56,8 @@ export default function NewPlotScreen() {
         startDate,
         endDate,
         mode,
-        jurisdiction,
-        foundationType,
+        jurisdiction: settings.jurisdiction,
+        foundationType: settings.defaultFoundationType,
       });
       router.replace(`/plot/${plot.id}`);
     } catch (err) {
@@ -85,18 +73,26 @@ export default function NewPlotScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>Plot Setup</Text>
         <Text style={styles.title}>New Plot Programme</Text>
-        <Text style={styles.subtitle}>Create a programme with build type, regulation route and foundation checklist route</Text>
+        <Text style={styles.subtitle}>Create a programme from site defaults, build type and schedule dates</Text>
       </View>
 
       <GuideBox
         title="How to Create a Plot"
         items={[
           'Assign plots to a phase such as PH1 or PH2.',
-          'Choose bedroom size, build type and regulation route.',
-          'Select the foundation type so the right foundation checklist is used.',
+          'Choose bedroom size and build type for the programme and checklists.',
+          'Regulation route and foundation type are inherited from Site Setup.',
           'Generate from a start date or work backwards from completion.',
         ]}
       />
+
+      <View style={styles.siteRouteBox}>
+        <View style={styles.routeTextWrap}>
+          <Text style={styles.routeTitle}>Inherited from Site Setup</Text>
+          <Text style={styles.routeText}>{settings.siteName} · {settings.jurisdiction} Building Regulations · {settings.defaultFoundationType}</Text>
+        </View>
+        <Link href="/site/setup" style={styles.routeLink}>Edit site setup</Link>
+      </View>
 
       <View style={styles.card}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -117,16 +113,6 @@ export default function NewPlotScreen() {
         <Field label="Build Type">
           <OptionRow values={buildTypes} value={buildType} onChange={setBuildType} />
           <Text style={styles.helpText}>This controls whether traditional, timber frame or steel frame checklists are used.</Text>
-        </Field>
-
-        <Field label="Regulation Route">
-          <OptionRow values={jurisdictions} value={jurisdiction} onChange={setJurisdiction} />
-          <Text style={styles.helpText}>England and Wales use separate Building Regulations guidance routes.</Text>
-        </Field>
-
-        <Field label="Foundation Type">
-          <OptionRow values={foundationTypes} value={foundationType} onChange={setFoundationType} />
-          <Text style={styles.helpText}>This controls the foundation checklist. Unknown falls back to the general foundation checklist.</Text>
         </Field>
 
         <Field label="Schedule From">
@@ -186,6 +172,11 @@ const styles = StyleSheet.create({
   eyebrow: { color: '#2563eb', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
   subtitle: { color: '#64748b', fontSize: 14 },
+  siteRouteBox: { backgroundColor: '#eff6ff', borderRadius: 16, borderWidth: 1, borderColor: '#bfdbfe', padding: 14, gap: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' },
+  routeTextWrap: { flex: 1, minWidth: 220 },
+  routeTitle: { color: '#1d4ed8', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  routeText: { color: '#0f172a', fontWeight: '800', marginTop: 3 },
+  routeLink: { color: '#2563eb', fontWeight: '900' },
   card: { backgroundColor: '#ffffff', borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', padding: 18, gap: 16 },
   field: { gap: 8 },
   label: { color: '#475569', fontSize: 13, fontWeight: '900' },
