@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
+import { TradeLookaheadGrid } from '../../components/TradeLookaheadGrid';
 import { TradeWorkList } from '../../components/TradeWorkList';
 import { supervisors } from '../../data/demoData';
 import { useProgrammeData } from '../../data/programmeStore';
@@ -31,10 +32,10 @@ export default function TradesScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Trades</Text>
-        <Text style={styles.subtitle}>Performance, 14-day work list and open inspection actions</Text>
+        <Text style={styles.subtitle}>Excel-style lookahead, open actions and trade performance</Text>
       </View>
 
-      <SectionCard title="Trade Selector" subtitle="Choose a trade to view work and actions">
+      <SectionCard title="Trade Selector" subtitle="Choose a trade to view its programme spreadsheet">
         <View style={styles.tradeChips}>
           {tradeOptions.map((trade) => {
             const active = trade === activeTrade;
@@ -46,6 +47,10 @@ export default function TradesScreen() {
             );
           })}
         </View>
+      </SectionCard>
+
+      <SectionCard title="Trade 2-Week Lookahead" subtitle={activeTrade ? `Spreadsheet view for ${activeTrade}` : 'Select a trade'}>
+        <TradeLookaheadGrid trade={activeTrade} plotProgrammes={plotProgrammes} plotStages={plotStages} defects={defects} />
       </SectionCard>
 
       <SectionCard title="Open Trade Actions" subtitle={activeTrade ? `Inspection defects assigned to ${activeTrade}` : 'Select a trade'}>
@@ -74,7 +79,7 @@ export default function TradesScreen() {
         })}
       </SectionCard>
 
-      <SectionCard title="14-Day Trade Work List" subtitle={activeTrade ? `Active work for ${activeTrade}` : 'Select a trade to view upcoming work'}>
+      <SectionCard title="14-Day Trade Work List" subtitle={activeTrade ? `Card view for ${activeTrade}` : 'Select a trade to view upcoming work'}>
         <TradeWorkList items={workItems} trade={activeTrade || 'Unassigned'} />
       </SectionCard>
 
