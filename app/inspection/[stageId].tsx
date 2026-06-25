@@ -104,6 +104,33 @@ function ChecklistRow({
     <View style={[styles.itemCard, item.compliant === 'No' ? styles.itemCardFailed : null]}>
       <Text style={styles.trade}>{item.trade}</Text>
       <Text style={styles.check}>{item.check}</Text>
+
+      {item.references?.length ? (
+        <View style={styles.referenceBox}>
+          {item.references.map((reference) => (
+            <Text key={reference.id} style={styles.referenceText}>{reference.source} · {reference.partOrChapter} · {reference.title}</Text>
+          ))}
+        </View>
+      ) : null}
+
+      {item.tolerance ? (
+        <View style={styles.toleranceBox}>
+          <Text style={styles.toleranceTitle}>{item.tolerance.label}</Text>
+          <Text style={styles.tolerancePrompt}>{item.tolerance.prompt}</Text>
+          {item.tolerance.values ? Object.entries(item.tolerance.values).map(([label, value]) => (
+            <Text key={label} style={styles.toleranceValue}>{label}: {String(value)}</Text>
+          )) : null}
+          {item.tolerance.measurementRequired ? (
+            <TextInput
+              style={styles.input}
+              placeholder={`Measured value (${item.tolerance.unit})`}
+              defaultValue={item.measuredValue}
+              onBlur={(event) => update(inspectionId, item.id, { measuredValue: event.nativeEvent.text })}
+            />
+          ) : null}
+        </View>
+      ) : null}
+
       <View style={styles.optionRow}>
         {answers.map((answer) => (
           <Pressable key={answer} style={[styles.option, item.compliant === answer ? styles.optionActive : null]} onPress={() => update(inspectionId, item.id, { compliant: answer })}>
@@ -141,6 +168,12 @@ const styles = StyleSheet.create({
   itemCardFailed: { borderColor: '#fecaca', backgroundColor: '#fff7f7' },
   trade: { color: '#2563eb', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
   check: { color: '#0f172a', fontSize: 15, fontWeight: '900' },
+  referenceBox: { backgroundColor: '#f8fafc', borderRadius: 12, padding: 10, gap: 4 },
+  referenceText: { color: '#475569', fontSize: 11, fontWeight: '800' },
+  toleranceBox: { backgroundColor: '#eff6ff', borderRadius: 12, padding: 10, gap: 6 },
+  toleranceTitle: { color: '#1d4ed8', fontSize: 12, fontWeight: '900' },
+  tolerancePrompt: { color: '#0f172a', fontSize: 12, fontWeight: '800' },
+  toleranceValue: { color: '#475569', fontSize: 11, fontWeight: '700' },
   optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   option: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#ffffff' },
   smallOption: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ffffff' },
