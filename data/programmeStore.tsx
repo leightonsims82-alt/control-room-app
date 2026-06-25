@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 import { plotProgrammes as demoPlots, plotStages as demoStages } from './demoData';
-import { getInspectionTemplateForStage } from './keyStageInspectionTemplates';
+import { getInspectionTemplateForStage } from '../utils/inspectionTemplateResolver';
 import {
   BedroomSize,
   ChecklistAnswer,
