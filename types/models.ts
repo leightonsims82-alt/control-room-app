@@ -2,11 +2,24 @@ export type BuildType = 'Traditional' | 'Timber Frame' | 'Steel Frame';
 export type BedroomSize = '2 Bed' | '3 Bed' | '4 Bed' | '5 Bed' | '6 Bed';
 export type StageStatus = 'Not started' | 'In progress' | 'Complete';
 export type HoldStatus = 'Active' | 'On hold' | 'Released';
-export type InspectionStatus = 'Not applicable' | 'Ready for inspection' | 'Pending' | 'Passed' | 'Issues noted' | 'Blocked';
+export type InspectionStatus =
+  | 'Not applicable'
+  | 'Ready for inspection'
+  | 'Pending'
+  | 'Inspection in progress'
+  | 'Passed'
+  | 'Issues noted'
+  | 'Failed awaiting close out'
+  | 'Verified complete'
+  | 'Blocked';
 export type HandoverStatus = 'Not Ready' | 'Partially Ready' | 'Ready for Handover';
 export type SiteStatus = 'free' | 'paid';
 export type IssuedProgrammeStatus = 'draft' | 'issued';
 export type UserRole = 'admin' | 'manager' | 'asm' | 'tsm' | 'supervisor' | 'user';
+export type ChecklistAnswer = 'Yes' | 'No' | 'N/A' | 'Not checked';
+export type DefectPriority = 'Low' | 'Medium' | 'High';
+export type DefectStatus = 'Open' | 'Sent to trade' | 'In progress' | 'Fixed awaiting verification' | 'Verified fixed' | 'Rejected';
+export type DefectType = 'Quality' | 'Trade missing' | 'Safety' | 'Delay' | 'Material' | 'Access' | 'Programme risk';
 
 export type HouseType = {
   id: string;
@@ -58,6 +71,66 @@ export type PlotStage = {
   inspectionWindowStart?: string;
   inspectionWindowEnd?: string;
   inspectionNotes?: string;
+};
+
+export type KeyStageInspectionTemplateItem = {
+  id: string;
+  trade: string;
+  check: string;
+};
+
+export type KeyStageInspectionTemplate = {
+  id: string;
+  keyStageName: string;
+  matchedStageNames: string[];
+  description: string;
+  items: KeyStageInspectionTemplateItem[];
+};
+
+export type InspectionChecklistItem = {
+  id: string;
+  templateItemId: string;
+  trade: string;
+  check: string;
+  compliant: ChecklistAnswer;
+  description?: string;
+  imageUri?: string;
+  fixed: ChecklistAnswer;
+  fixedImageUri?: string;
+};
+
+export type InspectionRecord = {
+  id: string;
+  plotProgrammeId: string;
+  plotStageId: string;
+  templateId: string;
+  templateName: string;
+  startedAt: string;
+  completedAt?: string;
+  status: InspectionStatus;
+  items: InspectionChecklistItem[];
+};
+
+export type DefectAction = {
+  id: string;
+  plotProgrammeId: string;
+  plotStageId: string;
+  inspectionRecordId?: string;
+  checklistItemId?: string;
+  source: 'Key stage inspection' | '8am walk' | 'Quick finding' | 'DABS';
+  stage: string;
+  trade: string;
+  type: DefectType;
+  description: string;
+  requiredAction: string;
+  imageUri?: string;
+  priority: DefectPriority;
+  status: DefectStatus;
+  sentToTrade: boolean;
+  fixed: ChecklistAnswer;
+  fixedImageUri?: string;
+  createdAt: string;
+  closedAt?: string;
 };
 
 export type HandoverChecklist = {
