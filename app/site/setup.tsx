@@ -3,18 +3,27 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
+import { getEffectiveProgrammeWeeks, TemplateActivity } from '../../utils/templateProgramme';
 
 export default function SiteSetupScreen() {
   const { siteSetup, plotTemplates, updateSiteSetup, updatePlotTemplate, updateTemplateActivityDuration } = useSitePlanner();
   const [selectedTemplateId, setSelectedTemplateId] = useState(plotTemplates[2]?.id ?? plotTemplates[0]?.id ?? 'threeBed');
   const selectedTemplate = plotTemplates.find((template) => template.id === selectedTemplateId) ?? plotTemplates[0];
 
+  const updateActivity = (activityCode: string, changes: Partial<TemplateActivity>) => {
+    if (!selectedTemplate) return;
+    updatePlotTemplate({
+      ...selectedTemplate,
+      activities: selectedTemplate.activities.map((activity) => (activity.code === activityCode ? { ...activity, ...changes } : activity)),
+    });
+  };
+
   return (
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.eyebrow}>Site Setup</Text>
         <Text style={styles.title}>Programme & Plot Templates</Text>
-        <Text style={styles.subtitle}>Set site defaults and edit task durations by plot type, so apartments, 2 beds, 3 beds, 4 beds and 5 beds can all run differently.</Text>
+        <Text style={styles.subtitle}>Set site defaults and edit task names, trades, stages, durations and overlap rules by plot type.</Text>
       </View>
 
       <View style={styles.card}>
@@ -37,7 +46,7 @@ export default function SiteSetupScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Plot type templates</Text>
-        <Text style={styles.helpText}>Choose a template, then edit the programme weeks, number of stages and task durations. These values are used when plots are assigned to that template.</Text>
+        <Text style={styles.helpText}>Each plot type has its own durations. Activities run sequentially unless Overlap is switched on for that activity.</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.templateChips}>
             {plotTemplates.map((template) => {
@@ -57,12 +66,16 @@ export default function SiteSetupScreen() {
               <Field label="Template name">
                 <TextInput value={selectedTemplate.name} onChangeText={(name) => updatePlotTemplate({ ...selectedTemplate, name })} style={styles.input} />
               </Field>
-              <Field label="Template programme weeks">
+              <Field label="Target weeks">
                 <TextInput value={String(selectedTemplate.programmeWeeks)} onChangeText={(value) => updatePlotTemplate({ ...selectedTemplate, programmeWeeks: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} />
               </Field>
-              <Field label="Template stage count">
+              <Field label="Stage count">
                 <TextInput value={String(selectedTemplate.stageCount)} onChangeText={(value) => updatePlotTemplate({ ...selectedTemplate, stageCount: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} />
               </Field>
+              <View style={styles.summaryBox}>
+                <Text style={styles.summaryLabel}>Calculated weeks</Text>
+                <Text style={styles.summaryValue}>{getEffectiveProgrammeWeeks(selectedTemplate)}</Text>
+              </View>
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator>
@@ -71,21 +84,22 @@ export default function SiteSetupScreen() {
                   <Text style={[styles.headerCell, styles.orderCell]}>Seq</Text>
                   <Text style={[styles.headerCell, styles.taskCell]}>Task</Text>
                   <Text style={[styles.headerCell, styles.tradeCell]}>Trade</Text>
+                  <Text style={[styles.headerCell, styles.displayCell]}>Display</Text>
                   <Text style={[styles.headerCell, styles.stageCell]}>Stage</Text>
                   <Text style={[styles.headerCell, styles.durationCell]}>Days</Text>
+                  <Text style={[styles.headerCell, styles.overlapCell]}>Overlap</Text>
                 </View>
                 {selectedTemplate.activities.map((activity, index) => (
-                  <View key={activity.code} style={[styles.tableRow, index % 2 ? styles.altRow : null]}>
+                  <View key={`${activity.order}-${activity.code}`} style={[styles.tableRow, index % 2 ? styles.altRow : null]}>
                     <Text style={[styles.bodyCell, styles.orderCell]}>{activity.order}</Text>
-                    <Text style={[styles.bodyCell, styles.taskCell]}>{activity.code}</Text>
-                    <Text style={[styles.bodyCell, styles.tradeCell]}>{activity.trade}</Text>
-                    <Text style={[styles.bodyCell, styles.stageCell]}>{activity.stage}</Text>
-                    <TextInput
-                      defaultValue={String(activity.durationDays)}
-                      keyboardType="number-pad"
-                      onEndEditing={(event) => updateTemplateActivityDuration(selectedTemplate.id, activity.code, Number(event.nativeEvent.text) || 0)}
-                      style={[styles.durationInput, styles.durationCell]}
-                    />
+                    <TextInput defaultValue={activity.code} onEndEditing={(event) => updateActivity(activity.code, { code: event.nativeEvent.text })} style={[styles.bodyInput, styles.taskCell]} />
+                    <TextInput defaultValue={activity.trade} onEndEditing={(event) => updateActivity(activity.code, { trade: event.nativeEvent.text })} style={[styles.bodyInput, styles.tradeCell]} />
+                    <TextInput defaultValue={activity.displayText} onEndEditing={(event) => updateActivity(activity.code, { displayText: event.nativeEvent.text })} style={[styles.bodyInput, styles.displayCell]} />
+                    <TextInput defaultValue={String(activity.stage)} keyboardType="number-pad" onEndEditing={(event) => updateActivity(activity.code, { stage: Number(event.nativeEvent.text) || activity.stage })} style={[styles.bodyInput, styles.stageCell]} />
+                    <TextInput defaultValue={String(activity.durationDays)} keyboardType="number-pad" onEndEditing={(event) => updateTemplateActivityDuration(selectedTemplate.id, activity.code, Number(event.nativeEvent.text) || 0)} style={[styles.durationInput, styles.durationCell]} />
+                    <Pressable style={[styles.overlapButton, activity.overlapAllowed ? styles.overlapButtonActive : null]} onPress={() => updateActivity(activity.code, { overlapAllowed: !activity.overlapAllowed })}>
+                      <Text style={[styles.overlapText, activity.overlapAllowed ? styles.overlapTextActive : null]}>{activity.overlapAllowed ? 'Yes' : 'No'}</Text>
+                    </Pressable>
                   </View>
                 ))}
               </View>
@@ -117,11 +131,14 @@ const styles = StyleSheet.create({
   subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
   card: { backgroundColor: '#ffffff', borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', padding: 18, gap: 16 },
   cardTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
-  formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
   field: { gap: 8, minWidth: 180, flex: 1 },
   label: { color: '#475569', fontSize: 13, fontWeight: '900' },
   input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', backgroundColor: '#ffffff', fontWeight: '800' },
   helpText: { color: '#64748b', fontSize: 12, lineHeight: 18 },
+  summaryBox: { minWidth: 150, backgroundColor: '#eff6ff', borderRadius: 12, padding: 12 },
+  summaryLabel: { color: '#2563eb', fontSize: 12, fontWeight: '900' },
+  summaryValue: { color: '#0f172a', fontSize: 24, fontWeight: '900' },
   templateChips: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
   templateChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
   templateChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
@@ -132,12 +149,19 @@ const styles = StyleSheet.create({
   altRow: { backgroundColor: '#f8fafc' },
   headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', fontWeight: '800' },
+  bodyInput: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff', fontWeight: '800' },
   orderCell: { width: 54, textAlign: 'center' },
   taskCell: { width: 150 },
   tradeCell: { width: 150 },
+  displayCell: { width: 140 },
   stageCell: { width: 70, textAlign: 'center' },
   durationCell: { width: 80, textAlign: 'center' },
+  overlapCell: { width: 90, textAlign: 'center' },
   durationInput: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fff4cc', fontWeight: '900' },
+  overlapButton: { width: 90, borderWidth: 1, borderColor: '#c8d7e6', alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffffff' },
+  overlapButtonActive: { backgroundColor: '#dcfce7' },
+  overlapText: { color: '#64748b', fontWeight: '900' },
+  overlapTextActive: { color: '#166534' },
   primaryButton: { alignSelf: 'flex-start', backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
   primaryButtonText: { color: '#ffffff', fontWeight: '900' },
 });
