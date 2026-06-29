@@ -10,6 +10,7 @@ export default function TradesScreen() {
     sitePlots,
     activityDelays,
     tradeContacts,
+    plotTemplates,
     issueSettings,
     issueLogs,
     upsertTradeContact,
@@ -41,13 +42,13 @@ export default function TradesScreen() {
   const recipientCount = savedSupervisorEmails.length + (managerEmail.trim() ? 1 : 0);
 
   const managerPreview = useMemo(
-    () => createManagerProgrammeText({ plots: sitePlots, activityDelays, startWeek: activeIssueWeek, tradeContacts }),
-    [sitePlots, activityDelays, activeIssueWeek, tradeContacts],
+    () => createManagerProgrammeText({ plots: sitePlots, activityDelays, startWeek: activeIssueWeek, tradeContacts, plotTemplates }),
+    [sitePlots, activityDelays, activeIssueWeek, tradeContacts, plotTemplates],
   );
 
   const tradePreview = useMemo(
-    () => activeContact ? createTradeProgrammeText({ trade: activeContact.trade, plots: sitePlots, activityDelays, startWeek: activeIssueWeek }) : '',
-    [activeContact, sitePlots, activityDelays, activeIssueWeek],
+    () => activeContact ? createTradeProgrammeText({ trade: activeContact.trade, plots: sitePlots, activityDelays, startWeek: activeIssueWeek, plotTemplates }) : '',
+    [activeContact, sitePlots, activityDelays, activeIssueWeek, plotTemplates],
   );
 
   const saveTradeContact = async () => {
