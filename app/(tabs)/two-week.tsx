@@ -1,56 +1,72 @@
-import { Link } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
-import { StageStatusPill } from '../../components/StageStatusPill';
-import { useProgrammeData } from '../../data/programmeStore';
-import { getInspectionTemplateForStage } from '../../utils/inspectionTemplateResolver';
+import { useSitePlanner } from '../../data/sitePlannerStore';
+import { DAY_NAMES, getActiveTradesForWindow, getTradeCellText, plotHasTradeWorkInWindow, TRADE_ORDER } from '../../utils/siteProgrammeEngine';
 
 export default function TwoWeekProgrammeScreen() {
-  const { plotProgrammes, plotStages, inspections, defects } = useProgrammeData();
-  const visibleStages = plotStages
-    .slice()
-    .sort((a, b) => a.startDate.localeCompare(b.startDate))
-    .slice(0, 14);
+  const { sitePlots, activityDelays } = useSitePlanner();
+  const [startWeek, setStartWeek] = useState(1);
+  const activeTrades = useMemo(() => getActiveTradesForWindow(sitePlots, startWeek, activityDelays), [sitePlots, startWeek, activityDelays]);
+  const tradesToShow = activeTrades.length ? activeTrades : TRADE_ORDER;
 
   return (
     <AppScreen>
       <View style={styles.header}>
-        <Text style={styles.title}>2-Week Programme</Text>
-        <Text style={styles.subtitle}>Short-term site focus by plot, stage, trade and inspection</Text>
+        <Text style={styles.title}>2-Week Trade Programme</Text>
+        <Text style={styles.subtitle}>Trade call-off view generated from the daily plot breakdown. Day headings stay as Mon-Fri because the selected week identifies the period.</Text>
       </View>
 
-      <SectionCard title="Next priority stages" subtitle="Tap a checklist when a stage is ready to inspect">
-        {visibleStages.map((stage) => {
-          const plot = plotProgrammes.find((item) => item.id === stage.plotProgrammeId);
-          const template = getInspectionTemplateForStage(stage.stageName);
-          const inspection = inspections.find((item) => item.plotStageId === stage.id);
-          const openActions = defects.filter((item) => item.plotStageId === stage.id && item.status !== 'Verified fixed').length;
-          return (
-            <View key={stage.id} style={styles.row}>
-              <View style={styles.dateBox}>
-                <Text style={styles.dateMonth}>{stage.startDate.slice(5, 7)}</Text>
-                <Text style={styles.dateDay}>{stage.startDate.slice(8, 10)}</Text>
-              </View>
-              <View style={styles.main}>
-                <Text style={styles.plot}>{plot?.plotName ?? 'Plot'}</Text>
-                <Text style={styles.stage}>{stage.stageName}</Text>
-                <Text style={styles.meta}>{stage.trade} · {stage.durationDays} working days</Text>
-                <Text style={styles.inspection}>Inspection: {inspection?.status ?? stage.inspectionStatus}</Text>
-                {openActions > 0 ? <Text style={styles.actions}>{openActions} open trade action{openActions === 1 ? '' : 's'}</Text> : null}
-                {template ? (
-                  <Link href={`/inspection/${stage.id}`} asChild>
-                    <Pressable style={styles.inspectButton}>
-                      <Text style={styles.inspectButtonText}>{inspection ? 'Open Checklist' : 'Start Checklist'} · {template.keyStageName}</Text>
-                    </Pressable>
-                  </Link>
-                ) : null}
-              </View>
-              <StageStatusPill status={stage.status} />
-            </View>
-          );
-        })}
+      <SectionCard title="Week selector" subtitle={`Currently showing WK${String(startWeek).padStart(2, '0')} and WK${String(startWeek + 1).padStart(2, '0')}`}>
+        <View style={styles.weekControls}>
+          <Pressable style={styles.weekButton} onPress={() => setStartWeek((week) => Math.max(1, week - 1))}>
+            <Text style={styles.weekButtonText}>Previous</Text>
+          </Pressable>
+          <Text style={styles.weekLabel}>WK{String(startWeek).padStart(2, '0')} + WK{String(startWeek + 1).padStart(2, '0')}</Text>
+          <Pressable style={styles.weekButton} onPress={() => setStartWeek((week) => Math.min(51, week + 1))}>
+            <Text style={styles.weekButtonText}>Next</Text>
+          </Pressable>
+        </View>
       </SectionCard>
+
+      {tradesToShow.map((trade) => {
+        const visiblePlots = sitePlots.filter((plot) => plotHasTradeWorkInWindow(plot, trade, startWeek, activityDelays));
+        return (
+          <SectionCard key={trade} title={trade} subtitle={visiblePlots.length ? `${visiblePlots.length} plot${visiblePlots.length === 1 ? '' : 's'} in this 2-week window` : 'No activity in this 2-week window'}>
+            <ScrollView horizontal showsHorizontalScrollIndicator>
+              <View>
+                <View style={styles.weekHeaderRow}>
+                  <Text style={[styles.weekHeaderBlank, styles.plotCell]} />
+                  <Text style={styles.weekGroup}>Week 1</Text>
+                  <Text style={styles.weekGroup}>Week 2</Text>
+                </View>
+                <View style={styles.tableRow}>
+                  <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
+                  {[startWeek, startWeek + 1].flatMap((week) => DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>{day}</Text>))}
+                </View>
+                {visiblePlots.length === 0 ? (
+                  <View style={styles.tableRow}>
+                    <Text style={[styles.emptyCell, styles.plotCell]}>-</Text>
+                    {Array.from({ length: 10 }).map((_, index) => <Text key={index} style={styles.emptyDayCell} />)}
+                  </View>
+                ) : null}
+                {visiblePlots.map((plot, rowIndex) => (
+                  <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
+                    <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
+                    {[startWeek, startWeek + 1].flatMap((week) =>
+                      DAY_NAMES.map((_, dayIndex) => {
+                        const text = getTradeCellText(plot, trade, week, dayIndex + 1, activityDelays);
+                        return <Text key={`${plot.id}-${trade}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
+                      }),
+                    )}
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          </SectionCard>
+        );
+      })}
     </AppScreen>
   );
 }
@@ -58,17 +74,22 @@ export default function TwoWeekProgrammeScreen() {
 const styles = StyleSheet.create({
   header: { gap: 4 },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
-  subtitle: { color: '#64748b', fontSize: 14 },
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
-  dateBox: { width: 52, height: 52, borderRadius: 14, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' },
-  dateMonth: { color: '#2563eb', fontSize: 11, fontWeight: '900' },
-  dateDay: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
-  main: { flex: 1, gap: 4 },
-  plot: { color: '#2563eb', fontWeight: '900', fontSize: 12 },
-  stage: { color: '#0f172a', fontWeight: '800' },
-  meta: { color: '#64748b', fontSize: 12 },
-  inspection: { color: '#2563eb', fontSize: 12, fontWeight: '800' },
-  actions: { color: '#dc2626', fontSize: 12, fontWeight: '900' },
-  inspectButton: { alignSelf: 'flex-start', backgroundColor: '#0f172a', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, marginTop: 4 },
-  inspectButtonText: { color: '#ffffff', fontSize: 12, fontWeight: '900' },
+  subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
+  weekControls: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
+  weekButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  weekButtonText: { color: '#ffffff', fontWeight: '900' },
+  weekLabel: { color: '#0f172a', fontWeight: '900', fontSize: 16 },
+  weekHeaderRow: { flexDirection: 'row' },
+  tableRow: { flexDirection: 'row', alignItems: 'stretch' },
+  altRow: { backgroundColor: '#eaf2fb' },
+  weekHeaderBlank: { backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce', minHeight: 28 },
+  weekGroup: { width: 400, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  plotCell: { width: 92 },
+  dayHeader: { width: 80, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
+  dayCell: { width: 80, minHeight: 58, color: '#0f172a', padding: 6, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontSize: 11, fontWeight: '900' },
+  activeDayCell: { backgroundColor: '#dff0ff' },
+  emptyCell: { color: '#94a3b8', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center' },
+  emptyDayCell: { width: 80, minHeight: 42, borderWidth: 1, borderColor: '#c8d7e6' },
 });
