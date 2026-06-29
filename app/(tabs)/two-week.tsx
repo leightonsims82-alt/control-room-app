@@ -3,19 +3,20 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
-import { DAY_NAMES, getActiveTradesForWindow, getTradeCellText, plotHasTradeWorkInWindow, TRADE_ORDER } from '../../utils/siteProgrammeEngine';
+import { DAY_NAMES, TRADE_ORDER } from '../../utils/siteProgrammeEngine';
+import { getActiveTemplateTrades, getTradeTemplateText, plotHasTradeWorkForTemplate } from '../../utils/templateProgramme';
 
 export default function TwoWeekProgrammeScreen() {
-  const { sitePlots, activityDelays } = useSitePlanner();
+  const { sitePlots, activityDelays, plotTemplates } = useSitePlanner();
   const [startWeek, setStartWeek] = useState(1);
-  const activeTrades = useMemo(() => getActiveTradesForWindow(sitePlots, startWeek, activityDelays), [sitePlots, startWeek, activityDelays]);
+  const activeTrades = useMemo(() => getActiveTemplateTrades(sitePlots, startWeek, activityDelays, plotTemplates), [sitePlots, startWeek, activityDelays, plotTemplates]);
   const tradesToShow = activeTrades.length ? activeTrades : TRADE_ORDER;
 
   return (
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>2-Week Trade Programme</Text>
-        <Text style={styles.subtitle}>Trade call-off view generated from the daily plot breakdown. Day headings stay as Mon-Fri because the selected week identifies the period.</Text>
+        <Text style={styles.subtitle}>Trade call-off view generated from plot templates and the daily plot breakdown.</Text>
       </View>
 
       <SectionCard title="Week selector" subtitle={`Currently showing WK${String(startWeek).padStart(2, '0')} and WK${String(startWeek + 1).padStart(2, '0')}`}>
@@ -31,7 +32,7 @@ export default function TwoWeekProgrammeScreen() {
       </SectionCard>
 
       {tradesToShow.map((trade) => {
-        const visiblePlots = sitePlots.filter((plot) => plotHasTradeWorkInWindow(plot, trade, startWeek, activityDelays));
+        const visiblePlots = sitePlots.filter((plot) => plotHasTradeWorkForTemplate(plot, trade, startWeek, activityDelays, plotTemplates));
         return (
           <SectionCard key={trade} title={trade} subtitle={visiblePlots.length ? `${visiblePlots.length} plot${visiblePlots.length === 1 ? '' : 's'} in this 2-week window` : 'No activity in this 2-week window'}>
             <ScrollView horizontal showsHorizontalScrollIndicator>
@@ -56,7 +57,7 @@ export default function TwoWeekProgrammeScreen() {
                     <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
                     {[startWeek, startWeek + 1].flatMap((week) =>
                       DAY_NAMES.map((_, dayIndex) => {
-                        const text = getTradeCellText(plot, trade, week, dayIndex + 1, activityDelays);
+                        const text = getTradeTemplateText(plot, trade, week, dayIndex + 1, activityDelays, plotTemplates);
                         return <Text key={`${plot.id}-${trade}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
                       }),
                     )}
