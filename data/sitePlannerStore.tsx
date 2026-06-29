@@ -1,12 +1,22 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { ActivityDelay, DEFAULT_SITE_PLOTS, SitePlot, TRADE_ORDER } from '../utils/siteProgrammeEngine';
+import { ActivityDelay, TRADE_ORDER } from '../utils/siteProgrammeEngine';
+import {
+  DEFAULT_PLOT_TEMPLATES,
+  DEFAULT_SITE_PROGRAMME_SETUP,
+  DEFAULT_TEMPLATE_PLOTS,
+  PlotTemplate,
+  SiteProgrammeSetup,
+  TemplateSitePlot,
+} from '../utils/templateProgramme';
 
-const SITE_PLOTS_KEY = 'siteprog:week-based-plots:v1';
+const SITE_PLOTS_KEY = 'siteprog:week-based-plots:v2';
 const SITE_DELAYS_KEY = 'siteprog:week-based-delays:v1';
 const TRADE_CONTACTS_KEY = 'siteprog:trade-contacts:v1';
 const ISSUE_SETTINGS_KEY = 'siteprog:issue-settings:v1';
 const ISSUE_LOGS_KEY = 'siteprog:issue-logs:v1';
+const PLOT_TEMPLATES_KEY = 'siteprog:plot-templates:v1';
+const SITE_PROGRAMME_SETUP_KEY = 'siteprog:programme-setup:v1';
 
 export type TradeContact = {
   id: string;
@@ -49,18 +59,23 @@ const DEFAULT_ISSUE_SETTINGS: IssueSettings = {
 };
 
 type SitePlannerStore = {
-  sitePlots: SitePlot[];
+  sitePlots: TemplateSitePlot[];
   activityDelays: ActivityDelay[];
   tradeContacts: TradeContact[];
   issueSettings: IssueSettings;
   issueLogs: IssueLog[];
+  plotTemplates: PlotTemplate[];
+  siteSetup: SiteProgrammeSetup;
   isSitePlannerLoaded: boolean;
-  upsertSitePlot: (input: { plotNo: string; stage9CompleteWeek: number }) => Promise<void>;
+  upsertSitePlot: (input: { plotNo: string; stage9CompleteWeek: number; templateId: string }) => Promise<void>;
   removeSitePlot: (plotId: string) => Promise<void>;
   setActivityDelay: (input: ActivityDelay) => Promise<void>;
   upsertTradeContact: (input: TradeContact) => Promise<void>;
   setIssueSettings: (input: IssueSettings) => Promise<void>;
   recordIssue: (input: { startWeek: number; recipientCount: number; note: string }) => Promise<void>;
+  updateSiteSetup: (input: Partial<SiteProgrammeSetup>) => Promise<void>;
+  updatePlotTemplate: (input: PlotTemplate) => Promise<void>;
+  updateTemplateActivityDuration: (templateId: string, activityCode: string, durationDays: number) => Promise<void>;
 };
 
 const SitePlannerContext = createContext<SitePlannerStore | undefined>(undefined);
@@ -88,31 +103,46 @@ function mergeDefaultTradeContacts(stored: TradeContact[]) {
   return DEFAULT_TRADE_CONTACTS.map((contact) => storedByTrade.get(contact.trade) ?? contact);
 }
 
+function normalisePlots(stored: TemplateSitePlot[]) {
+  return stored.map((plot) => ({ ...plot, templateId: plot.templateId || 'threeBed' }));
+}
+
+function mergeDefaultTemplates(stored: PlotTemplate[]) {
+  const storedById = new Map(stored.map((template) => [template.id, template]));
+  return DEFAULT_PLOT_TEMPLATES.map((template) => storedById.get(template.id) ?? template);
+}
+
 export function SitePlannerProvider({ children }: PropsWithChildren) {
-  const [sitePlots, setSitePlots] = useState<SitePlot[]>(DEFAULT_SITE_PLOTS);
+  const [sitePlots, setSitePlots] = useState<TemplateSitePlot[]>(DEFAULT_TEMPLATE_PLOTS);
   const [activityDelays, setActivityDelays] = useState<ActivityDelay[]>([]);
   const [tradeContacts, setTradeContacts] = useState<TradeContact[]>(DEFAULT_TRADE_CONTACTS);
   const [issueSettingsState, setIssueSettingsState] = useState<IssueSettings>(DEFAULT_ISSUE_SETTINGS);
   const [issueLogs, setIssueLogs] = useState<IssueLog[]>([]);
+  const [plotTemplates, setPlotTemplates] = useState<PlotTemplate[]>(DEFAULT_PLOT_TEMPLATES);
+  const [siteSetup, setSiteSetupState] = useState<SiteProgrammeSetup>(DEFAULT_SITE_PROGRAMME_SETUP);
   const [isSitePlannerLoaded, setIsSitePlannerLoaded] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     async function loadPlanner() {
       try {
-        const [storedPlots, storedDelays, storedContacts, storedIssueSettings, storedIssueLogs] = await Promise.all([
-          readArray<SitePlot>(SITE_PLOTS_KEY, DEFAULT_SITE_PLOTS),
+        const [storedPlots, storedDelays, storedContacts, storedIssueSettings, storedIssueLogs, storedTemplates, storedSiteSetup] = await Promise.all([
+          readArray<TemplateSitePlot>(SITE_PLOTS_KEY, DEFAULT_TEMPLATE_PLOTS),
           readArray<ActivityDelay>(SITE_DELAYS_KEY, []),
           readArray<TradeContact>(TRADE_CONTACTS_KEY, DEFAULT_TRADE_CONTACTS),
           readObject<IssueSettings>(ISSUE_SETTINGS_KEY, DEFAULT_ISSUE_SETTINGS),
           readArray<IssueLog>(ISSUE_LOGS_KEY, []),
+          readArray<PlotTemplate>(PLOT_TEMPLATES_KEY, DEFAULT_PLOT_TEMPLATES),
+          readObject<SiteProgrammeSetup>(SITE_PROGRAMME_SETUP_KEY, DEFAULT_SITE_PROGRAMME_SETUP),
         ]);
         if (mounted) {
-          setSitePlots(storedPlots);
+          setSitePlots(normalisePlots(storedPlots));
           setActivityDelays(storedDelays);
           setTradeContacts(mergeDefaultTradeContacts(storedContacts));
           setIssueSettingsState(storedIssueSettings);
           setIssueLogs(storedIssueLogs);
+          setPlotTemplates(mergeDefaultTemplates(storedTemplates));
+          setSiteSetupState({ ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup });
         }
       } catch (error) {
         console.warn('Unable to load site planner data', error);
@@ -126,14 +156,14 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
-  const upsertSitePlot = async (input: { plotNo: string; stage9CompleteWeek: number }) => {
+  const upsertSitePlot = async (input: { plotNo: string; stage9CompleteWeek: number; templateId: string }) => {
     const plotNo = input.plotNo.trim();
     if (!plotNo || !Number.isFinite(input.stage9CompleteWeek)) return;
 
     const existing = sitePlots.find((plot) => plot.plotNo.toLowerCase() === plotNo.toLowerCase());
-    const nextPlot: SitePlot = existing
-      ? { ...existing, plotNo, stage9CompleteWeek: input.stage9CompleteWeek }
-      : { id: `site-plot-${Date.now()}`, plotNo, stage9CompleteWeek: input.stage9CompleteWeek };
+    const nextPlot: TemplateSitePlot = existing
+      ? { ...existing, plotNo, stage9CompleteWeek: input.stage9CompleteWeek, templateId: input.templateId }
+      : { id: `site-plot-${Date.now()}`, plotNo, stage9CompleteWeek: input.stage9CompleteWeek, templateId: input.templateId };
     const nextPlots = existing
       ? sitePlots.map((plot) => (plot.id === existing.id ? nextPlot : plot))
       : [...sitePlots, nextPlot];
@@ -186,6 +216,32 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
     await AsyncStorage.setItem(ISSUE_LOGS_KEY, JSON.stringify(nextLogs));
   };
 
+  const updateSiteSetup = async (input: Partial<SiteProgrammeSetup>) => {
+    const nextSetup = { ...siteSetup, ...input };
+    setSiteSetupState(nextSetup);
+    await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(nextSetup));
+  };
+
+  const updatePlotTemplate = async (input: PlotTemplate) => {
+    const nextTemplates = plotTemplates.map((template) => (template.id === input.id ? input : template));
+    setPlotTemplates(nextTemplates);
+    await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(nextTemplates));
+  };
+
+  const updateTemplateActivityDuration = async (templateId: string, activityCode: string, durationDays: number) => {
+    const nextTemplates = plotTemplates.map((template) => {
+      if (template.id !== templateId) return template;
+      return {
+        ...template,
+        activities: template.activities.map((activity) =>
+          activity.code === activityCode ? { ...activity, durationDays: Math.max(0, durationDays) } : activity,
+        ),
+      };
+    });
+    setPlotTemplates(nextTemplates);
+    await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(nextTemplates));
+  };
+
   const value = useMemo(
     () => ({
       sitePlots,
@@ -193,6 +249,8 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       tradeContacts,
       issueSettings: issueSettingsState,
       issueLogs,
+      plotTemplates,
+      siteSetup,
       isSitePlannerLoaded,
       upsertSitePlot,
       removeSitePlot,
@@ -200,8 +258,11 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       upsertTradeContact,
       setIssueSettings,
       recordIssue,
+      updateSiteSetup,
+      updatePlotTemplate,
+      updateTemplateActivityDuration,
     }),
-    [sitePlots, activityDelays, tradeContacts, issueSettingsState, issueLogs, isSitePlannerLoaded],
+    [sitePlots, activityDelays, tradeContacts, issueSettingsState, issueLogs, plotTemplates, siteSetup, isSitePlannerLoaded],
   );
 
   return <SitePlannerContext.Provider value={value}>{children}</SitePlannerContext.Provider>;
