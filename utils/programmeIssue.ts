@@ -1,5 +1,5 @@
 import { ActivityDelay, DAY_NAMES, TRADE_ORDER } from './siteProgrammeEngine';
-import { getTradeTemplateText, PlotTemplate, TemplateSitePlot } from './templateProgramme';
+import { DEFAULT_PLOT_TEMPLATES, getTradeTemplateText, PlotTemplate, TemplateSitePlot } from './templateProgramme';
 
 type TradeContactLike = {
   trade: string;
@@ -22,9 +22,10 @@ export function createTradeProgrammeText(input: {
   plots: TemplateSitePlot[];
   activityDelays: ActivityDelay[];
   startWeek: number;
-  plotTemplates: PlotTemplate[];
+  plotTemplates?: PlotTemplate[];
 }) {
-  const { trade, plots, activityDelays, startWeek, plotTemplates } = input;
+  const { trade, plots, activityDelays, startWeek } = input;
+  const plotTemplates = input.plotTemplates ?? DEFAULT_PLOT_TEMPLATES;
   const header = rowText(['Plot', ...DAY_NAMES, ...DAY_NAMES]);
   const divider = rowText(['---', '---', '---', '---', '---', '---', '---', '---', '---', '---', '---']);
   const rows = plots
@@ -45,9 +46,10 @@ export function createManagerProgrammeText(input: {
   activityDelays: ActivityDelay[];
   startWeek: number;
   tradeContacts: TradeContactLike[];
-  plotTemplates: PlotTemplate[];
+  plotTemplates?: PlotTemplate[];
 }) {
-  const { plots, activityDelays, startWeek, tradeContacts, plotTemplates } = input;
+  const { plots, activityDelays, startWeek, tradeContacts } = input;
+  const plotTemplates = input.plotTemplates ?? DEFAULT_PLOT_TEMPLATES;
   const sections = TRADE_ORDER.map((trade) => createTradeProgrammeText({ trade, plots, activityDelays, startWeek, plotTemplates }));
   const contactLines = tradeContacts
     .filter((contact) => contact.supervisorName || contact.contractor || contact.supervisorEmail || contact.supervisorPhone)
