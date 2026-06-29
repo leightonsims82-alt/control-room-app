@@ -2,13 +2,12 @@ import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
-import { houseTypes, plotProgrammes, plotStages } from '../../data/demoData';
 import { useProgrammeData } from '../../data/programmeStore';
-import { useSiteSettings } from '../../data/siteSettingsStore';
+import { useSitePlanner } from '../../data/sitePlannerStore';
 
 export default function MoreScreen() {
   const { defects, inspections } = useProgrammeData();
-  const { settings } = useSiteSettings();
+  const { siteSetup, plotTemplates, sitePlots, tradeContacts, issueLogs } = useSitePlanner();
 
   return (
     <AppScreen>
@@ -17,10 +16,12 @@ export default function MoreScreen() {
         <Text style={styles.subtitle}>Settings, templates and build information</Text>
       </View>
 
-      <SectionCard title="Site Setup" subtitle="Default route used by new plots">
-        <InfoRow label="Site" value={settings.siteName} />
-        <InfoRow label="Regulation route" value={`${settings.jurisdiction} Building Regulations`} />
-        <InfoRow label="Default foundation" value={settings.defaultFoundationType} />
+      <SectionCard title="Site Setup" subtitle="Programme defaults and plot type templates">
+        <InfoRow label="Site" value={siteSetup.siteName} />
+        <InfoRow label="Default programme" value={`${siteSetup.defaultProgrammeWeeks} weeks`} />
+        <InfoRow label="Default stage count" value={`${siteSetup.stageCount}`} />
+        <InfoRow label="Working week" value={siteSetup.workingWeek} />
+        <InfoRow label="Templates" value={`${plotTemplates.length}`} />
         <Link href="/site/setup" asChild>
           <Pressable style={styles.primaryButton}>
             <Text style={styles.primaryButtonText}>Open Site Setup</Text>
@@ -28,29 +29,29 @@ export default function MoreScreen() {
         </Link>
       </SectionCard>
 
-      <SectionCard title="Build Status" subtitle="Current professional rebuild progress">
-        <InfoRow label="App" value="SiteProg" />
-        <InfoRow label="Mode" value="Local demo build" />
-        <InfoRow label="Plots loaded" value={`${plotProgrammes.length}`} />
-        <InfoRow label="Stages loaded" value={`${plotStages.length}`} />
-        <InfoRow label="House types" value={`${houseTypes.length}`} />
+      <SectionCard title="Build Status" subtitle="Current programme app state">
+        <InfoRow label="App" value="Site Programme Control Room" />
+        <InfoRow label="Mode" value="Local pilot build" />
+        <InfoRow label="Week-based plots" value={`${sitePlots.length}`} />
+        <InfoRow label="Trade contacts" value={`${tradeContacts.length}`} />
+        <InfoRow label="Issue logs" value={`${issueLogs.length}`} />
         <InfoRow label="Inspections saved" value={`${inspections.length}`} />
         <InfoRow label="Trade actions" value={`${defects.length}`} />
       </SectionCard>
 
       <SectionCard title="Modules now added" subtitle="Current site control layer">
-        <Text style={styles.item}>Site setup for England/Wales and foundation route</Text>
-        <Text style={styles.item}>Stage inspection checklists</Text>
-        <Text style={styles.item}>Failed checks create trade actions</Text>
-        <Text style={styles.item}>DABS standalone PM meeting record</Text>
-        <Text style={styles.item}>Brickwork inspections for 1st, 2nd, 3rd, 4th lift and gables</Text>
+        <Text style={styles.item}>Configurable site setup: programme weeks, stage count and working week</Text>
+        <Text style={styles.item}>Plot type templates for apartments, 2 bed, 3 bed, 4 bed and 5 bed homes</Text>
+        <Text style={styles.item}>Editable task durations by template</Text>
+        <Text style={styles.item}>Plot setup assigns each plot to a template</Text>
+        <Text style={styles.item}>Daily plot breakdown and 2-week trade programme use the selected template</Text>
       </SectionCard>
 
       <SectionCard title="Next Modules" subtitle="Planned build sequence">
-        <Text style={styles.item}>8am site walk from programme and live plot list</Text>
-        <Text style={styles.item}>Proper camera/photo upload</Text>
-        <Text style={styles.item}>Trade action export and copy message</Text>
-        <Text style={styles.item}>Regenerate programme for existing plots</Text>
+        <Text style={styles.item}>Plot-specific task duration overrides</Text>
+        <Text style={styles.item}>Editable task names and activity order</Text>
+        <Text style={styles.item}>Backend email job for true scheduled issue</Text>
+        <Text style={styles.item}>PDF / Excel export for issued programmes</Text>
       </SectionCard>
     </AppScreen>
   );
