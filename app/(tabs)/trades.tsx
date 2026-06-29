@@ -1,119 +1,182 @@
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
-import { TradeLookaheadGrid } from '../../components/TradeLookaheadGrid';
-import { TradeWorkList } from '../../components/TradeWorkList';
-import { supervisors } from '../../data/demoData';
-import { useProgrammeData } from '../../data/programmeStore';
-import { createTradeLookaheadCsv } from '../../utils/tradeLookaheadExport';
-import { getTradePerformance } from '../../utils/programmeLogic';
+import { TradeContact, useSitePlanner } from '../../data/sitePlannerStore';
+import { createManagerProgrammeText, createTradeProgrammeText, getSavedSupervisorEmails } from '../../utils/programmeIssue';
 
 export default function TradesScreen() {
-  const { plotProgrammes, plotStages, defects, updateDefect } = useProgrammeData();
-  const performance = getTradePerformance(plotStages);
-  const defectTrades = Array.from(new Set(defects.map((defect) => defect.trade))).filter(Boolean);
-  const tradeOptions = Array.from(new Set([...performance.map((item) => item.trade), ...defectTrades]));
-  const [selectedTrade, setSelectedTrade] = useState(tradeOptions[0] ?? '');
+  const {
+    sitePlots,
+    activityDelays,
+    tradeContacts,
+    issueSettings,
+    issueLogs,
+    upsertTradeContact,
+    setIssueSettings,
+    recordIssue,
+  } = useSitePlanner();
+  const [selectedTradeId, setSelectedTradeId] = useState(tradeContacts[0]?.id ?? '');
+  const activeContact = tradeContacts.find((contact) => contact.id === selectedTradeId) ?? tradeContacts[0];
+  const [draftContact, setDraftContact] = useState<TradeContact | undefined>(activeContact);
+  const [managerEmail, setManagerEmail] = useState(issueSettings.managerEmail);
+  const [issueDay, setIssueDay] = useState(issueSettings.issueDay);
+  const [issueTime, setIssueTime] = useState(issueSettings.issueTime);
+  const [autoIssueEnabled, setAutoIssueEnabled] = useState(issueSettings.autoIssueEnabled);
+  const [issueStartWeek, setIssueStartWeek] = useState('1');
 
-  const activeTrade = selectedTrade || tradeOptions[0] || '';
-  const workItems = useMemo(() => {
-    return plotStages
-      .filter((stage) => stage.trade === activeTrade)
-      .map((stage) => ({
-        stage,
-        plot: plotProgrammes.find((plot) => plot.id === stage.plotProgrammeId),
-      }))
-      .filter((item): item is { stage: typeof plotStages[number]; plot: typeof plotProgrammes[number] } => Boolean(item.plot));
-  }, [activeTrade, plotProgrammes, plotStages]);
+  useEffect(() => {
+    setDraftContact(activeContact);
+  }, [activeContact]);
 
-  const csvExport = useMemo(
-    () => createTradeLookaheadCsv({ trade: activeTrade, plotProgrammes, plotStages, defects }),
-    [activeTrade, defects, plotProgrammes, plotStages],
+  useEffect(() => {
+    setManagerEmail(issueSettings.managerEmail);
+    setIssueDay(issueSettings.issueDay);
+    setIssueTime(issueSettings.issueTime);
+    setAutoIssueEnabled(issueSettings.autoIssueEnabled);
+  }, [issueSettings]);
+
+  const activeIssueWeek = Math.max(1, Math.min(51, Number(issueStartWeek) || 1));
+  const savedSupervisorEmails = getSavedSupervisorEmails(tradeContacts);
+  const recipientCount = savedSupervisorEmails.length + (managerEmail.trim() ? 1 : 0);
+
+  const managerPreview = useMemo(
+    () => createManagerProgrammeText({ plots: sitePlots, activityDelays, startWeek: activeIssueWeek, tradeContacts }),
+    [sitePlots, activityDelays, activeIssueWeek, tradeContacts],
   );
 
-  const activeDefects = defects.filter((defect) => defect.trade === activeTrade && defect.status !== 'Verified fixed');
+  const tradePreview = useMemo(
+    () => activeContact ? createTradeProgrammeText({ trade: activeContact.trade, plots: sitePlots, activityDelays, startWeek: activeIssueWeek }) : '',
+    [activeContact, sitePlots, activityDelays, activeIssueWeek],
+  );
+
+  const saveTradeContact = async () => {
+    if (!draftContact) return;
+    await upsertTradeContact(draftContact);
+  };
+
+  const saveIssueSettings = async () => {
+    await setIssueSettings({ managerEmail, issueDay, issueTime, autoIssueEnabled });
+  };
+
+  const markIssued = async () => {
+    await recordIssue({
+      startWeek: activeIssueWeek,
+      recipientCount,
+      note: `Programme prepared for manager and saved trade contacts for WK${String(activeIssueWeek).padStart(2, '0')} + WK${String(activeIssueWeek + 1).padStart(2, '0')}`,
+    });
+  };
 
   return (
     <AppScreen>
       <View style={styles.header}>
-        <Text style={styles.title}>Trades</Text>
-        <Text style={styles.subtitle}>Excel-style lookahead, open actions and trade performance</Text>
+        <Text style={styles.title}>Trade Setup & Issue</Text>
+        <Text style={styles.subtitle}>Save contractors, trade supervisors and issue settings for the automatic 2-week trade programme.</Text>
       </View>
 
-      <SectionCard title="Trade Selector" subtitle="Choose a trade to view its programme spreadsheet">
-        <View style={styles.tradeChips}>
-          {tradeOptions.map((trade) => {
-            const active = trade === activeTrade;
-            const actionCount = defects.filter((defect) => defect.trade === trade && defect.status !== 'Verified fixed').length;
-            return (
-              <Pressable key={trade} style={[styles.tradeChip, active ? styles.tradeChipActive : null]} onPress={() => setSelectedTrade(trade)}>
-                <Text style={[styles.tradeChipText, active ? styles.tradeChipTextActive : null]}>{trade} {actionCount > 0 ? `(${actionCount})` : ''}</Text>
-              </Pressable>
-            );
-          })}
+      <SectionCard title="Trade setup" subtitle="Each trade can have its contractor, supervisor, email and phone saved against it.">
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View style={styles.tradeChips}>
+            {tradeContacts.map((contact) => {
+              const active = contact.id === activeContact?.id;
+              return (
+                <Pressable key={contact.id} style={[styles.tradeChip, active ? styles.tradeChipActive : null]} onPress={() => setSelectedTradeId(contact.id)}>
+                  <Text style={[styles.tradeChipText, active ? styles.tradeChipTextActive : null]}>{contact.trade}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
+
+        {draftContact ? (
+          <View style={styles.formGrid}>
+            <View style={styles.inputWrap}>
+              <Text style={styles.label}>Trade</Text>
+              <TextInput value={draftContact.trade} editable={false} style={[styles.input, styles.lockedInput]} />
+            </View>
+            <View style={styles.inputWrap}>
+              <Text style={styles.label}>Contractor</Text>
+              <TextInput value={draftContact.contractor} onChangeText={(contractor) => setDraftContact({ ...draftContact, contractor })} style={styles.input} placeholder="Contractor name" />
+            </View>
+            <View style={styles.inputWrap}>
+              <Text style={styles.label}>Supervisor</Text>
+              <TextInput value={draftContact.supervisorName} onChangeText={(supervisorName) => setDraftContact({ ...draftContact, supervisorName })} style={styles.input} placeholder="Supervisor name" />
+            </View>
+            <View style={styles.inputWrap}>
+              <Text style={styles.label}>Supervisor email</Text>
+              <TextInput value={draftContact.supervisorEmail} onChangeText={(supervisorEmail) => setDraftContact({ ...draftContact, supervisorEmail })} style={styles.input} placeholder="name@example.com" keyboardType="email-address" autoCapitalize="none" />
+            </View>
+            <View style={styles.inputWrap}>
+              <Text style={styles.label}>Supervisor phone</Text>
+              <TextInput value={draftContact.supervisorPhone} onChangeText={(supervisorPhone) => setDraftContact({ ...draftContact, supervisorPhone })} style={styles.input} placeholder="07..." keyboardType="phone-pad" />
+            </View>
+            <Pressable style={styles.saveButton} onPress={saveTradeContact}>
+              <Text style={styles.saveButtonText}>Save Trade</Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </SectionCard>
+
+      <SectionCard title="Automatic issue settings" subtitle="Stores the schedule and recipient source for the 2-week trade programme. A backend email job will be needed for true background auto-send.">
+        <View style={styles.formGrid}>
+          <View style={styles.inputWrap}>
+            <Text style={styles.label}>Manager email</Text>
+            <TextInput value={managerEmail} onChangeText={setManagerEmail} style={styles.input} placeholder="manager@example.com" keyboardType="email-address" autoCapitalize="none" />
+          </View>
+          <View style={styles.inputWrap}>
+            <Text style={styles.label}>Issue day</Text>
+            <TextInput value={issueDay} onChangeText={setIssueDay} style={styles.input} placeholder="Friday" />
+          </View>
+          <View style={styles.inputWrap}>
+            <Text style={styles.label}>Issue time</Text>
+            <TextInput value={issueTime} onChangeText={setIssueTime} style={styles.input} placeholder="15:00" />
+          </View>
+          <Pressable style={[styles.toggleButton, autoIssueEnabled ? styles.toggleActive : null]} onPress={() => setAutoIssueEnabled((value) => !value)}>
+            <Text style={[styles.toggleText, autoIssueEnabled ? styles.toggleTextActive : null]}>{autoIssueEnabled ? 'Auto issue on' : 'Auto issue off'}</Text>
+          </Pressable>
+          <Pressable style={styles.saveButton} onPress={saveIssueSettings}>
+            <Text style={styles.saveButtonText}>Save Issue Settings</Text>
+          </Pressable>
+        </View>
+        <Text style={styles.helperText}>Recipients currently saved: {recipientCount}. Manager receives the full programme. Supervisors receive their trade programme once server-side email sending is connected.</Text>
+      </SectionCard>
+
+      <SectionCard title="Issue 2-week programme" subtitle="Prepare the manager copy and individual trade copy from the live programme.">
+        <View style={styles.issueHeaderRow}>
+          <View style={styles.inputWrapSmall}>
+            <Text style={styles.label}>Start week</Text>
+            <TextInput value={issueStartWeek} onChangeText={setIssueStartWeek} style={styles.input} keyboardType="number-pad" />
+          </View>
+          <View style={styles.issueSummary}>
+            <Text style={styles.issueTitle}>WK{String(activeIssueWeek).padStart(2, '0')} + WK{String(activeIssueWeek + 1).padStart(2, '0')}</Text>
+            <Text style={styles.issueMeta}>{savedSupervisorEmails.length} supervisor email{savedSupervisorEmails.length === 1 ? '' : 's'} saved</Text>
+          </View>
+          <Pressable style={styles.saveButton} onPress={markIssued}>
+            <Text style={styles.saveButtonText}>Mark Issued</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.previewGrid}>
+          <View style={styles.previewPanel}>
+            <Text style={styles.previewTitle}>Manager full programme preview</Text>
+            <TextInput value={managerPreview} editable={false} multiline style={styles.previewBox} />
+          </View>
+          <View style={styles.previewPanel}>
+            <Text style={styles.previewTitle}>{activeContact?.trade ?? 'Trade'} supervisor preview</Text>
+            <TextInput value={tradePreview} editable={false} multiline style={styles.previewBox} />
+          </View>
         </View>
       </SectionCard>
 
-      <SectionCard title="Trade 2-Week Lookahead" subtitle={activeTrade ? `Spreadsheet view for ${activeTrade}` : 'Select a trade'}>
-        <TradeLookaheadGrid trade={activeTrade} plotProgrammes={plotProgrammes} plotStages={plotStages} defects={defects} />
-      </SectionCard>
-
-      <SectionCard title="CSV Export" subtitle="Copy this into Excel, email or a shared file during the pilot">
-        <TextInput value={csvExport} editable={false} multiline style={styles.csvBox} />
-      </SectionCard>
-
-      <SectionCard title="Open Trade Actions" subtitle={activeTrade ? `Inspection defects assigned to ${activeTrade}` : 'Select a trade'}>
-        {activeDefects.length === 0 ? <Text style={styles.empty}>No open actions for this trade.</Text> : null}
-        {activeDefects.map((defect) => {
-          const plot = plotProgrammes.find((item) => item.id === defect.plotProgrammeId);
-          return (
-            <View key={defect.id} style={styles.actionRow}>
-              <View style={styles.main}>
-                <Text style={styles.actionPlot}>{plot?.plotName ?? 'Plot'} · {defect.stage}</Text>
-                <Text style={styles.actionText}>{defect.description}</Text>
-                <Text style={styles.actionMeta}>Required action: {defect.requiredAction}</Text>
-                {defect.imageUri ? <Text style={styles.imageText}>Image: {defect.imageUri}</Text> : null}
-                <Text style={styles.statusText}>Status: {defect.status}</Text>
-              </View>
-              <View style={styles.actionButtons}>
-                <Pressable style={styles.smallButton} onPress={() => updateDefect(defect.id, { sentToTrade: true, status: 'Sent to trade' })}>
-                  <Text style={styles.smallButtonText}>Mark sent</Text>
-                </Pressable>
-                <Pressable style={styles.smallButtonLight} onPress={() => updateDefect(defect.id, { fixed: 'Yes', status: 'Fixed awaiting verification' })}>
-                  <Text style={styles.smallButtonLightText}>Fixed?</Text>
-                </Pressable>
-              </View>
+      <SectionCard title="Issue history" subtitle="Local audit trail for programme issue actions during the pilot.">
+        {issueLogs.length === 0 ? <Text style={styles.empty}>No programmes recorded as issued yet.</Text> : null}
+        {issueLogs.map((log) => (
+          <View key={log.id} style={styles.logRow}>
+            <View style={styles.logMain}>
+              <Text style={styles.logTitle}>WK{String(log.startWeek).padStart(2, '0')} + WK{String(log.startWeek + 1).padStart(2, '0')}</Text>
+              <Text style={styles.logMeta}>{log.note}</Text>
             </View>
-          );
-        })}
-      </SectionCard>
-
-      <SectionCard title="14-Day Trade Work List" subtitle={activeTrade ? `Card view for ${activeTrade}` : 'Select a trade to view upcoming work'}>
-        <TradeWorkList items={workItems} trade={activeTrade || 'Unassigned'} />
-      </SectionCard>
-
-      <SectionCard title="Trade Performance" subtitle="Scored from completed stages minus delay impact">
-        {performance.map((trade, index) => (
-          <View key={trade.trade} style={styles.tradeRow}>
-            <View style={styles.rank}><Text style={styles.rankText}>{index + 1}</Text></View>
-            <View style={styles.main}>
-              <Text style={styles.tradeName}>{trade.trade}</Text>
-              <Text style={styles.tradeMeta}>{trade.complete} complete · {trade.total} total · {trade.delayed} delayed</Text>
-            </View>
-            <Text style={styles.score}>{trade.score}%</Text>
-          </View>
-        ))}
-      </SectionCard>
-
-      <SectionCard title="Supervisors" subtitle="Initial contact list for trade accountability">
-        {supervisors.map((supervisor) => (
-          <View key={supervisor.id} style={styles.supervisorRow}>
-            <View>
-              <Text style={styles.supervisorName}>{supervisor.supervisorName}</Text>
-              <Text style={styles.supervisorTrade}>{supervisor.trade}</Text>
-            </View>
-            <Text style={styles.contact}>Details pending</Text>
+            <Text style={styles.logDate}>{new Date(log.issuedAt).toLocaleDateString()}</Text>
           </View>
         ))}
       </SectionCard>
@@ -124,34 +187,37 @@ export default function TradesScreen() {
 const styles = StyleSheet.create({
   header: { gap: 4 },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
-  subtitle: { color: '#64748b', fontSize: 14 },
-  tradeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
+  tradeChips: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
   tradeChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
   tradeChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   tradeChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
   tradeChipTextActive: { color: '#ffffff' },
-  csvBox: { minHeight: 180, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
+  formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
+  inputWrap: { gap: 6, minWidth: 190, flex: 1 },
+  inputWrapSmall: { gap: 6, width: 120 },
+  label: { color: '#334155', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', fontWeight: '800' },
+  lockedInput: { backgroundColor: '#f1f5f9', color: '#64748b' },
+  saveButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-end' },
+  saveButtonText: { color: '#ffffff', fontWeight: '900' },
+  toggleButton: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#ffffff' },
+  toggleActive: { backgroundColor: '#dcfce7', borderColor: '#16a34a' },
+  toggleText: { color: '#475569', fontWeight: '900' },
+  toggleTextActive: { color: '#166534' },
+  helperText: { color: '#64748b', fontSize: 12, lineHeight: 18 },
+  issueHeaderRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
+  issueSummary: { flex: 1, minWidth: 220, backgroundColor: '#eff6ff', borderRadius: 12, padding: 12 },
+  issueTitle: { color: '#0f172a', fontWeight: '900', fontSize: 18 },
+  issueMeta: { color: '#64748b', fontSize: 12, marginTop: 3 },
+  previewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  previewPanel: { flex: 1, minWidth: 300, gap: 8 },
+  previewTitle: { color: '#0f172a', fontWeight: '900' },
+  previewBox: { minHeight: 260, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
   empty: { color: '#64748b' },
-  actionRow: { borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12, gap: 10 },
-  main: { flex: 1 },
-  actionPlot: { color: '#2563eb', fontSize: 12, fontWeight: '900' },
-  actionText: { color: '#0f172a', fontWeight: '900', marginTop: 3 },
-  actionMeta: { color: '#475569', fontSize: 12, marginTop: 3 },
-  imageText: { color: '#64748b', fontSize: 12, marginTop: 3 },
-  statusText: { color: '#dc2626', fontSize: 12, fontWeight: '900', marginTop: 3 },
-  actionButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  smallButton: { backgroundColor: '#0f172a', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  smallButtonText: { color: '#ffffff', fontSize: 12, fontWeight: '900' },
-  smallButtonLight: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
-  smallButtonLightText: { color: '#475569', fontSize: 12, fontWeight: '900' },
-  tradeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12, paddingBottom: 2 },
-  rank: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' },
-  rankText: { color: '#2563eb', fontWeight: '900' },
-  tradeName: { color: '#0f172a', fontWeight: '900' },
-  tradeMeta: { color: '#64748b', fontSize: 12, marginTop: 3 },
-  score: { color: '#2563eb', fontWeight: '900', fontSize: 18 },
-  supervisorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
-  supervisorName: { color: '#0f172a', fontWeight: '900' },
-  supervisorTrade: { color: '#64748b', marginTop: 3 },
-  contact: { color: '#94a3b8', fontWeight: '700', fontSize: 12 },
+  logRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
+  logMain: { flex: 1 },
+  logTitle: { color: '#0f172a', fontWeight: '900' },
+  logMeta: { color: '#64748b', fontSize: 12, marginTop: 3, lineHeight: 18 },
+  logDate: { color: '#2563eb', fontWeight: '900', fontSize: 12 },
 });
