@@ -1,71 +1,76 @@
-import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
-import { PlotCard } from '../../components/PlotCard';
 import { SectionCard } from '../../components/SectionCard';
-import { useProgrammeData } from '../../data/programmeStore';
-import { getDelayedStages, getHeldPlots } from '../../utils/programmeLogic';
+import { useSitePlanner } from '../../data/sitePlannerStore';
+import { DAY_NAMES, getPlotBreakdownCellText, getStage1StartWeek, WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
 
 export default function PlotsScreen() {
-  const { plotProgrammes, plotStages } = useProgrammeData();
-  const heldPlots = getHeldPlots(plotProgrammes);
-  const delayedStages = getDelayedStages(plotStages);
+  const { sitePlots, activityDelays } = useSitePlanner();
 
   return (
     <AppScreen>
-      <View style={styles.headerRow}>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Plots</Text>
-          <Text style={styles.subtitle}>Live plot status, current stage and programme progress</Text>
-        </View>
-        <Pressable style={styles.newButton} onPress={() => router.push('/plot/new')}>
-          <Text style={styles.newButtonText}>+ New Plot</Text>
-        </Pressable>
+      <View style={styles.header}>
+        <Text style={styles.title}>Plot Breakdown</Text>
+        <Text style={styles.subtitle}>Daily plot programme in the same format as the trade programme, extended across the full build. Cells show specific activity codes such as FND, DNG, SLAB and 1ST BWK.</Text>
       </View>
 
-      <View style={styles.summaryGrid}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>{plotProgrammes.length}</Text>
-          <Text style={styles.summaryLabel}>Plots</Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>{plotProgrammes.length - heldPlots.length}</Text>
-          <Text style={styles.summaryLabel}>Active</Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>{heldPlots.length}</Text>
-          <Text style={styles.summaryLabel}>On hold</Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>{delayedStages.length}</Text>
-          <Text style={styles.summaryLabel}>Delayed stages</Text>
-        </View>
-      </View>
+      <SectionCard title="Daily Plot Breakdown" subtitle="One row per plot. Use this as the daily progress tracker against the programme.">
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View>
+            <View style={styles.weekHeaderRow}>
+              <Text style={[styles.weekHeaderBlank, styles.plotCell]} />
+              <Text style={[styles.weekHeaderBlank, styles.stageCell]} />
+              <Text style={[styles.weekHeaderBlank, styles.stageCell]} />
+              {WEEK_NUMBERS.map((week) => (
+                <Text key={week} style={styles.weekGroup}>WK{String(week).padStart(2, '0')}</Text>
+              ))}
+            </View>
+            <View style={styles.tableRow}>
+              <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
+              <Text style={[styles.headerCell, styles.stageCell]}>Stage 9 Week</Text>
+              <Text style={[styles.headerCell, styles.stageCell]}>Stage 1 Start</Text>
+              {WEEK_NUMBERS.flatMap((week) =>
+                DAY_NAMES.map((day) => (
+                  <Text key={`${week}-${day}`} style={styles.dayHeader}>{day}</Text>
+                )),
+              )}
+            </View>
 
-      <View style={styles.plotGrid}>
-        {plotProgrammes.map((plot) => (
-          <PlotCard key={plot.id} plot={plot} stages={plotStages} />
-        ))}
-      </View>
-
-      <SectionCard title="Base44 parity" subtitle="Create plot flow now available">
-        <Text style={styles.note}>Use New Plot to create a programme from phase, bedroom size, build type and forward or reverse scheduling.</Text>
+            {sitePlots.map((plot, rowIndex) => (
+              <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
+                <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
+                <Text style={[styles.bodyCell, styles.stageCell]}>{plot.stage9CompleteWeek}</Text>
+                <Text style={[styles.stageStartCell, styles.stageCell]}>{getStage1StartWeek(plot)}</Text>
+                {WEEK_NUMBERS.flatMap((week) =>
+                  DAY_NAMES.map((_, dayIndex) => {
+                    const text = getPlotBreakdownCellText(plot, week, dayIndex + 1, activityDelays);
+                    return <Text key={`${plot.id}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
+                  }),
+                )}
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       </SectionCard>
     </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap' },
-  headerText: { gap: 4, flex: 1, minWidth: 220 },
+  header: { gap: 4 },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
-  subtitle: { color: '#64748b', fontSize: 14 },
-  newButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
-  newButtonText: { color: '#ffffff', fontSize: 13, fontWeight: '900' },
-  summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  summaryCard: { flex: 1, minWidth: 140, backgroundColor: '#ffffff', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', padding: 16 },
-  summaryValue: { color: '#0f172a', fontSize: 26, fontWeight: '900' },
-  summaryLabel: { color: '#64748b', fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
-  plotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  note: { color: '#475569', lineHeight: 20 },
+  subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
+  weekHeaderRow: { flexDirection: 'row' },
+  tableRow: { flexDirection: 'row', alignItems: 'stretch' },
+  altRow: { backgroundColor: '#eaf2fb' },
+  weekHeaderBlank: { backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce', minHeight: 28 },
+  weekGroup: { width: 400, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  plotCell: { width: 92 },
+  stageCell: { width: 106 },
+  dayHeader: { width: 80, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
+  stageStartCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900', backgroundColor: '#e3f3d8' },
+  dayCell: { width: 80, minHeight: 58, color: '#0f172a', padding: 6, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontSize: 11, fontWeight: '900' },
+  activeDayCell: { backgroundColor: '#dff0ff' },
 });
