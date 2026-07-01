@@ -131,6 +131,16 @@ function orderedActivities(template: PlotTemplate) {
   return template.activities.slice().filter((activity) => activity.durationDays > 0).sort((a, b) => a.order - b.order);
 }
 
+export function calendarDayIndexFromWeekDay(week: number, day: number) {
+  return (week - 1) * 7 + day;
+}
+
+function businessDayIndexToCalendarDayIndex(businessDayIndex: number) {
+  const week = Math.floor((businessDayIndex - 1) / 5) + 1;
+  const day = ((businessDayIndex - 1) % 5) + 1;
+  return calendarDayIndexFromWeekDay(week, day);
+}
+
 export function getTemplateActivityRanges(template: PlotTemplate) {
   return orderedActivities(template).map((activity) => {
     const plannedStart = dayIndexFromWeekDay(activity.relativeWeek, activity.relativeDay);
@@ -194,20 +204,29 @@ function cascadingMoveDelta(plotId: string, activityOrder: number, moves: Activi
 export function getActivityBaseStartDay(template: PlotTemplate, activityCode: string) {
   const activity = template.activities.find((item) => item.code === activityCode);
   if (!activity) return null;
-  return dayIndexFromWeekDay(activity.relativeWeek, activity.relativeDay);
+  const baseBusinessDay = dayIndexFromWeekDay(activity.relativeWeek, activity.relativeDay);
+  return businessDayIndexToCalendarDayIndex(baseBusinessDay);
 }
 
-function activityRange(plot: TemplateSitePlot, template: PlotTemplate, activity: TemplateActivity, delays: ActivityDelay[], moves: ActivityMove[] = []) {
-  const stage1Week = getStage1StartWeekForPlot(plot, [template]);
+function getActivityCalendarDays(plot: TemplateSitePlot, template: PlotTemplate, activity: TemplateActivity, delays: ActivityDelay[], moves: ActivityMove[] = []) {
+  const stage1StartBusinessDay = dayIndexFromWeekDay(getStage1StartWeekForPlot(plot, [template]), 1);
   const scheduled = getTemplateActivityRanges(template).find((item) => item.activity.code === activity.code);
   const relativeStart = scheduled?.start ?? 1;
   const relativeFinish = scheduled?.finish ?? relativeStart;
-  const baseOffset = dayIndexFromWeekDay(stage1Week, 1) - 1;
+  const startBusinessDay = stage1StartBusinessDay + relativeStart - 1 + delayBefore(plot.id, activity.order, delays, template.activities);
+  const finishBusinessDay = stage1StartBusinessDay + relativeFinish - 1 + delayUpTo(plot.id, activity.order, delays, template.activities);
   const moveDelta = cascadingMoveDelta(plot.id, activity.order, moves, template.activities);
-  return {
-    start: baseOffset + relativeStart + moveDelta + delayBefore(plot.id, activity.order, delays, template.activities),
-    finish: baseOffset + relativeFinish + moveDelta + delayUpTo(plot.id, activity.order, delays, template.activities),
-  };
+
+  return Array.from({ length: Math.max(0, finishBusinessDay - startBusinessDay + 1) }, (_, index) =>
+    businessDayIndexToCalendarDayIndex(startBusinessDay + index) + moveDelta,
+  );
+}
+
+function activityRange(plot: TemplateSitePlot, template: PlotTemplate, activity: TemplateActivity, delays: ActivityDelay[], moves: ActivityMove[] = []) {
+  const days = getActivityCalendarDays(plot, template, activity, delays, moves);
+  const start = days.length ? Math.min(...days) : 0;
+  const finish = days.length ? Math.max(...days) : 0;
+  return { start, finish };
 }
 
 export function getActivityRangeForPlot(plot: TemplateSitePlot, activityCode: string, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
@@ -220,18 +239,15 @@ export function getActivityRangeForPlot(plot: TemplateSitePlot, activityCode: st
 export function getActivityMoveDeltaToTarget(plot: TemplateSitePlot, activityCode: string, targetWeek: number, targetDay: number, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
   const currentRange = getActivityRangeForPlot(plot, activityCode, delays, templates, moves);
   if (!currentRange) return 0;
-  const targetDayIndex = dayIndexFromWeekDay(targetWeek, targetDay);
+  const targetDayIndex = calendarDayIndexFromWeekDay(targetWeek, targetDay);
   const existingOwnMove = moves.find((move) => move.plotId === plot.id && move.activityCode === activityCode)?.deltaDays ?? 0;
   return existingOwnMove + (targetDayIndex - currentRange.start);
 }
 
 export function getActivitiesForTemplateDay(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
   const template = getTemplateForPlot(plot, templates);
-  const currentDay = dayIndexFromWeekDay(week, day);
-  return orderedActivities(template).filter((activity) => {
-    const range = activityRange(plot, template, activity, delays, moves);
-    return currentDay >= range.start && currentDay <= range.finish;
-  });
+  const currentDay = calendarDayIndexFromWeekDay(week, day);
+  return orderedActivities(template).filter((activity) => getActivityCalendarDays(plot, template, activity, delays, moves).includes(currentDay));
 }
 
 export function getPlotBreakdownTemplateText(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
@@ -247,7 +263,7 @@ export function getTradeTemplateText(plot: TemplateSitePlot, trade: string, week
 
 export function plotHasTradeWorkForTemplate(plot: TemplateSitePlot, trade: string, startWeek: number, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
   for (let week = startWeek; week <= startWeek + 1; week += 1) {
-    for (let day = 1; day <= 5; day += 1) {
+    for (let day = 1; day <= 7; day += 1) {
       if (getTradeTemplateText(plot, trade, week, day, delays, templates, moves)) return true;
     }
   }
