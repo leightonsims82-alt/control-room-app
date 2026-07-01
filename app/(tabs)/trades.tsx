@@ -15,8 +15,10 @@ export default function TradesScreen() {
     plotTemplates,
     issueSettings,
     issueLogs,
+    programmeNotes,
     upsertTradeContact,
     setIssueSettings,
+    setProgrammeNote,
     recordIssue,
   } = useSitePlanner();
   const [selectedTradeId, setSelectedTradeId] = useState(tradeContacts[0]?.id ?? '');
@@ -112,7 +114,7 @@ export default function TradesScreen() {
         </View>
       </SectionCard>
 
-      <SectionCard title={`2 WEEK ${selectedTrade.toUpperCase()} PROGRAMME`} subtitle="This is the app version of your trade-specific Excel programme.">
+      <SectionCard title={`2 WEEK ${selectedTrade.toUpperCase()} PROGRAMME`} subtitle="This is the app version of your trade-specific Excel programme. Output / Recovery Notes can be typed directly into the row.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.topHeaderRow}>
@@ -146,6 +148,7 @@ export default function TradesScreen() {
             {visiblePlots.map((plot, rowIndex) => {
               const fixText = getFixText(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates);
               const output = getOutputText(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates);
+              const savedNote = programmeNotes.find((note) => note.plotId === plot.id && note.trade === selectedTrade && note.startWeek === activeIssueWeek)?.note ?? '';
               return (
                 <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                   <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
@@ -157,7 +160,13 @@ export default function TradesScreen() {
                       return <Text key={`${plot.id}-${selectedTrade}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
                     }),
                   )}
-                  <Text style={[styles.bodyCell, styles.outputCell]}>{output || 'Complete planned trade output / record missed target notes here.'}</Text>
+                  <TextInput
+                    value={savedNote}
+                    onChangeText={(note) => setProgrammeNote({ plotId: plot.id, trade: selectedTrade, startWeek: activeIssueWeek, note })}
+                    placeholder={output ? `${output} — add missed target / recovery note` : 'Add missed target / recovery note'}
+                    multiline
+                    style={[styles.outputInput, styles.outputCell]}
+                  />
                 </View>
               );
             })}
@@ -301,13 +310,14 @@ const styles = StyleSheet.create({
   plotCell: { width: 90 },
   tradeCell: { width: 150 },
   fixCell: { width: 150 },
-  outputCell: { width: 260 },
+  outputCell: { width: 300 },
   dayHeader: { width: 140, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
   dayCell: { width: 140, minHeight: 58, color: '#0f172a', padding: 6, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontSize: 11, fontWeight: '900' },
   activeDayCell: { backgroundColor: '#dff0ff' },
   emptyCell: { color: '#64748b', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
   emptyDayCell: { width: 140, minHeight: 42, borderWidth: 1, borderColor: '#c8d7e6' },
+  outputInput: { minHeight: 58, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fffdf2', fontSize: 12, fontWeight: '700', textAlignVertical: 'top' },
   formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
   inputWrap: { gap: 6, minWidth: 190, flex: 1 },
   inputWrapSmall: { gap: 6, width: 120 },
