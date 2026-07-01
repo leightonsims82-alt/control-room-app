@@ -3,6 +3,7 @@ import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useSt
 import { ActivityDelay, TRADE_ORDER } from '../utils/siteProgrammeEngine';
 import {
   ActivityMove,
+  createHouseTypeTemplate,
   DEFAULT_PLOT_TEMPLATES,
   DEFAULT_SITE_PROGRAMME_SETUP,
   DEFAULT_TEMPLATE_PLOTS,
@@ -91,6 +92,7 @@ type SitePlannerStore = {
   setProgrammeNote: (input: { plotId: string; trade: string; startWeek: number; note: string }) => Promise<void>;
   recordIssue: (input: { startWeek: number; recipientCount: number; note: string }) => Promise<void>;
   updateSiteSetup: (input: Partial<SiteProgrammeSetup>) => Promise<void>;
+  addPlotTemplate: (input: { name: string; houseTypeCode: string; baseTemplateId?: string }) => Promise<void>;
   updatePlotTemplate: (input: PlotTemplate) => Promise<void>;
   updateTemplateActivityDuration: (templateId: string, activityCode: string, durationDays: number) => Promise<void>;
 };
@@ -124,22 +126,30 @@ function normalisePlots(stored: TemplateSitePlot[]) {
   return stored.map((plot) => ({ ...plot, templateId: plot.templateId || 'threeBed' }));
 }
 
+function normaliseTemplate(template: PlotTemplate) {
+  return { ...template, houseTypeCode: template.houseTypeCode || template.name };
+}
+
 function mergeDefaultTemplates(stored: PlotTemplate[]) {
   const storedById = new Map(stored.map((template) => [template.id, template]));
-  return DEFAULT_PLOT_TEMPLATES.map((template) => {
+  const defaultIds = new Set(DEFAULT_PLOT_TEMPLATES.map((template) => template.id));
+  const mergedDefaults = DEFAULT_PLOT_TEMPLATES.map((template) => {
     const storedTemplate = storedById.get(template.id);
-    if (!storedTemplate) return template;
+    if (!storedTemplate) return normaliseTemplate(template);
     const storedActivitiesByCode = new Map(storedTemplate.activities.map((activity) => [activity.code, activity]));
-    return {
+    return normaliseTemplate({
       ...template,
       name: storedTemplate.name || template.name,
+      houseTypeCode: storedTemplate.houseTypeCode || template.houseTypeCode || template.name,
       description: storedTemplate.description || template.description,
       activities: template.activities.map((activity) => {
         const storedActivity = storedActivitiesByCode.get(activity.code);
         return storedActivity ? { ...activity, durationDays: storedActivity.durationDays ?? activity.durationDays } : activity;
       }),
-    };
+    });
   });
+  const customTemplates = stored.filter((template) => !defaultIds.has(template.id)).map(normaliseTemplate);
+  return [...mergedDefaults, ...customTemplates];
 }
 
 export function SitePlannerProvider({ children }: PropsWithChildren) {
@@ -299,6 +309,14 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
     await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(nextSetup));
   };
 
+  const addPlotTemplate = async (input: { name: string; houseTypeCode: string; baseTemplateId?: string }) => {
+    const baseTemplate = plotTemplates.find((template) => template.id === input.baseTemplateId) ?? plotTemplates.find((template) => template.id === 'threeBed') ?? plotTemplates[0];
+    const nextTemplate = createHouseTypeTemplate({ ...input, baseTemplate });
+    const nextTemplates = [...plotTemplates, nextTemplate];
+    setPlotTemplates(nextTemplates);
+    await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(nextTemplates));
+  };
+
   const updatePlotTemplate = async (input: PlotTemplate) => {
     const nextTemplates = plotTemplates.map((template) => (template.id === input.id ? input : template));
     setPlotTemplates(nextTemplates);
@@ -341,6 +359,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       setProgrammeNote,
       recordIssue,
       updateSiteSetup,
+      addPlotTemplate,
       updatePlotTemplate,
       updateTemplateActivityDuration,
     }),
