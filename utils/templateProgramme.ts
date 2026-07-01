@@ -18,6 +18,14 @@ export type TemplateActivity = ProgrammeActivity & {
   overlapAllowed?: boolean;
 };
 
+export type ActivityMove = {
+  id: string;
+  plotId: string;
+  activityCode: string;
+  deltaDays: number;
+  updatedAt: string;
+};
+
 export type PlotTemplate = {
   id: string;
   name: string;
@@ -148,47 +156,77 @@ function delayUpTo(plotId: string, activityOrder: number, delays: ActivityDelay[
   }, 0);
 }
 
-function activityRange(plot: TemplateSitePlot, template: PlotTemplate, activity: TemplateActivity, delays: ActivityDelay[]) {
+function cascadingMoveDelta(plotId: string, activityOrder: number, moves: ActivityMove[], activities: TemplateActivity[]) {
+  return moves.reduce((total, move) => {
+    if (move.plotId !== plotId) return total;
+    const movedActivity = activities.find((item) => item.code === move.activityCode);
+    if (!movedActivity) return total;
+    return movedActivity.order <= activityOrder ? total + move.deltaDays : total;
+  }, 0);
+}
+
+export function getActivityBaseStartDay(template: PlotTemplate, activityCode: string) {
+  const activity = template.activities.find((item) => item.code === activityCode);
+  if (!activity) return null;
+  return dayIndexFromWeekDay(activity.relativeWeek, activity.relativeDay);
+}
+
+function activityRange(plot: TemplateSitePlot, template: PlotTemplate, activity: TemplateActivity, delays: ActivityDelay[], moves: ActivityMove[] = []) {
   const stage1Week = getStage1StartWeekForPlot(plot, [template]);
   const scheduled = getTemplateActivityRanges(template).find((item) => item.activity.code === activity.code);
   const relativeStart = scheduled?.start ?? 1;
   const relativeFinish = scheduled?.finish ?? relativeStart;
   const baseOffset = dayIndexFromWeekDay(stage1Week, 1) - 1;
+  const moveDelta = cascadingMoveDelta(plot.id, activity.order, moves, template.activities);
   return {
-    start: baseOffset + relativeStart + delayBefore(plot.id, activity.order, delays, template.activities),
-    finish: baseOffset + relativeFinish + delayUpTo(plot.id, activity.order, delays, template.activities),
+    start: baseOffset + relativeStart + moveDelta + delayBefore(plot.id, activity.order, delays, template.activities),
+    finish: baseOffset + relativeFinish + moveDelta + delayUpTo(plot.id, activity.order, delays, template.activities),
   };
 }
 
-export function getActivitiesForTemplateDay(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[]) {
+export function getActivityRangeForPlot(plot: TemplateSitePlot, activityCode: string, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
+  const template = getTemplateForPlot(plot, templates);
+  const activity = template.activities.find((item) => item.code === activityCode);
+  if (!activity) return null;
+  return activityRange(plot, template, activity, delays, moves);
+}
+
+export function getActivityMoveDeltaToTarget(plot: TemplateSitePlot, activityCode: string, targetWeek: number, targetDay: number, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
+  const currentRange = getActivityRangeForPlot(plot, activityCode, delays, templates, moves);
+  if (!currentRange) return 0;
+  const targetDayIndex = dayIndexFromWeekDay(targetWeek, targetDay);
+  return targetDayIndex - currentRange.start;
+}
+
+export function getActivitiesForTemplateDay(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
   const template = getTemplateForPlot(plot, templates);
   const currentDay = dayIndexFromWeekDay(week, day);
   return orderedActivities(template).filter((activity) => {
-    const range = activityRange(plot, template, activity, delays);
+    const range = activityRange(plot, template, activity, delays, moves);
     return currentDay >= range.start && currentDay <= range.finish;
   });
 }
 
-export function getPlotBreakdownTemplateText(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[]) {
-  return getActivitiesForTemplateDay(plot, week, day, delays, templates).map((activity) => activity.code).join('\n');
+export function getPlotBreakdownTemplateText(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
+  return getActivitiesForTemplateDay(plot, week, day, delays, templates, moves).map((activity) => activity.code).join('\n');
 }
 
-export function getTradeTemplateText(plot: TemplateSitePlot, trade: string, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[]) {
-  return getActivitiesForTemplateDay(plot, week, day, delays, templates)
+export function getTradeTemplateText(plot: TemplateSitePlot, trade: string, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
+  return getActivitiesForTemplateDay(plot, week, day, delays, templates, moves)
     .filter((activity) => activity.trade === trade)
     .map((activity) => activity.displayText)
     .join('\n');
 }
 
-export function plotHasTradeWorkForTemplate(plot: TemplateSitePlot, trade: string, startWeek: number, delays: ActivityDelay[], templates: PlotTemplate[]) {
+export function plotHasTradeWorkForTemplate(plot: TemplateSitePlot, trade: string, startWeek: number, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
   for (let week = startWeek; week <= startWeek + 1; week += 1) {
     for (let day = 1; day <= 5; day += 1) {
-      if (getTradeTemplateText(plot, trade, week, day, delays, templates)) return true;
+      if (getTradeTemplateText(plot, trade, week, day, delays, templates, moves)) return true;
     }
   }
   return false;
 }
 
-export function getActiveTemplateTrades(plots: TemplateSitePlot[], startWeek: number, delays: ActivityDelay[], templates: PlotTemplate[]) {
-  return TRADE_ORDER.filter((trade) => plots.some((plot) => plotHasTradeWorkForTemplate(plot, trade, startWeek, delays, templates)));
+export function getActiveTemplateTrades(plots: TemplateSitePlot[], startWeek: number, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
+  return TRADE_ORDER.filter((trade) => plots.some((plot) => plotHasTradeWorkForTemplate(plot, trade, startWeek, delays, templates, moves)));
 }
