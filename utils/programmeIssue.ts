@@ -1,5 +1,5 @@
 import { ActivityDelay, DAY_NAMES, TRADE_ORDER } from './siteProgrammeEngine';
-import { DEFAULT_PLOT_TEMPLATES, getTradeTemplateText, PlotTemplate, TemplateSitePlot } from './templateProgramme';
+import { ActivityMove, DEFAULT_PLOT_TEMPLATES, getTradeTemplateText, PlotTemplate, TemplateSitePlot } from './templateProgramme';
 
 type TradeContactLike = {
   trade: string;
@@ -35,16 +35,18 @@ export function createTradeProgrammeText(input: {
   startWeek: number;
   plotTemplates?: PlotTemplate[];
   programmeNotes?: ProgrammeNoteLike[];
+  activityMoves?: ActivityMove[];
 }) {
   const { trade, plots, activityDelays, startWeek } = input;
   const plotTemplates = input.plotTemplates ?? DEFAULT_PLOT_TEMPLATES;
   const programmeNotes = input.programmeNotes ?? [];
+  const activityMoves = input.activityMoves ?? [];
   const header = rowText(['Plot', ...DAY_NAMES, ...DAY_NAMES, 'Output / Recovery Notes']);
   const divider = rowText(['---', '---', '---', '---', '---', '---', '---', '---', '---', '---', '---', '---']);
   const rows = plots
     .map((plot) => {
       const cells = [startWeek, startWeek + 1].flatMap((week) =>
-        DAY_NAMES.map((_, dayIndex) => cleanCell(getTradeTemplateText(plot, trade, week, dayIndex + 1, activityDelays, plotTemplates))),
+        DAY_NAMES.map((_, dayIndex) => cleanCell(getTradeTemplateText(plot, trade, week, dayIndex + 1, activityDelays, plotTemplates, activityMoves))),
       );
       const note = getNote(plot.id, trade, startWeek, programmeNotes);
       const hasWork = cells.some(Boolean);
@@ -62,11 +64,13 @@ export function createManagerProgrammeText(input: {
   tradeContacts: TradeContactLike[];
   plotTemplates?: PlotTemplate[];
   programmeNotes?: ProgrammeNoteLike[];
+  activityMoves?: ActivityMove[];
 }) {
   const { plots, activityDelays, startWeek, tradeContacts } = input;
   const plotTemplates = input.plotTemplates ?? DEFAULT_PLOT_TEMPLATES;
   const programmeNotes = input.programmeNotes ?? [];
-  const sections = TRADE_ORDER.map((trade) => createTradeProgrammeText({ trade, plots, activityDelays, startWeek, plotTemplates, programmeNotes }));
+  const activityMoves = input.activityMoves ?? [];
+  const sections = TRADE_ORDER.map((trade) => createTradeProgrammeText({ trade, plots, activityDelays, startWeek, plotTemplates, programmeNotes, activityMoves }));
   const contactLines = tradeContacts
     .filter((contact) => contact.supervisorName || contact.contractor || contact.supervisorEmail || contact.supervisorPhone)
     .map((contact) => `${contact.trade}: ${contact.contractor || 'Contractor TBC'} - ${contact.supervisorName || 'Supervisor TBC'} - ${contact.supervisorEmail || 'Email TBC'} - ${contact.supervisorPhone || 'Phone TBC'}`);
