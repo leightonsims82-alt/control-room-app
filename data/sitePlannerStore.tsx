@@ -7,6 +7,7 @@ import {
   DEFAULT_PLOT_TEMPLATES,
   DEFAULT_SITE_PROGRAMME_SETUP,
   DEFAULT_TEMPLATE_PLOTS,
+  getSortedSitePlots,
   PlotTemplate,
   SiteProgrammeSetup,
   TemplateSitePlot,
@@ -55,6 +56,13 @@ export type ProgrammeNote = {
   updatedAt: string;
 };
 
+export type SitePlotInput = {
+  plotNo: string;
+  buildOrder?: number;
+  stage9CompleteWeek: number;
+  templateId: string;
+};
+
 const DEFAULT_TRADE_CONTACTS: TradeContact[] = TRADE_ORDER.map((trade) => ({
   id: `trade-${trade.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
   trade,
@@ -82,7 +90,8 @@ type SitePlannerStore = {
   plotTemplates: PlotTemplate[];
   siteSetup: SiteProgrammeSetup;
   isSitePlannerLoaded: boolean;
-  upsertSitePlot: (input: { plotNo: string; stage9CompleteWeek: number; templateId: string }) => Promise<void>;
+  upsertSitePlot: (input: SitePlotInput) => Promise<void>;
+  bulkUpsertSitePlots: (inputs: SitePlotInput[]) => Promise<void>;
   removeSitePlot: (plotId: string) => Promise<void>;
   setActivityDelay: (input: ActivityDelay) => Promise<void>;
   setActivityMove: (input: { plotId: string; activityCode: string; deltaDays: number }) => Promise<void>;
@@ -123,7 +132,7 @@ function mergeDefaultTradeContacts(stored: TradeContact[]) {
 }
 
 function normalisePlots(stored: TemplateSitePlot[]) {
-  return stored.map((plot) => ({ ...plot, templateId: plot.templateId || 'threeBed' }));
+  return stored.map((plot, index) => ({ ...plot, buildOrder: plot.buildOrder || index + 1, templateId: plot.templateId || 'threeBed' }));
 }
 
 function normaliseTemplate(template: PlotTemplate) {
@@ -150,6 +159,32 @@ function mergeDefaultTemplates(stored: PlotTemplate[]) {
   });
   const customTemplates = stored.filter((template) => !defaultIds.has(template.id)).map(normaliseTemplate);
   return [...mergedDefaults, ...customTemplates];
+}
+
+function cleanPlotInput(input: SitePlotInput, fallbackBuildOrder: number): SitePlotInput | null {
+  const plotNo = input.plotNo.trim();
+  const stage9CompleteWeek = Number(input.stage9CompleteWeek);
+  if (!plotNo || !Number.isFinite(stage9CompleteWeek) || stage9CompleteWeek <= 0) return null;
+  return {
+    plotNo,
+    buildOrder: Number.isFinite(input.buildOrder) && input.buildOrder && input.buildOrder > 0 ? input.buildOrder : fallbackBuildOrder,
+    stage9CompleteWeek,
+    templateId: input.templateId || 'threeBed',
+  };
+}
+
+function applyPlotInputs(currentPlots: TemplateSitePlot[], inputs: SitePlotInput[]) {
+  let nextPlots = normalisePlots(currentPlots);
+  inputs.forEach((input, inputIndex) => {
+    const cleaned = cleanPlotInput(input, nextPlots.length + inputIndex + 1);
+    if (!cleaned) return;
+    const existing = nextPlots.find((plot) => plot.plotNo.toLowerCase() === cleaned.plotNo.toLowerCase());
+    const nextPlot: TemplateSitePlot = existing
+      ? { ...existing, plotNo: cleaned.plotNo, buildOrder: cleaned.buildOrder, stage9CompleteWeek: cleaned.stage9CompleteWeek, templateId: cleaned.templateId }
+      : { id: `site-plot-${Date.now()}-${inputIndex}`, plotNo: cleaned.plotNo, buildOrder: cleaned.buildOrder, stage9CompleteWeek: cleaned.stage9CompleteWeek, templateId: cleaned.templateId };
+    nextPlots = existing ? nextPlots.map((plot) => (plot.id === existing.id ? nextPlot : plot)) : [...nextPlots, nextPlot];
+  });
+  return getSortedSitePlots(nextPlots);
 }
 
 export function SitePlannerProvider({ children }: PropsWithChildren) {
@@ -180,7 +215,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           readObject<SiteProgrammeSetup>(SITE_PROGRAMME_SETUP_KEY, DEFAULT_SITE_PROGRAMME_SETUP),
         ]);
         if (mounted) {
-          setSitePlots(normalisePlots(storedPlots));
+          setSitePlots(getSortedSitePlots(normalisePlots(storedPlots)));
           setActivityDelays(storedDelays);
           setActivityMoves(storedMoves);
           setTradeContacts(mergeDefaultTradeContacts(storedContacts));
@@ -202,18 +237,14 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
-  const upsertSitePlot = async (input: { plotNo: string; stage9CompleteWeek: number; templateId: string }) => {
-    const plotNo = input.plotNo.trim();
-    if (!plotNo || !Number.isFinite(input.stage9CompleteWeek)) return;
+  const upsertSitePlot = async (input: SitePlotInput) => {
+    const nextPlots = applyPlotInputs(sitePlots, [input]);
+    setSitePlots(nextPlots);
+    await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(nextPlots));
+  };
 
-    const existing = sitePlots.find((plot) => plot.plotNo.toLowerCase() === plotNo.toLowerCase());
-    const nextPlot: TemplateSitePlot = existing
-      ? { ...existing, plotNo, stage9CompleteWeek: input.stage9CompleteWeek, templateId: input.templateId }
-      : { id: `site-plot-${Date.now()}`, plotNo, stage9CompleteWeek: input.stage9CompleteWeek, templateId: input.templateId };
-    const nextPlots = existing
-      ? sitePlots.map((plot) => (plot.id === existing.id ? nextPlot : plot))
-      : [...sitePlots, nextPlot];
-
+  const bulkUpsertSitePlots = async (inputs: SitePlotInput[]) => {
+    const nextPlots = applyPlotInputs(sitePlots, inputs);
     setSitePlots(nextPlots);
     await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(nextPlots));
   };
@@ -350,6 +381,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       siteSetup,
       isSitePlannerLoaded,
       upsertSitePlot,
+      bulkUpsertSitePlots,
       removeSitePlot,
       setActivityDelay,
       setActivityMove,
