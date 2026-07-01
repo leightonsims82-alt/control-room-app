@@ -152,8 +152,8 @@ export default function SiteSetupScreen() {
           </View>
         ) : null}
 
-        <Pressable style={styles.primaryButton} onPress={() => router.back()}>
-          <Text style={styles.primaryButtonText}>Done</Text>
+        <Pressable style={styles.primaryButton} onPress={() => router.replace('/')}>
+          <Text style={styles.primaryButtonText}>Save</Text>
         </Pressable>
       </View>
     </AppScreen>
