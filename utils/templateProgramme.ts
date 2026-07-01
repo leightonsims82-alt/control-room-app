@@ -12,6 +12,7 @@ import {
 
 export type TemplateSitePlot = SitePlot & {
   templateId?: string;
+  buildOrder?: number;
 };
 
 export type TemplateActivity = ProgrammeActivity;
@@ -96,9 +97,22 @@ export const DEFAULT_PLOT_TEMPLATES: PlotTemplate[] = [
 export const DEFAULT_TEMPLATE_PLOTS: TemplateSitePlot[] = Array.from({ length: 10 }, (_, index) => ({
   id: `plot-${index + 1}`,
   plotNo: String(index + 1),
+  buildOrder: index + 1,
   stage9CompleteWeek: 23 + index,
   templateId: 'threeBed',
 }));
+
+export function getPlotBuildOrder(plot: TemplateSitePlot, fallbackIndex = 0) {
+  return Number.isFinite(plot.buildOrder) && plot.buildOrder && plot.buildOrder > 0 ? plot.buildOrder : fallbackIndex + 1;
+}
+
+export function getSortedSitePlots(plots: TemplateSitePlot[]) {
+  return plots.slice().sort((a, b) => {
+    const buildDiff = getPlotBuildOrder(a, 9999) - getPlotBuildOrder(b, 9999);
+    if (buildDiff !== 0) return buildDiff;
+    return a.plotNo.localeCompare(b.plotNo, undefined, { numeric: true, sensitivity: 'base' });
+  });
+}
 
 export function getTemplateForPlot(plot: TemplateSitePlot, templates: PlotTemplate[]) {
   return templates.find((template) => template.id === plot.templateId) ?? templates.find((template) => template.id === 'threeBed') ?? templates[0];
