@@ -8,14 +8,18 @@ import { getStage1StartWeekForPlot, getStageNumberForPlotWeek, getTemplateForPlo
 
 export default function MasterProgrammeScreen() {
   const { sitePlots, plotTemplates, upsertSitePlot, removeSitePlot } = useSitePlanner();
-  const [plotNo, setPlotNo] = useState('11');
-  const [preHandoverWeek, setPreHandoverWeek] = useState('33');
+  const [plotNo, setPlotNo] = useState('');
+  const [preHandoverWeek, setPreHandoverWeek] = useState('');
   const [templateId, setTemplateId] = useState(plotTemplates[2]?.id ?? 'threeBed');
+  const nextPlotHint = String(sitePlots.length + 1);
+  const nextPreHandoverHint = String((sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.stage9CompleteWeek)) : 22) + 1);
 
   const savePlot = async () => {
     const parsedWeek = Number(preHandoverWeek);
-    if (!plotNo.trim() || !Number.isFinite(parsedWeek)) return;
+    if (!plotNo.trim() || !Number.isFinite(parsedWeek) || parsedWeek <= 0) return;
     await upsertSitePlot({ plotNo, stage9CompleteWeek: parsedWeek, templateId });
+    setPlotNo('');
+    setPreHandoverWeek('');
   };
 
   return (
@@ -25,15 +29,15 @@ export default function MasterProgrammeScreen() {
         <Text style={styles.subtitle}>Excel-style stage matrix. One row per plot, week columns across the top, stage numbers only in the cells.</Text>
       </View>
 
-      <SectionCard title="Plot input" subtitle="Enter the pre-handover week and Programme Buddy back-plans the 23-week route.">
+      <SectionCard title="Plot input" subtitle="Enter the plot number and pre-handover week. The boxes stay blank until you type into them.">
         <View style={styles.formRow}>
           <View style={styles.inputWrap}>
             <Text style={styles.label}>Plot No</Text>
-            <TextInput value={plotNo} onChangeText={setPlotNo} style={styles.input} placeholder="1" />
+            <TextInput value={plotNo} onChangeText={setPlotNo} style={styles.input} placeholder={`e.g. ${nextPlotHint}`} />
           </View>
           <View style={styles.inputWrap}>
             <Text style={styles.label}>Pre-handover week</Text>
-            <TextInput value={preHandoverWeek} onChangeText={setPreHandoverWeek} style={styles.input} keyboardType="number-pad" placeholder="23" />
+            <TextInput value={preHandoverWeek} onChangeText={setPreHandoverWeek} style={styles.input} keyboardType="number-pad" placeholder={`e.g. ${nextPreHandoverHint}`} />
           </View>
           <View style={styles.inputWrapWide}>
             <Text style={styles.label}>House type</Text>
