@@ -136,7 +136,11 @@ function normalisePlots(stored: TemplateSitePlot[]) {
 }
 
 function normaliseTemplate(template: PlotTemplate) {
-  return { ...template, houseTypeCode: template.houseTypeCode || template.name };
+  return {
+    ...template,
+    houseTypeCode: template.houseTypeCode || template.name,
+    constructionMethod: template.constructionMethod ?? 'traditional',
+  };
 }
 
 function mergeDefaultTemplates(stored: PlotTemplate[]) {
@@ -150,6 +154,7 @@ function mergeDefaultTemplates(stored: PlotTemplate[]) {
       ...template,
       name: storedTemplate.name || template.name,
       houseTypeCode: storedTemplate.houseTypeCode || template.houseTypeCode || template.name,
+      constructionMethod: storedTemplate.constructionMethod ?? template.constructionMethod ?? 'traditional',
       description: storedTemplate.description || template.description,
       activities: template.activities.map((activity) => {
         const storedActivity = storedActivitiesByCode.get(activity.code);
