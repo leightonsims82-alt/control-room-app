@@ -136,7 +136,6 @@ export default function SiteSetupScreen() {
                   <Text style={[styles.headerCell, styles.displayCell]}>Trade Display</Text>
                   <Text style={[styles.headerCell, styles.stageCell]}>Stage</Text>
                   <Text style={[styles.headerCell, styles.durationCell]}>Days</Text>
-                  <Text style={[styles.headerCell, styles.overlapCell]}>Overlap</Text>
                 </View>
                 {selectedTemplate.activities.map((activity, index) => (
                   <View key={`${activity.order}-${activity.code}`} style={[styles.tableRow, index % 2 ? styles.altRow : null]}>
@@ -146,9 +145,6 @@ export default function SiteSetupScreen() {
                     <TextInput defaultValue={activity.displayText} onEndEditing={(event) => updateActivity(activity.code, { displayText: event.nativeEvent.text })} style={[styles.bodyInput, styles.displayCell]} />
                     <TextInput defaultValue={String(activity.stage)} keyboardType="number-pad" onEndEditing={(event) => updateActivity(activity.code, { stage: toStageNumber(event.nativeEvent.text, activity.stage) })} style={[styles.bodyInput, styles.stageCell]} />
                     <TextInput defaultValue={String(activity.durationDays)} keyboardType="number-pad" onEndEditing={(event) => updateTemplateActivityDuration(selectedTemplate.id, activity.code, Number(event.nativeEvent.text) || 0)} style={[styles.durationInput, styles.durationCell]} />
-                    <Pressable style={[styles.overlapButton, activity.overlapAllowed ? styles.overlapButtonActive : null]} onPress={() => updateActivity(activity.code, { overlapAllowed: !activity.overlapAllowed })}>
-                      <Text style={[styles.overlapText, activity.overlapAllowed ? styles.overlapTextActive : null]}>{activity.overlapAllowed ? 'Yes' : 'No'}</Text>
-                    </Pressable>
                   </View>
                 ))}
               </View>
@@ -213,12 +209,7 @@ const styles = StyleSheet.create({
   displayCell: { width: 140 },
   stageCell: { width: 70, textAlign: 'center' },
   durationCell: { width: 80, textAlign: 'center' },
-  overlapCell: { width: 90, textAlign: 'center' },
   durationInput: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fff4cc', fontWeight: '900' },
-  overlapButton: { width: 90, borderWidth: 1, borderColor: '#c8d7e6', alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffffff' },
-  overlapButtonActive: { backgroundColor: '#dcfce7' },
-  overlapText: { color: '#64748b', fontWeight: '900' },
-  overlapTextActive: { color: '#166534' },
   primaryButton: { alignSelf: 'flex-start', backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
   primaryButtonText: { color: '#ffffff', fontWeight: '900' },
   secondaryButton: { alignSelf: 'flex-end', backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
