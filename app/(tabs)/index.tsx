@@ -19,7 +19,7 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Programme Buddy</Text>
-          <Text style={styles.subtitle}>23-week build back-planning, stage-number master programmes and rolling 2-week lookaheads.</Text>
+          <Text style={styles.subtitle}>23-week build back-planning, stage-number master programmes, rolling 2-week lookaheads and stage inspections.</Text>
         </View>
         <View style={styles.badge}><Text style={styles.badgeText}>Excel rebuild</Text></View>
       </View>
@@ -53,6 +53,13 @@ export default function DashboardScreen() {
             <Text style={styles.programmeText}>Trade contacts, issue settings and programme previews</Text>
           </View>
         </Pressable>
+        <Pressable style={styles.programmeCard} onPress={() => router.push('/(tabs)/inspections')}>
+          <Ionicons name="clipboard-outline" size={24} color="#dc2626" />
+          <View style={styles.cardTextWrap}>
+            <Text style={styles.programmeTitle}>Inspections</Text>
+            <Text style={styles.programmeText}>Stage checklists filtered by plot setup and construction method</Text>
+          </View>
+        </Pressable>
       </View>
 
       <View style={styles.statsGrid}>
@@ -74,6 +81,10 @@ export default function DashboardScreen() {
         <View style={styles.ruleRow}>
           <Text style={styles.ruleNumber}>3</Text>
           <Text style={styles.ruleText}>Plot breakdown: daily activity codes remain available behind the stage-number view.</Text>
+        </View>
+        <View style={styles.ruleRow}>
+          <Text style={styles.ruleNumber}>4</Text>
+          <Text style={styles.ruleText}>Stage inspections: checklist items follow the plot's house type and construction method, with global custom items available.</Text>
         </View>
       </SectionCard>
     </AppScreen>
