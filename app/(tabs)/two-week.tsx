@@ -1,25 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
-import { DAY_NAMES, TRADE_ORDER } from '../../utils/siteProgrammeEngine';
-import { getActiveTemplateTrades, getTradeTemplateText, plotHasTradeWorkForTemplate } from '../../utils/templateProgramme';
+import { DAY_NAMES, PROGRAMME_STAGE_SEQUENCE } from '../../utils/siteProgrammeEngine';
+import { getStageNumberForPlotWeek, getTemplateForPlot } from '../../utils/templateProgramme';
 
 export default function TwoWeekProgrammeScreen() {
-  const { sitePlots, activityDelays, plotTemplates } = useSitePlanner();
+  const { sitePlots, plotTemplates } = useSitePlanner();
   const [startWeek, setStartWeek] = useState(1);
-  const activeTrades = useMemo(() => getActiveTemplateTrades(sitePlots, startWeek, activityDelays, plotTemplates), [sitePlots, startWeek, activityDelays, plotTemplates]);
-  const tradesToShow = activeTrades.length ? activeTrades : TRADE_ORDER;
 
   return (
     <AppScreen>
       <View style={styles.header}>
-        <Text style={styles.title}>2-Week Trade Programme</Text>
-        <Text style={styles.subtitle}>Trade call-off view generated from plot templates and the daily plot breakdown.</Text>
+        <Text style={styles.title}>Rolling 2-Week Programme</Text>
+        <Text style={styles.subtitle}>One row per plot. Scroll the week selector to issue the current two-week block. Cells show stage numbers only.</Text>
       </View>
 
-      <SectionCard title="Week selector" subtitle={`Currently showing WK${String(startWeek).padStart(2, '0')} and WK${String(startWeek + 1).padStart(2, '0')}`}>
+      <SectionCard title="2-week selector" subtitle={`Currently showing WK${String(startWeek).padStart(2, '0')} and WK${String(startWeek + 1).padStart(2, '0')}`}>
         <View style={styles.weekControls}>
           <Pressable style={styles.weekButton} onPress={() => setStartWeek((week) => Math.max(1, week - 1))}>
             <Text style={styles.weekButtonText}>Previous</Text>
@@ -31,43 +29,50 @@ export default function TwoWeekProgrammeScreen() {
         </View>
       </SectionCard>
 
-      {tradesToShow.map((trade) => {
-        const visiblePlots = sitePlots.filter((plot) => plotHasTradeWorkForTemplate(plot, trade, startWeek, activityDelays, plotTemplates));
-        return (
-          <SectionCard key={trade} title={trade} subtitle={visiblePlots.length ? `${visiblePlots.length} plot${visiblePlots.length === 1 ? '' : 's'} in this 2-week window` : 'No activity in this 2-week window'}>
-            <ScrollView horizontal showsHorizontalScrollIndicator>
-              <View>
-                <View style={styles.weekHeaderRow}>
-                  <Text style={[styles.weekHeaderBlank, styles.plotCell]} />
-                  <Text style={styles.weekGroup}>Week 1</Text>
-                  <Text style={styles.weekGroup}>Week 2</Text>
+      <SectionCard title="Rolling programme" subtitle="This is the app version of the Excel rolling programme: Plot No | House Type | dates across the top | stage numbers only.">
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View>
+            <View style={styles.weekHeaderRow}>
+              <Text style={[styles.weekHeaderBlank, styles.plotCell]} />
+              <Text style={[styles.weekHeaderBlank, styles.templateCell]} />
+              <Text style={styles.weekGroup}>Week 1</Text>
+              <Text style={styles.weekGroup}>Week 2</Text>
+            </View>
+            <View style={styles.tableRow}>
+              <Text style={[styles.headerCell, styles.plotCell]}>Plot No</Text>
+              <Text style={[styles.headerCell, styles.templateCell]}>House Type</Text>
+              {[startWeek, startWeek + 1].flatMap((week) => DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>WK{String(week).padStart(2, '0')} {day}</Text>))}
+            </View>
+
+            {sitePlots.map((plot, rowIndex) => {
+              const template = getTemplateForPlot(plot, plotTemplates);
+              return (
+                <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
+                  <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
+                  <Text style={[styles.bodyCell, styles.templateCell]}>{template.name}</Text>
+                  {[startWeek, startWeek + 1].flatMap((week) =>
+                    DAY_NAMES.map((_, dayIndex) => {
+                      const stage = getStageNumberForPlotWeek(plot, week, plotTemplates);
+                      return <Text key={`${plot.id}-${week}-${dayIndex}`} style={[styles.dayCell, stage ? styles.activeDayCell : null]}>{stage}</Text>;
+                    }),
+                  )}
                 </View>
-                <View style={styles.tableRow}>
-                  <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
-                  {[startWeek, startWeek + 1].flatMap((week) => DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>{day}</Text>))}
-                </View>
-                {visiblePlots.length === 0 ? (
-                  <View style={styles.tableRow}>
-                    <Text style={[styles.emptyCell, styles.plotCell]}>-</Text>
-                    {Array.from({ length: 10 }).map((_, index) => <Text key={index} style={styles.emptyDayCell} />)}
-                  </View>
-                ) : null}
-                {visiblePlots.map((plot, rowIndex) => (
-                  <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
-                    <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
-                    {[startWeek, startWeek + 1].flatMap((week) =>
-                      DAY_NAMES.map((_, dayIndex) => {
-                        const text = getTradeTemplateText(plot, trade, week, dayIndex + 1, activityDelays, plotTemplates);
-                        return <Text key={`${plot.id}-${trade}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
-                      }),
-                    )}
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-          </SectionCard>
-        );
-      })}
+              );
+            })}
+          </View>
+        </ScrollView>
+      </SectionCard>
+
+      <SectionCard title="Stage key" subtitle="Use this key to read the stage numbers shown in the programme cells.">
+        <View style={styles.stageKeyGrid}>
+          {PROGRAMME_STAGE_SEQUENCE.map((stage) => (
+            <View key={stage.stage} style={styles.stageKeyItem}>
+              <Text style={styles.stageKeyNumber}>{stage.stage}</Text>
+              <Text style={styles.stageKeyLabel}>{stage.label}</Text>
+            </View>
+          ))}
+        </View>
+      </SectionCard>
     </AppScreen>
   );
 }
@@ -82,15 +87,18 @@ const styles = StyleSheet.create({
   weekLabel: { color: '#0f172a', fontWeight: '900', fontSize: 16 },
   weekHeaderRow: { flexDirection: 'row' },
   tableRow: { flexDirection: 'row', alignItems: 'stretch' },
-  altRow: { backgroundColor: '#eaf2fb' },
+  altRow: { backgroundColor: '#f8fbff' },
   weekHeaderBlank: { backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce', minHeight: 28 },
-  weekGroup: { width: 400, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  weekGroup: { width: 700, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
-  plotCell: { width: 92 },
-  dayHeader: { width: 80, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  plotCell: { width: 94 },
+  templateCell: { width: 130 },
+  dayHeader: { width: 140, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
-  dayCell: { width: 80, minHeight: 58, color: '#0f172a', padding: 6, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontSize: 11, fontWeight: '900' },
+  dayCell: { width: 140, minHeight: 48, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontSize: 16, fontWeight: '900' },
   activeDayCell: { backgroundColor: '#dff0ff' },
-  emptyCell: { color: '#94a3b8', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center' },
-  emptyDayCell: { width: 80, minHeight: 42, borderWidth: 1, borderColor: '#c8d7e6' },
+  stageKeyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  stageKeyItem: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 210, flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 10 },
+  stageKeyNumber: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#173b5f', color: '#ffffff', textAlign: 'center', lineHeight: 30, fontWeight: '900' },
+  stageKeyLabel: { flex: 1, color: '#0f172a', fontWeight: '900' },
 });
