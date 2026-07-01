@@ -4,7 +4,7 @@ import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { DAY_NAMES } from '../../utils/siteProgrammeEngine';
-import { getPlotBreakdownTemplateText, getTemplateForPlot } from '../../utils/templateProgramme';
+import { getHouseTypeLabel, getPlotBreakdownTemplateText, getTemplateForPlot } from '../../utils/templateProgramme';
 
 export default function TwoWeekProgrammeScreen() {
   const { sitePlots, activityDelays, activityMoves, plotTemplates } = useSitePlanner();
@@ -61,7 +61,7 @@ export default function TwoWeekProgrammeScreen() {
               return (
                 <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                   <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
-                  <Text style={[styles.bodyCell, styles.templateCell]}>{template.name}</Text>
+                  <Text style={[styles.bodyCell, styles.templateCell]}>{getHouseTypeLabel(template)}</Text>
                   {[startWeek, startWeek + 1].flatMap((week) =>
                     DAY_NAMES.map((_, dayIndex) => {
                       const text = getPlotBreakdownTemplateText(plot, week, dayIndex + 1, activityDelays, plotTemplates, activityMoves);
