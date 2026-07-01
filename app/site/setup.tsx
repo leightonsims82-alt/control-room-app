@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
+import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber } from '../../utils/siteProgrammeEngine';
 import { getEffectiveProgrammeWeeks, TemplateActivity } from '../../utils/templateProgramme';
 
 export default function SiteSetupScreen() {
@@ -21,9 +22,9 @@ export default function SiteSetupScreen() {
   return (
     <AppScreen>
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>Site Setup</Text>
-        <Text style={styles.title}>Programme & Plot Templates</Text>
-        <Text style={styles.subtitle}>Set site defaults and edit task names, trades, stages, durations and overlap rules by plot type.</Text>
+        <Text style={styles.eyebrow}>Programme Buddy Setup</Text>
+        <Text style={styles.title}>Build Sequence Key</Text>
+        <Text style={styles.subtitle}>This is the source data behind the master stage matrix, plot breakdown and 2-week trade programme.</Text>
       </View>
 
       <View style={styles.card}>
@@ -35,7 +36,7 @@ export default function SiteSetupScreen() {
           <Field label="Default programme weeks">
             <TextInput value={String(siteSetup.defaultProgrammeWeeks)} onChangeText={(value) => updateSiteSetup({ defaultProgrammeWeeks: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} />
           </Field>
-          <Field label="Default stage count">
+          <Field label="Stage count">
             <TextInput value={String(siteSetup.stageCount)} onChangeText={(value) => updateSiteSetup({ stageCount: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} />
           </Field>
           <Field label="Working week">
@@ -45,8 +46,24 @@ export default function SiteSetupScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Plot type templates</Text>
-        <Text style={styles.helpText}>Each plot type has its own durations. Activities run sequentially unless Overlap is switched on for that activity.</Text>
+        <Text style={styles.cardTitle}>Stage key</Text>
+        <Text style={styles.helpText}>The master programme shows stage numbers only. This key explains what each number means.</Text>
+        <View style={styles.stageGrid}>
+          {PROGRAMME_STAGE_SEQUENCE.map((stage) => (
+            <View key={stage.stage} style={styles.stageItem}>
+              <Text style={styles.stageNumber}>{stage.stage}</Text>
+              <View style={styles.stageMain}>
+                <Text style={styles.stageLabel}>{stage.label}</Text>
+                <Text style={styles.stageMeta}>{stage.durationWeeks} week{stage.durationWeeks === 1 ? '' : 's'}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>House type templates</Text>
+        <Text style={styles.helpText}>Use 3 Bedroom as the standard base. Larger house types can carry longer task durations without changing the 23-week stage view.</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.templateChips}>
             {plotTemplates.map((template) => {
@@ -66,7 +83,7 @@ export default function SiteSetupScreen() {
               <Field label="Template name">
                 <TextInput value={selectedTemplate.name} onChangeText={(name) => updatePlotTemplate({ ...selectedTemplate, name })} style={styles.input} />
               </Field>
-              <Field label="Target weeks">
+              <Field label="Programme weeks">
                 <TextInput value={String(selectedTemplate.programmeWeeks)} onChangeText={(value) => updatePlotTemplate({ ...selectedTemplate, programmeWeeks: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} />
               </Field>
               <Field label="Stage count">
@@ -82,9 +99,9 @@ export default function SiteSetupScreen() {
               <View>
                 <View style={styles.tableRow}>
                   <Text style={[styles.headerCell, styles.orderCell]}>Seq</Text>
-                  <Text style={[styles.headerCell, styles.taskCell]}>Task</Text>
+                  <Text style={[styles.headerCell, styles.taskCell]}>Activity Code</Text>
                   <Text style={[styles.headerCell, styles.tradeCell]}>Trade</Text>
-                  <Text style={[styles.headerCell, styles.displayCell]}>Display</Text>
+                  <Text style={[styles.headerCell, styles.displayCell]}>Trade Display</Text>
                   <Text style={[styles.headerCell, styles.stageCell]}>Stage</Text>
                   <Text style={[styles.headerCell, styles.durationCell]}>Days</Text>
                   <Text style={[styles.headerCell, styles.overlapCell]}>Overlap</Text>
@@ -95,7 +112,7 @@ export default function SiteSetupScreen() {
                     <TextInput defaultValue={activity.code} onEndEditing={(event) => updateActivity(activity.code, { code: event.nativeEvent.text })} style={[styles.bodyInput, styles.taskCell]} />
                     <TextInput defaultValue={activity.trade} onEndEditing={(event) => updateActivity(activity.code, { trade: event.nativeEvent.text })} style={[styles.bodyInput, styles.tradeCell]} />
                     <TextInput defaultValue={activity.displayText} onEndEditing={(event) => updateActivity(activity.code, { displayText: event.nativeEvent.text })} style={[styles.bodyInput, styles.displayCell]} />
-                    <TextInput defaultValue={String(activity.stage)} keyboardType="number-pad" onEndEditing={(event) => updateActivity(activity.code, { stage: Number(event.nativeEvent.text) || activity.stage })} style={[styles.bodyInput, styles.stageCell]} />
+                    <TextInput defaultValue={String(activity.stage)} keyboardType="number-pad" onEndEditing={(event) => updateActivity(activity.code, { stage: toStageNumber(event.nativeEvent.text, activity.stage) })} style={[styles.bodyInput, styles.stageCell]} />
                     <TextInput defaultValue={String(activity.durationDays)} keyboardType="number-pad" onEndEditing={(event) => updateTemplateActivityDuration(selectedTemplate.id, activity.code, Number(event.nativeEvent.text) || 0)} style={[styles.durationInput, styles.durationCell]} />
                     <Pressable style={[styles.overlapButton, activity.overlapAllowed ? styles.overlapButtonActive : null]} onPress={() => updateActivity(activity.code, { overlapAllowed: !activity.overlapAllowed })}>
                       <Text style={[styles.overlapText, activity.overlapAllowed ? styles.overlapTextActive : null]}>{activity.overlapAllowed ? 'Yes' : 'No'}</Text>
@@ -113,6 +130,11 @@ export default function SiteSetupScreen() {
       </View>
     </AppScreen>
   );
+}
+
+function toStageNumber(value: string, fallback: ProgrammeStageNumber): ProgrammeStageNumber {
+  const parsed = Number(value);
+  return PROGRAMME_STAGE_SEQUENCE.some((stage) => stage.stage === parsed) ? (parsed as ProgrammeStageNumber) : fallback;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -151,7 +173,7 @@ const styles = StyleSheet.create({
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', fontWeight: '800' },
   bodyInput: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff', fontWeight: '800' },
   orderCell: { width: 54, textAlign: 'center' },
-  taskCell: { width: 150 },
+  taskCell: { width: 160 },
   tradeCell: { width: 150 },
   displayCell: { width: 140 },
   stageCell: { width: 70, textAlign: 'center' },
@@ -164,4 +186,10 @@ const styles = StyleSheet.create({
   overlapTextActive: { color: '#166534' },
   primaryButton: { alignSelf: 'flex-start', backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
   primaryButtonText: { color: '#ffffff', fontWeight: '900' },
+  stageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  stageItem: { flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 250, flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 10 },
+  stageNumber: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#173b5f', color: '#ffffff', textAlign: 'center', lineHeight: 34, fontWeight: '900' },
+  stageMain: { flex: 1 },
+  stageLabel: { color: '#0f172a', fontWeight: '900' },
+  stageMeta: { color: '#64748b', fontSize: 12, marginTop: 2 },
 });
