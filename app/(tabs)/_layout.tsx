@@ -52,6 +52,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="inspections"
+        options={{
+          title: 'Inspections',
+          tabBarIcon: ({ color, size }) => <Ionicons name="clipboard-outline" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
         name="more"
         options={{
           title: 'Setup',
