@@ -4,7 +4,15 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber } from '../../utils/siteProgrammeEngine';
-import { getEffectiveProgrammeWeeks, getHouseTypeLabel, TemplateActivity } from '../../utils/templateProgramme';
+import {
+  CONSTRUCTION_METHOD_OPTIONS,
+  ConstructionMethod,
+  getConstructionMethod,
+  getConstructionMethodLabel,
+  getEffectiveProgrammeWeeks,
+  getHouseTypeLabel,
+  TemplateActivity,
+} from '../../utils/templateProgramme';
 
 export default function SiteSetupScreen() {
   const { siteSetup, plotTemplates, updateSiteSetup, addPlotTemplate, updatePlotTemplate, updateTemplateActivityDuration } = useSitePlanner();
@@ -21,6 +29,11 @@ export default function SiteSetupScreen() {
     });
   };
 
+  const updateConstructionMethod = (constructionMethod: ConstructionMethod) => {
+    if (!selectedTemplate) return;
+    updatePlotTemplate({ ...selectedTemplate, constructionMethod });
+  };
+
   const saveNewHouseType = async () => {
     if (!newHouseTypeCode.trim() && !newHouseTypeName.trim()) return;
     await addPlotTemplate({ name: newHouseTypeName, houseTypeCode: newHouseTypeCode, baseTemplateId: selectedTemplate?.id });
@@ -33,7 +46,7 @@ export default function SiteSetupScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>Programme Buddy Setup</Text>
         <Text style={styles.title}>Build Sequence Key</Text>
-        <Text style={styles.subtitle}>This is the source data behind the master stage matrix, plot breakdown and 2-week trade programme.</Text>
+        <Text style={styles.subtitle}>This is the source data behind the master programme, plot setup, trade programmes and inspection checklists.</Text>
       </View>
 
       <View style={styles.card}>
@@ -72,7 +85,7 @@ export default function SiteSetupScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>House type templates</Text>
-        <Text style={styles.helpText}>Enter the house type names or codes used by your organisation. These labels feed the Master, Plot Breakdown and Rolling 2-Week views.</Text>
+        <Text style={styles.helpText}>Enter the house type names/codes used by your organisation and set the construction method. Inspection checklists will follow this plot setup.</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.templateChips}>
             {plotTemplates.map((template) => {
@@ -88,7 +101,7 @@ export default function SiteSetupScreen() {
 
         <View style={styles.addPanel}>
           <Text style={styles.panelTitle}>Add organisation house type</Text>
-          <Text style={styles.helpText}>Use this for codes such as HT-A, B3, The Ash, SA-31 or whatever your business uses.</Text>
+          <Text style={styles.helpText}>New house types copy the currently selected template, including construction method and activity durations.</Text>
           <View style={styles.formGrid}>
             <Field label="House type code">
               <TextInput value={newHouseTypeCode} onChangeText={setNewHouseTypeCode} placeholder="e.g. HT-A" style={styles.input} />
@@ -122,8 +135,27 @@ export default function SiteSetupScreen() {
                 <Text style={styles.summaryValueSmall}>{getHouseTypeLabel(selectedTemplate)}</Text>
               </View>
               <View style={styles.summaryBox}>
+                <Text style={styles.summaryLabel}>Construction</Text>
+                <Text style={styles.summaryValueSmall}>{getConstructionMethodLabel(getConstructionMethod(selectedTemplate))}</Text>
+              </View>
+              <View style={styles.summaryBox}>
                 <Text style={styles.summaryLabel}>Weeks</Text>
                 <Text style={styles.summaryValue}>{getEffectiveProgrammeWeeks(selectedTemplate)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.methodPanel}>
+              <Text style={styles.panelTitle}>Construction method for this house type</Text>
+              <Text style={styles.helpText}>This controls whether traditional masonry, timber frame or hybrid checklist items appear during inspections.</Text>
+              <View style={styles.methodChips}>
+                {CONSTRUCTION_METHOD_OPTIONS.map((option) => {
+                  const active = getConstructionMethod(selectedTemplate) === option.id;
+                  return (
+                    <Pressable key={option.id} style={[styles.methodChip, active ? styles.methodChipActive : null]} onPress={() => updateConstructionMethod(option.id)}>
+                      <Text style={[styles.methodChipText, active ? styles.methodChipTextActive : null]}>{option.label}</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
 
@@ -183,6 +215,7 @@ const styles = StyleSheet.create({
   cardTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
   panelTitle: { color: '#0f172a', fontSize: 15, fontWeight: '900' },
   addPanel: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, padding: 14, gap: 10 },
+  methodPanel: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 14, padding: 14, gap: 10 },
   formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
   field: { gap: 8, minWidth: 180, flex: 1 },
   label: { color: '#475569', fontSize: 13, fontWeight: '900' },
@@ -197,6 +230,11 @@ const styles = StyleSheet.create({
   templateChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   templateChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
   templateChipTextActive: { color: '#ffffff' },
+  methodChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  methodChip: { borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
+  methodChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  methodChipText: { color: '#475569', fontSize: 12, fontWeight: '900' },
+  methodChipTextActive: { color: '#ffffff' },
   templatePanel: { gap: 14 },
   tableRow: { flexDirection: 'row', alignItems: 'stretch' },
   altRow: { backgroundColor: '#f8fafc' },
