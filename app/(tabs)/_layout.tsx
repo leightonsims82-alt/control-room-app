@@ -26,7 +26,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="plots"
         options={{
-          title: 'Plots',
+          title: 'Plot Breakdown',
           tabBarIcon: ({ color, size }) => <Ionicons name="business-outline" color={color} size={size} />,
         }}
       />
@@ -54,8 +54,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="more"
         options={{
-          title: 'More',
-          tabBarIcon: ({ color, size }) => <Ionicons name="ellipsis-horizontal" color={color} size={size} />,
+          title: 'Setup',
+          tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" color={color} size={size} />,
         }}
       />
     </Tabs>
