@@ -4,11 +4,13 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber } from '../../utils/siteProgrammeEngine';
-import { getEffectiveProgrammeWeeks, TemplateActivity } from '../../utils/templateProgramme';
+import { getEffectiveProgrammeWeeks, getHouseTypeLabel, TemplateActivity } from '../../utils/templateProgramme';
 
 export default function SiteSetupScreen() {
-  const { siteSetup, plotTemplates, updateSiteSetup, updatePlotTemplate, updateTemplateActivityDuration } = useSitePlanner();
+  const { siteSetup, plotTemplates, updateSiteSetup, addPlotTemplate, updatePlotTemplate, updateTemplateActivityDuration } = useSitePlanner();
   const [selectedTemplateId, setSelectedTemplateId] = useState(plotTemplates[2]?.id ?? plotTemplates[0]?.id ?? 'threeBed');
+  const [newHouseTypeCode, setNewHouseTypeCode] = useState('');
+  const [newHouseTypeName, setNewHouseTypeName] = useState('');
   const selectedTemplate = plotTemplates.find((template) => template.id === selectedTemplateId) ?? plotTemplates[0];
 
   const updateActivity = (activityCode: string, changes: Partial<TemplateActivity>) => {
@@ -17,6 +19,13 @@ export default function SiteSetupScreen() {
       ...selectedTemplate,
       activities: selectedTemplate.activities.map((activity) => (activity.code === activityCode ? { ...activity, ...changes } : activity)),
     });
+  };
+
+  const saveNewHouseType = async () => {
+    if (!newHouseTypeCode.trim() && !newHouseTypeName.trim()) return;
+    await addPlotTemplate({ name: newHouseTypeName, houseTypeCode: newHouseTypeCode, baseTemplateId: selectedTemplate?.id });
+    setNewHouseTypeCode('');
+    setNewHouseTypeName('');
   };
 
   return (
@@ -63,24 +72,43 @@ export default function SiteSetupScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>House type templates</Text>
-        <Text style={styles.helpText}>Use 3 Bedroom as the standard base. Larger house types can carry longer task durations without changing the 23-week stage view.</Text>
+        <Text style={styles.helpText}>Enter the house type names or codes used by your organisation. These labels feed the Master, Plot Breakdown and Rolling 2-Week views.</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.templateChips}>
             {plotTemplates.map((template) => {
               const active = template.id === selectedTemplateId;
               return (
                 <Pressable key={template.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => setSelectedTemplateId(template.id)}>
-                  <Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>{template.name}</Text>
+                  <Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>{getHouseTypeLabel(template)}</Text>
                 </Pressable>
               );
             })}
           </View>
         </ScrollView>
 
+        <View style={styles.addPanel}>
+          <Text style={styles.panelTitle}>Add organisation house type</Text>
+          <Text style={styles.helpText}>Use this for codes such as HT-A, B3, The Ash, SA-31 or whatever your business uses.</Text>
+          <View style={styles.formGrid}>
+            <Field label="House type code">
+              <TextInput value={newHouseTypeCode} onChangeText={setNewHouseTypeCode} placeholder="e.g. HT-A" style={styles.input} />
+            </Field>
+            <Field label="House type name">
+              <TextInput value={newHouseTypeName} onChangeText={setNewHouseTypeName} placeholder="e.g. The Ash" style={styles.input} />
+            </Field>
+            <Pressable style={styles.secondaryButton} onPress={saveNewHouseType}>
+              <Text style={styles.secondaryButtonText}>Add House Type</Text>
+            </Pressable>
+          </View>
+        </View>
+
         {selectedTemplate ? (
           <View style={styles.templatePanel}>
             <View style={styles.formGrid}>
-              <Field label="Template name">
+              <Field label="House type code">
+                <TextInput value={selectedTemplate.houseTypeCode} onChangeText={(houseTypeCode) => updatePlotTemplate({ ...selectedTemplate, houseTypeCode })} style={styles.input} />
+              </Field>
+              <Field label="House type name">
                 <TextInput value={selectedTemplate.name} onChangeText={(name) => updatePlotTemplate({ ...selectedTemplate, name })} style={styles.input} />
               </Field>
               <Field label="Programme weeks">
@@ -90,7 +118,11 @@ export default function SiteSetupScreen() {
                 <TextInput value={String(selectedTemplate.stageCount)} onChangeText={(value) => updatePlotTemplate({ ...selectedTemplate, stageCount: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} />
               </Field>
               <View style={styles.summaryBox}>
-                <Text style={styles.summaryLabel}>Calculated weeks</Text>
+                <Text style={styles.summaryLabel}>Shown as</Text>
+                <Text style={styles.summaryValueSmall}>{getHouseTypeLabel(selectedTemplate)}</Text>
+              </View>
+              <View style={styles.summaryBox}>
+                <Text style={styles.summaryLabel}>Weeks</Text>
                 <Text style={styles.summaryValue}>{getEffectiveProgrammeWeeks(selectedTemplate)}</Text>
               </View>
             </View>
@@ -153,6 +185,8 @@ const styles = StyleSheet.create({
   subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
   card: { backgroundColor: '#ffffff', borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', padding: 18, gap: 16 },
   cardTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
+  panelTitle: { color: '#0f172a', fontSize: 15, fontWeight: '900' },
+  addPanel: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, padding: 14, gap: 10 },
   formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
   field: { gap: 8, minWidth: 180, flex: 1 },
   label: { color: '#475569', fontSize: 13, fontWeight: '900' },
@@ -161,6 +195,7 @@ const styles = StyleSheet.create({
   summaryBox: { minWidth: 150, backgroundColor: '#eff6ff', borderRadius: 12, padding: 12 },
   summaryLabel: { color: '#2563eb', fontSize: 12, fontWeight: '900' },
   summaryValue: { color: '#0f172a', fontSize: 24, fontWeight: '900' },
+  summaryValueSmall: { color: '#0f172a', fontSize: 16, fontWeight: '900', marginTop: 4 },
   templateChips: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
   templateChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
   templateChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
@@ -186,6 +221,8 @@ const styles = StyleSheet.create({
   overlapTextActive: { color: '#166534' },
   primaryButton: { alignSelf: 'flex-start', backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
   primaryButtonText: { color: '#ffffff', fontWeight: '900' },
+  secondaryButton: { alignSelf: 'flex-end', backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  secondaryButtonText: { color: '#ffffff', fontWeight: '900' },
   stageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   stageItem: { flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 250, flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 10 },
   stageNumber: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#173b5f', color: '#ffffff', textAlign: 'center', lineHeight: 34, fontWeight: '900' },
