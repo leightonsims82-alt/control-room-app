@@ -14,9 +14,7 @@ export type TemplateSitePlot = SitePlot & {
   templateId?: string;
 };
 
-export type TemplateActivity = ProgrammeActivity & {
-  overlapAllowed?: boolean;
-};
+export type TemplateActivity = ProgrammeActivity;
 
 export type ActivityMove = {
   id: string;
@@ -83,7 +81,6 @@ function makeTemplate(id: string, name: string, description: string): PlotTempla
     activities: BUILD_SEQUENCE.map((activity) => ({
       ...activity,
       durationDays: taskDurations[activity.code] ?? activity.durationDays,
-      overlapAllowed: activity.stage === 10 || activity.stage === 11,
     })).filter((activity) => activity.durationDays > 0),
   };
 }
