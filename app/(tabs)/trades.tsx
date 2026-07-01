@@ -3,7 +3,9 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { TradeContact, useSitePlanner } from '../../data/sitePlannerStore';
+import { DAY_NAMES } from '../../utils/siteProgrammeEngine';
 import { createManagerProgrammeText, createTradeProgrammeText, getSavedSupervisorEmails } from '../../utils/programmeIssue';
+import { getActivitiesForTemplateDay, getTradeTemplateText } from '../../utils/templateProgramme';
 
 export default function TradesScreen() {
   const {
@@ -40,6 +42,12 @@ export default function TradesScreen() {
   const activeIssueWeek = Math.max(1, Math.min(51, Number(issueStartWeek) || 1));
   const savedSupervisorEmails = getSavedSupervisorEmails(tradeContacts);
   const recipientCount = savedSupervisorEmails.length + (managerEmail.trim() ? 1 : 0);
+  const selectedTrade = activeContact?.trade ?? tradeContacts[0]?.trade ?? 'Groundworks';
+
+  const visiblePlots = useMemo(
+    () => sitePlots.filter((plot) => hasTradeWork(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates)),
+    [sitePlots, selectedTrade, activeIssueWeek, activityDelays, plotTemplates],
+  );
 
   const managerPreview = useMemo(
     () => createManagerProgrammeText({ plots: sitePlots, activityDelays, startWeek: activeIssueWeek, tradeContacts, plotTemplates }),
@@ -64,18 +72,18 @@ export default function TradesScreen() {
     await recordIssue({
       startWeek: activeIssueWeek,
       recipientCount,
-      note: `Programme prepared for manager and saved trade contacts for WK${String(activeIssueWeek).padStart(2, '0')} + WK${String(activeIssueWeek + 1).padStart(2, '0')}`,
+      note: `${selectedTrade} 2-week programme prepared for WK${String(activeIssueWeek).padStart(2, '0')} + WK${String(activeIssueWeek + 1).padStart(2, '0')}`,
     });
   };
 
   return (
     <AppScreen>
       <View style={styles.header}>
-        <Text style={styles.title}>Trade Setup & Issue</Text>
-        <Text style={styles.subtitle}>Save contractors, trade supervisors and issue settings for the automatic 2-week trade programme.</Text>
+        <Text style={styles.title}>Trade 2-Week Programmes</Text>
+        <Text style={styles.subtitle}>Excel-style trade sheet: Plot No | Trade | Fix | two weeks of dates | output / recovery notes.</Text>
       </View>
 
-      <SectionCard title="Trade setup" subtitle="Each trade can have its contractor, supervisor, email and phone saved against it.">
+      <SectionCard title="Select trade and issue week" subtitle="Choose the trade and the live two-week block to issue or review.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View style={styles.tradeChips}>
             {tradeContacts.map((contact) => {
@@ -89,6 +97,75 @@ export default function TradesScreen() {
           </View>
         </ScrollView>
 
+        <View style={styles.issueHeaderRow}>
+          <View style={styles.inputWrapSmall}>
+            <Text style={styles.label}>Start week</Text>
+            <TextInput value={issueStartWeek} onChangeText={setIssueStartWeek} style={styles.input} keyboardType="number-pad" />
+          </View>
+          <View style={styles.issueSummary}>
+            <Text style={styles.issueTitle}>{selectedTrade} | WK{String(activeIssueWeek).padStart(2, '0')} + WK{String(activeIssueWeek + 1).padStart(2, '0')}</Text>
+            <Text style={styles.issueMeta}>{visiblePlots.length} plot{visiblePlots.length === 1 ? '' : 's'} with work in this window</Text>
+          </View>
+          <Pressable style={styles.saveButton} onPress={markIssued}>
+            <Text style={styles.saveButtonText}>Mark Issued</Text>
+          </Pressable>
+        </View>
+      </SectionCard>
+
+      <SectionCard title={`2 WEEK ${selectedTrade.toUpperCase()} PROGRAMME`} subtitle="This is the app version of your trade-specific Excel programme.">
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View>
+            <View style={styles.topHeaderRow}>
+              <Text style={[styles.weekHeaderBlank, styles.plotCell]} />
+              <Text style={[styles.weekHeaderBlank, styles.tradeCell]} />
+              <Text style={[styles.weekHeaderBlank, styles.fixCell]} />
+              <Text style={styles.weekGroup}>WEEK 1</Text>
+              <Text style={styles.weekGroup}>WEEK 2</Text>
+              <Text style={[styles.weekHeaderBlank, styles.outputCell]} />
+            </View>
+            <View style={styles.tableRow}>
+              <Text style={[styles.headerCell, styles.plotCell]}>Plot No</Text>
+              <Text style={[styles.headerCell, styles.tradeCell]}>Trade</Text>
+              <Text style={[styles.headerCell, styles.fixCell]}>Fix</Text>
+              {[activeIssueWeek, activeIssueWeek + 1].flatMap((week) =>
+                DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>WK{String(week).padStart(2, '0')} {day}</Text>),
+              )}
+              <Text style={[styles.headerCell, styles.outputCell]}>Output / Recovery Notes</Text>
+            </View>
+
+            {visiblePlots.length === 0 ? (
+              <View style={styles.tableRow}>
+                <Text style={[styles.emptyCell, styles.plotCell]}>-</Text>
+                <Text style={[styles.emptyCell, styles.tradeCell]}>{selectedTrade}</Text>
+                <Text style={[styles.emptyCell, styles.fixCell]}>No activity</Text>
+                {Array.from({ length: 10 }).map((_, index) => <Text key={index} style={styles.emptyDayCell} />)}
+                <Text style={[styles.emptyCell, styles.outputCell]}>No trade activity in selected window.</Text>
+              </View>
+            ) : null}
+
+            {visiblePlots.map((plot, rowIndex) => {
+              const fixText = getFixText(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates);
+              const output = getOutputText(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates);
+              return (
+                <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
+                  <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
+                  <Text style={[styles.bodyCell, styles.tradeCell]}>{selectedTrade}</Text>
+                  <Text style={[styles.bodyCell, styles.fixCell]}>{fixText || 'Activity'}</Text>
+                  {[activeIssueWeek, activeIssueWeek + 1].flatMap((week) =>
+                    DAY_NAMES.map((_, dayIndex) => {
+                      const text = getTradeTemplateText(plot, selectedTrade, week, dayIndex + 1, activityDelays, plotTemplates);
+                      return <Text key={`${plot.id}-${selectedTrade}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
+                    }),
+                  )}
+                  <Text style={[styles.bodyCell, styles.outputCell]}>{output || 'Complete planned trade output / record missed target notes here.'}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </SectionCard>
+
+      <SectionCard title="Trade contact" subtitle="Saved against the selected trade for issue records and future email sending.">
         {draftContact ? (
           <View style={styles.formGrid}>
             <View style={styles.inputWrap}>
@@ -118,7 +195,7 @@ export default function TradesScreen() {
         ) : null}
       </SectionCard>
 
-      <SectionCard title="Automatic issue settings" subtitle="Stores the schedule and recipient source for the 2-week trade programme. A backend email job will be needed for true background auto-send.">
+      <SectionCard title="Issue settings" subtitle="Stores the future issue schedule. Email sending still needs a backend connection.">
         <View style={styles.formGrid}>
           <View style={styles.inputWrap}>
             <Text style={styles.label}>Manager email</Text>
@@ -139,31 +216,17 @@ export default function TradesScreen() {
             <Text style={styles.saveButtonText}>Save Issue Settings</Text>
           </Pressable>
         </View>
-        <Text style={styles.helperText}>Recipients currently saved: {recipientCount}. Manager receives the full programme. Supervisors receive their trade programme once server-side email sending is connected.</Text>
+        <Text style={styles.helperText}>Recipients saved: {recipientCount}. Manager gets the full programme; trade supervisors get their trade programme when email sending is connected.</Text>
       </SectionCard>
 
-      <SectionCard title="Issue 2-week programme" subtitle="Prepare the manager copy and individual trade copy from the live programme.">
-        <View style={styles.issueHeaderRow}>
-          <View style={styles.inputWrapSmall}>
-            <Text style={styles.label}>Start week</Text>
-            <TextInput value={issueStartWeek} onChangeText={setIssueStartWeek} style={styles.input} keyboardType="number-pad" />
-          </View>
-          <View style={styles.issueSummary}>
-            <Text style={styles.issueTitle}>WK{String(activeIssueWeek).padStart(2, '0')} + WK{String(activeIssueWeek + 1).padStart(2, '0')}</Text>
-            <Text style={styles.issueMeta}>{savedSupervisorEmails.length} supervisor email{savedSupervisorEmails.length === 1 ? '' : 's'} saved</Text>
-          </View>
-          <Pressable style={styles.saveButton} onPress={markIssued}>
-            <Text style={styles.saveButtonText}>Mark Issued</Text>
-          </Pressable>
-        </View>
-
+      <SectionCard title="Text preview" subtitle="Kept for copy/paste until Excel/PDF/email export is connected.">
         <View style={styles.previewGrid}>
           <View style={styles.previewPanel}>
             <Text style={styles.previewTitle}>Manager full programme preview</Text>
             <TextInput value={managerPreview} editable={false} multiline style={styles.previewBox} />
           </View>
           <View style={styles.previewPanel}>
-            <Text style={styles.previewTitle}>{activeContact?.trade ?? 'Trade'} supervisor preview</Text>
+            <Text style={styles.previewTitle}>{selectedTrade} supervisor preview</Text>
             <TextInput value={tradePreview} editable={false} multiline style={styles.previewBox} />
           </View>
         </View>
@@ -185,6 +248,41 @@ export default function TradesScreen() {
   );
 }
 
+function getPlotById(plotId: string, plots: ReturnType<typeof useSitePlanner>['sitePlots']) {
+  return plots.find((plot) => plot.id === plotId);
+}
+
+function getTradeActivities(plotId: string, trade: string, startWeek: number, plots: ReturnType<typeof useSitePlanner>['sitePlots'], delays: ReturnType<typeof useSitePlanner>['activityDelays'], templates: ReturnType<typeof useSitePlanner>['plotTemplates']) {
+  const plot = getPlotById(plotId, plots);
+  if (!plot) return [];
+  const activities = [];
+  for (let week = startWeek; week <= startWeek + 1; week += 1) {
+    for (let day = 1; day <= 5; day += 1) {
+      activities.push(...getActivitiesForTemplateDay(plot, week, day, delays, templates).filter((activity) => activity.trade === trade));
+    }
+  }
+  return Array.from(new Map(activities.map((activity) => [activity.code, activity])).values());
+}
+
+function hasTradeWork(plotId: string, trade: string, startWeek: number, plots: ReturnType<typeof useSitePlanner>['sitePlots'], delays: ReturnType<typeof useSitePlanner>['activityDelays'], templates: ReturnType<typeof useSitePlanner>['plotTemplates']) {
+  return getTradeActivities(plotId, trade, startWeek, plots, delays, templates).length > 0;
+}
+
+function getFixText(plotId: string, trade: string, startWeek: number, plots: ReturnType<typeof useSitePlanner>['sitePlots'], delays: ReturnType<typeof useSitePlanner>['activityDelays'], templates: ReturnType<typeof useSitePlanner>['plotTemplates']) {
+  return getTradeActivities(plotId, trade, startWeek, plots, delays, templates)
+    .map((activity) => activity.displayText)
+    .filter(Boolean)
+    .filter((text, index, array) => array.indexOf(text) === index)
+    .join(' / ');
+}
+
+function getOutputText(plotId: string, trade: string, startWeek: number, plots: ReturnType<typeof useSitePlanner>['sitePlots'], delays: ReturnType<typeof useSitePlanner>['activityDelays'], templates: ReturnType<typeof useSitePlanner>['plotTemplates']) {
+  return getTradeActivities(plotId, trade, startWeek, plots, delays, templates)
+    .map((activity) => activity.code)
+    .filter(Boolean)
+    .join(', ');
+}
+
 const styles = StyleSheet.create({
   header: { gap: 4 },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
@@ -194,6 +292,22 @@ const styles = StyleSheet.create({
   tradeChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   tradeChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
   tradeChipTextActive: { color: '#ffffff' },
+  topHeaderRow: { flexDirection: 'row' },
+  tableRow: { flexDirection: 'row', alignItems: 'stretch' },
+  altRow: { backgroundColor: '#f8fbff' },
+  weekHeaderBlank: { backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce', minHeight: 28 },
+  weekGroup: { width: 700, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  plotCell: { width: 90 },
+  tradeCell: { width: 150 },
+  fixCell: { width: 150 },
+  outputCell: { width: 260 },
+  dayHeader: { width: 140, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
+  dayCell: { width: 140, minHeight: 58, color: '#0f172a', padding: 6, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontSize: 11, fontWeight: '900' },
+  activeDayCell: { backgroundColor: '#dff0ff' },
+  emptyCell: { color: '#64748b', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
+  emptyDayCell: { width: 140, minHeight: 42, borderWidth: 1, borderColor: '#c8d7e6' },
   formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
   inputWrap: { gap: 6, minWidth: 190, flex: 1 },
   inputWrapSmall: { gap: 6, width: 120 },
@@ -214,7 +328,7 @@ const styles = StyleSheet.create({
   previewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   previewPanel: { flex: 1, minWidth: 300, gap: 8 },
   previewTitle: { color: '#0f172a', fontWeight: '900' },
-  previewBox: { minHeight: 260, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
+  previewBox: { minHeight: 180, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
   empty: { color: '#64748b' },
   logRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
   logMain: { flex: 1 },
