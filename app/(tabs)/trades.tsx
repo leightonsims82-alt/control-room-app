@@ -5,12 +5,18 @@ import { SectionCard } from '../../components/SectionCard';
 import { TradeContact, useSitePlanner } from '../../data/sitePlannerStore';
 import { DAY_NAMES } from '../../utils/siteProgrammeEngine';
 import { createManagerProgrammeText, createTradeProgrammeText, getSavedSupervisorEmails } from '../../utils/programmeIssue';
-import { getActivitiesForTemplateDay, getTradeTemplateText } from '../../utils/templateProgramme';
+import { getActivitiesForTemplateDay, getActivityMoveDeltaToTarget, getTradeTemplateText } from '../../utils/templateProgramme';
+
+type DragPayload = {
+  plotId: string;
+  activityCode: string;
+};
 
 export default function TradesScreen() {
   const {
     sitePlots,
     activityDelays,
+    activityMoves,
     tradeContacts,
     plotTemplates,
     issueSettings,
@@ -19,6 +25,8 @@ export default function TradesScreen() {
     upsertTradeContact,
     setIssueSettings,
     setProgrammeNote,
+    setActivityMove,
+    resetActivityMovesForPlot,
     recordIssue,
   } = useSitePlanner();
   const [selectedTradeId, setSelectedTradeId] = useState(tradeContacts[0]?.id ?? '');
@@ -47,18 +55,18 @@ export default function TradesScreen() {
   const selectedTrade = activeContact?.trade ?? tradeContacts[0]?.trade ?? 'Groundworks';
 
   const visiblePlots = useMemo(
-    () => sitePlots.filter((plot) => hasTradeWork(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates)),
-    [sitePlots, selectedTrade, activeIssueWeek, activityDelays, plotTemplates],
+    () => sitePlots.filter((plot) => hasTradeWork(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates, activityMoves)),
+    [sitePlots, selectedTrade, activeIssueWeek, activityDelays, plotTemplates, activityMoves],
   );
 
   const managerPreview = useMemo(
-    () => createManagerProgrammeText({ plots: sitePlots, activityDelays, startWeek: activeIssueWeek, tradeContacts, plotTemplates, programmeNotes }),
-    [sitePlots, activityDelays, activeIssueWeek, tradeContacts, plotTemplates, programmeNotes],
+    () => createManagerProgrammeText({ plots: sitePlots, activityDelays, startWeek: activeIssueWeek, tradeContacts, plotTemplates, programmeNotes, activityMoves }),
+    [sitePlots, activityDelays, activeIssueWeek, tradeContacts, plotTemplates, programmeNotes, activityMoves],
   );
 
   const tradePreview = useMemo(
-    () => activeContact ? createTradeProgrammeText({ trade: activeContact.trade, plots: sitePlots, activityDelays, startWeek: activeIssueWeek, plotTemplates, programmeNotes }) : '',
-    [activeContact, sitePlots, activityDelays, activeIssueWeek, plotTemplates, programmeNotes],
+    () => activeContact ? createTradeProgrammeText({ trade: activeContact.trade, plots: sitePlots, activityDelays, startWeek: activeIssueWeek, plotTemplates, programmeNotes, activityMoves }) : '',
+    [activeContact, sitePlots, activityDelays, activeIssueWeek, plotTemplates, programmeNotes, activityMoves],
   );
 
   const saveTradeContact = async () => {
@@ -78,11 +86,19 @@ export default function TradesScreen() {
     });
   };
 
+  const dropActivity = async (plotId: string, targetWeek: number, targetDay: number, payload: DragPayload) => {
+    if (payload.plotId !== plotId) return;
+    const plot = sitePlots.find((item) => item.id === plotId);
+    if (!plot) return;
+    const deltaDays = getActivityMoveDeltaToTarget(plot, payload.activityCode, targetWeek, targetDay, activityDelays, plotTemplates, activityMoves);
+    await setActivityMove({ plotId, activityCode: payload.activityCode, deltaDays });
+  };
+
   return (
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Trade 2-Week Programmes</Text>
-        <Text style={styles.subtitle}>Excel-style trade sheet: Plot No | Trade | Fix | two weeks of dates | output / recovery notes.</Text>
+        <Text style={styles.subtitle}>Drag a fix into another day cell to pull it back or push it out. The selected fix and every following fix move with it.</Text>
       </View>
 
       <SectionCard title="Select trade and issue week" subtitle="Choose the trade and the live two-week block to issue or review.">
@@ -114,7 +130,7 @@ export default function TradesScreen() {
         </View>
       </SectionCard>
 
-      <SectionCard title={`2 WEEK ${selectedTrade.toUpperCase()} PROGRAMME`} subtitle="This is the app version of your trade-specific Excel programme. Output / Recovery Notes can be typed directly into the row.">
+      <SectionCard title={`2 WEEK ${selectedTrade.toUpperCase()} PROGRAMME`} subtitle="Drag any fix pill into a new day box. Example: drag 2nd fix plumbing backwards to overlap with 2nd fix electrical; all later fixes follow.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.topHeaderRow}>
@@ -124,6 +140,7 @@ export default function TradesScreen() {
               <Text style={styles.weekGroup}>WEEK 1</Text>
               <Text style={styles.weekGroup}>WEEK 2</Text>
               <Text style={[styles.weekHeaderBlank, styles.outputCell]} />
+              <Text style={[styles.weekHeaderBlank, styles.resetCell]} />
             </View>
             <View style={styles.tableRow}>
               <Text style={[styles.headerCell, styles.plotCell]}>Plot No</Text>
@@ -133,6 +150,7 @@ export default function TradesScreen() {
                 DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>WK{String(week).padStart(2, '0')} {day}</Text>),
               )}
               <Text style={[styles.headerCell, styles.outputCell]}>Output / Recovery Notes</Text>
+              <Text style={[styles.headerCell, styles.resetCell]}>Reset</Text>
             </View>
 
             {visiblePlots.length === 0 ? (
@@ -140,15 +158,17 @@ export default function TradesScreen() {
                 <Text style={[styles.emptyCell, styles.plotCell]}>-</Text>
                 <Text style={[styles.emptyCell, styles.tradeCell]}>{selectedTrade}</Text>
                 <Text style={[styles.emptyCell, styles.fixCell]}>No activity</Text>
-                {Array.from({ length: 10 }).map((_, index) => <Text key={index} style={styles.emptyDayCell} />)}
+                {Array.from({ length: 10 }).map((_, index) => <View key={index} style={styles.emptyDayCell} />)}
                 <Text style={[styles.emptyCell, styles.outputCell]}>No trade activity in selected window.</Text>
+                <Text style={[styles.emptyCell, styles.resetCell]}>-</Text>
               </View>
             ) : null}
 
             {visiblePlots.map((plot, rowIndex) => {
-              const fixText = getFixText(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates);
-              const output = getOutputText(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates);
+              const fixText = getFixText(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates, activityMoves);
+              const output = getOutputText(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates, activityMoves);
               const savedNote = programmeNotes.find((note) => note.plotId === plot.id && note.trade === selectedTrade && note.startWeek === activeIssueWeek)?.note ?? '';
+              const plotHasMoves = activityMoves.some((move) => move.plotId === plot.id);
               return (
                 <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                   <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
@@ -156,8 +176,38 @@ export default function TradesScreen() {
                   <Text style={[styles.bodyCell, styles.fixCell]}>{fixText || 'Activity'}</Text>
                   {[activeIssueWeek, activeIssueWeek + 1].flatMap((week) =>
                     DAY_NAMES.map((_, dayIndex) => {
-                      const text = getTradeTemplateText(plot, selectedTrade, week, dayIndex + 1, activityDelays, plotTemplates);
-                      return <Text key={`${plot.id}-${selectedTrade}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
+                      const day = dayIndex + 1;
+                      const activities = getActivitiesForTemplateDay(plot, week, day, activityDelays, plotTemplates, activityMoves).filter((activity) => activity.trade === selectedTrade);
+                      return (
+                        <View
+                          key={`${plot.id}-${selectedTrade}-${week}-${dayIndex}`}
+                          style={[styles.dayDropCell, activities.length ? styles.activeDayCell : null]}
+                          {...({
+                            onDragOver: (event: any) => event.preventDefault(),
+                            onDrop: (event: any) => {
+                              event.preventDefault();
+                              const raw = event.dataTransfer?.getData('application/json');
+                              if (!raw) return;
+                              dropActivity(plot.id, week, day, JSON.parse(raw));
+                            },
+                          } as any)}
+                        >
+                          {activities.map((activity) => (
+                            <View
+                              key={activity.code}
+                              style={styles.activityPill}
+                              {...({
+                                draggable: true,
+                                onDragStart: (event: any) => {
+                                  event.dataTransfer?.setData('application/json', JSON.stringify({ plotId: plot.id, activityCode: activity.code }));
+                                },
+                              } as any)}
+                            >
+                              <Text style={styles.activityPillText}>{activity.displayText}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      );
                     }),
                   )}
                   <TextInput
@@ -167,6 +217,9 @@ export default function TradesScreen() {
                     multiline
                     style={[styles.outputInput, styles.outputCell]}
                   />
+                  <Pressable style={[styles.resetButton, !plotHasMoves ? styles.resetButtonDisabled : null]} onPress={() => resetActivityMovesForPlot(plot.id)}>
+                    <Text style={styles.resetButtonText}>{plotHasMoves ? 'Reset' : '-'}</Text>
+                  </Pressable>
                 </View>
               );
             })}
@@ -261,32 +314,64 @@ function getPlotById(plotId: string, plots: ReturnType<typeof useSitePlanner>['s
   return plots.find((plot) => plot.id === plotId);
 }
 
-function getTradeActivities(plotId: string, trade: string, startWeek: number, plots: ReturnType<typeof useSitePlanner>['sitePlots'], delays: ReturnType<typeof useSitePlanner>['activityDelays'], templates: ReturnType<typeof useSitePlanner>['plotTemplates']) {
+function getTradeActivities(
+  plotId: string,
+  trade: string,
+  startWeek: number,
+  plots: ReturnType<typeof useSitePlanner>['sitePlots'],
+  delays: ReturnType<typeof useSitePlanner>['activityDelays'],
+  templates: ReturnType<typeof useSitePlanner>['plotTemplates'],
+  moves: ReturnType<typeof useSitePlanner>['activityMoves'],
+) {
   const plot = getPlotById(plotId, plots);
   if (!plot) return [];
   const activities = [];
   for (let week = startWeek; week <= startWeek + 1; week += 1) {
     for (let day = 1; day <= 5; day += 1) {
-      activities.push(...getActivitiesForTemplateDay(plot, week, day, delays, templates).filter((activity) => activity.trade === trade));
+      activities.push(...getActivitiesForTemplateDay(plot, week, day, delays, templates, moves).filter((activity) => activity.trade === trade));
     }
   }
   return Array.from(new Map(activities.map((activity) => [activity.code, activity])).values());
 }
 
-function hasTradeWork(plotId: string, trade: string, startWeek: number, plots: ReturnType<typeof useSitePlanner>['sitePlots'], delays: ReturnType<typeof useSitePlanner>['activityDelays'], templates: ReturnType<typeof useSitePlanner>['plotTemplates']) {
-  return getTradeActivities(plotId, trade, startWeek, plots, delays, templates).length > 0;
+function hasTradeWork(
+  plotId: string,
+  trade: string,
+  startWeek: number,
+  plots: ReturnType<typeof useSitePlanner>['sitePlots'],
+  delays: ReturnType<typeof useSitePlanner>['activityDelays'],
+  templates: ReturnType<typeof useSitePlanner>['plotTemplates'],
+  moves: ReturnType<typeof useSitePlanner>['activityMoves'],
+) {
+  return getTradeActivities(plotId, trade, startWeek, plots, delays, templates, moves).length > 0;
 }
 
-function getFixText(plotId: string, trade: string, startWeek: number, plots: ReturnType<typeof useSitePlanner>['sitePlots'], delays: ReturnType<typeof useSitePlanner>['activityDelays'], templates: ReturnType<typeof useSitePlanner>['plotTemplates']) {
-  return getTradeActivities(plotId, trade, startWeek, plots, delays, templates)
+function getFixText(
+  plotId: string,
+  trade: string,
+  startWeek: number,
+  plots: ReturnType<typeof useSitePlanner>['sitePlots'],
+  delays: ReturnType<typeof useSitePlanner>['activityDelays'],
+  templates: ReturnType<typeof useSitePlanner>['plotTemplates'],
+  moves: ReturnType<typeof useSitePlanner>['activityMoves'],
+) {
+  return getTradeActivities(plotId, trade, startWeek, plots, delays, templates, moves)
     .map((activity) => activity.displayText)
     .filter(Boolean)
     .filter((text, index, array) => array.indexOf(text) === index)
     .join(' / ');
 }
 
-function getOutputText(plotId: string, trade: string, startWeek: number, plots: ReturnType<typeof useSitePlanner>['sitePlots'], delays: ReturnType<typeof useSitePlanner>['activityDelays'], templates: ReturnType<typeof useSitePlanner>['plotTemplates']) {
-  return getTradeActivities(plotId, trade, startWeek, plots, delays, templates)
+function getOutputText(
+  plotId: string,
+  trade: string,
+  startWeek: number,
+  plots: ReturnType<typeof useSitePlanner>['sitePlots'],
+  delays: ReturnType<typeof useSitePlanner>['activityDelays'],
+  templates: ReturnType<typeof useSitePlanner>['plotTemplates'],
+  moves: ReturnType<typeof useSitePlanner>['activityMoves'],
+) {
+  return getTradeActivities(plotId, trade, startWeek, plots, delays, templates, moves)
     .map((activity) => activity.code)
     .filter(Boolean)
     .join(', ');
@@ -311,13 +396,19 @@ const styles = StyleSheet.create({
   tradeCell: { width: 150 },
   fixCell: { width: 150 },
   outputCell: { width: 300 },
+  resetCell: { width: 88 },
   dayHeader: { width: 140, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
-  dayCell: { width: 140, minHeight: 58, color: '#0f172a', padding: 6, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontSize: 11, fontWeight: '900' },
+  dayDropCell: { width: 140, minHeight: 64, padding: 5, gap: 4, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff', alignItems: 'stretch', justifyContent: 'center' },
   activeDayCell: { backgroundColor: '#dff0ff' },
+  activityPill: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#2563eb', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 4, cursor: 'grab' as any },
+  activityPillText: { color: '#0f172a', fontSize: 11, fontWeight: '900', textAlign: 'center' },
   emptyCell: { color: '#64748b', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
   emptyDayCell: { width: 140, minHeight: 42, borderWidth: 1, borderColor: '#c8d7e6' },
-  outputInput: { minHeight: 58, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fffdf2', fontSize: 12, fontWeight: '700', textAlignVertical: 'top' },
+  outputInput: { minHeight: 64, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fffdf2', fontSize: 12, fontWeight: '700', textAlignVertical: 'top' },
+  resetButton: { width: 88, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fff7ed' },
+  resetButtonDisabled: { backgroundColor: '#f8fafc' },
+  resetButtonText: { color: '#0f172a', fontWeight: '900', fontSize: 12 },
   formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
   inputWrap: { gap: 6, minWidth: 190, flex: 1 },
   inputWrapSmall: { gap: 6, width: 120 },
