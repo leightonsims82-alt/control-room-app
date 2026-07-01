@@ -52,13 +52,13 @@ export default function TradesScreen() {
   );
 
   const managerPreview = useMemo(
-    () => createManagerProgrammeText({ plots: sitePlots, activityDelays, startWeek: activeIssueWeek, tradeContacts, plotTemplates }),
-    [sitePlots, activityDelays, activeIssueWeek, tradeContacts, plotTemplates],
+    () => createManagerProgrammeText({ plots: sitePlots, activityDelays, startWeek: activeIssueWeek, tradeContacts, plotTemplates, programmeNotes }),
+    [sitePlots, activityDelays, activeIssueWeek, tradeContacts, plotTemplates, programmeNotes],
   );
 
   const tradePreview = useMemo(
-    () => activeContact ? createTradeProgrammeText({ trade: activeContact.trade, plots: sitePlots, activityDelays, startWeek: activeIssueWeek, plotTemplates }) : '',
-    [activeContact, sitePlots, activityDelays, activeIssueWeek, plotTemplates],
+    () => activeContact ? createTradeProgrammeText({ trade: activeContact.trade, plots: sitePlots, activityDelays, startWeek: activeIssueWeek, plotTemplates, programmeNotes }) : '',
+    [activeContact, sitePlots, activityDelays, activeIssueWeek, plotTemplates, programmeNotes],
   );
 
   const saveTradeContact = async () => {
