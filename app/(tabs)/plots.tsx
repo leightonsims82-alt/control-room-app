@@ -6,13 +6,13 @@ import { DAY_NAMES, WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
 import { getPlotBreakdownTemplateText, getStage1StartWeekForPlot, getTemplateForPlot } from '../../utils/templateProgramme';
 
 export default function PlotsScreen() {
-  const { sitePlots, activityDelays, plotTemplates } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates } = useSitePlanner();
 
   return (
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Plot Breakdown</Text>
-        <Text style={styles.subtitle}>Daily plot programme using the selected template for each plot. Different plot types can now use different task durations.</Text>
+        <Text style={styles.subtitle}>Daily plot programme using the selected template for each plot. Dragged trade fixes are reflected here automatically.</Text>
       </View>
 
       <SectionCard title="Daily Plot Breakdown" subtitle="One row per plot. Cells show specific activity codes such as FND, DNG, SLAB and 1ST BWK.">
@@ -43,7 +43,7 @@ export default function PlotsScreen() {
                   <Text style={[styles.stageStartCell, styles.stageCell]}>{getStage1StartWeekForPlot(plot, plotTemplates)}</Text>
                   {WEEK_NUMBERS.flatMap((week) =>
                     DAY_NAMES.map((_, dayIndex) => {
-                      const text = getPlotBreakdownTemplateText(plot, week, dayIndex + 1, activityDelays, plotTemplates);
+                      const text = getPlotBreakdownTemplateText(plot, week, dayIndex + 1, activityDelays, plotTemplates, activityMoves);
                       return <Text key={`${plot.id}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
                     }),
                   )}
