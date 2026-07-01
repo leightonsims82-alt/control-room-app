@@ -3,7 +3,7 @@ import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { DAY_NAMES, WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
-import { getPlotBreakdownTemplateText, getStage1StartWeekForPlot, getTemplateForPlot } from '../../utils/templateProgramme';
+import { getHouseTypeLabel, getPlotBreakdownTemplateText, getStage1StartWeekForPlot, getTemplateForPlot } from '../../utils/templateProgramme';
 
 export default function PlotsScreen() {
   const { sitePlots, activityDelays, activityMoves, plotTemplates } = useSitePlanner();
@@ -12,7 +12,7 @@ export default function PlotsScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Plot Breakdown</Text>
-        <Text style={styles.subtitle}>Daily plot programme using the selected template for each plot. Dragged trade fixes are reflected here automatically.</Text>
+        <Text style={styles.subtitle}>Daily plot programme using the selected house type code for each plot. Dragged trade fixes are reflected here automatically.</Text>
       </View>
 
       <SectionCard title="Daily Plot Breakdown" subtitle="One row per plot. Cells show specific activity codes such as FND, DNG, SLAB and 1ST BWK.">
@@ -27,7 +27,7 @@ export default function PlotsScreen() {
             </View>
             <View style={styles.tableRow}>
               <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
-              <Text style={[styles.headerCell, styles.templateCell]}>Template</Text>
+              <Text style={[styles.headerCell, styles.templateCell]}>House Type</Text>
               <Text style={[styles.headerCell, styles.stageCell]}>Stage 9 Week</Text>
               <Text style={[styles.headerCell, styles.stageCell]}>Stage 1 Start</Text>
               {WEEK_NUMBERS.flatMap((week) => DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>{day}</Text>))}
@@ -38,7 +38,7 @@ export default function PlotsScreen() {
               return (
                 <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                   <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
-                  <Text style={[styles.bodyCell, styles.templateCell]}>{template.name}</Text>
+                  <Text style={[styles.bodyCell, styles.templateCell]}>{getHouseTypeLabel(template)}</Text>
                   <Text style={[styles.bodyCell, styles.stageCell]}>{plot.stage9CompleteWeek}</Text>
                   <Text style={[styles.stageStartCell, styles.stageCell]}>{getStage1StartWeekForPlot(plot, plotTemplates)}</Text>
                   {WEEK_NUMBERS.flatMap((week) =>
