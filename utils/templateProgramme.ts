@@ -195,7 +195,8 @@ export function getActivityMoveDeltaToTarget(plot: TemplateSitePlot, activityCod
   const currentRange = getActivityRangeForPlot(plot, activityCode, delays, templates, moves);
   if (!currentRange) return 0;
   const targetDayIndex = dayIndexFromWeekDay(targetWeek, targetDay);
-  return targetDayIndex - currentRange.start;
+  const existingOwnMove = moves.find((move) => move.plotId === plot.id && move.activityCode === activityCode)?.deltaDays ?? 0;
+  return existingOwnMove + (targetDayIndex - currentRange.start);
 }
 
 export function getActivitiesForTemplateDay(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
