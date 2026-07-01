@@ -3,17 +3,17 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
-import { WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
-import { getMilestoneForPlotWeek, getStage1StartWeekForPlot, getTemplateForPlot } from '../../utils/templateProgramme';
+import { PROGRAMME_STAGE_SEQUENCE, WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
+import { getStage1StartWeekForPlot, getStageNumberForPlotWeek, getTemplateForPlot } from '../../utils/templateProgramme';
 
 export default function MasterProgrammeScreen() {
   const { sitePlots, plotTemplates, upsertSitePlot, removeSitePlot } = useSitePlanner();
-  const [plotNo, setPlotNo] = useState('105');
-  const [stage9Week, setStage9Week] = useState('26');
+  const [plotNo, setPlotNo] = useState('11');
+  const [preHandoverWeek, setPreHandoverWeek] = useState('33');
   const [templateId, setTemplateId] = useState(plotTemplates[2]?.id ?? 'threeBed');
 
   const savePlot = async () => {
-    const parsedWeek = Number(stage9Week);
+    const parsedWeek = Number(preHandoverWeek);
     if (!plotNo.trim() || !Number.isFinite(parsedWeek)) return;
     await upsertSitePlot({ plotNo, stage9CompleteWeek: parsedWeek, templateId });
   };
@@ -21,22 +21,22 @@ export default function MasterProgrammeScreen() {
   return (
     <AppScreen>
       <View style={styles.header}>
-        <Text style={styles.title}>Master 23 Week Build</Text>
-        <Text style={styles.subtitle}>Milestone completion view. Add a plot, choose its house type template, and enter the Stage 9 complete week.</Text>
+        <Text style={styles.title}>Master 23 Week Programme</Text>
+        <Text style={styles.subtitle}>Excel-style stage matrix. One row per plot, week columns across the top, stage numbers only in the cells.</Text>
       </View>
 
-      <SectionCard title="Add / update plot" subtitle="Plot template controls the build duration and task durations used by the plot breakdown.">
+      <SectionCard title="Plot input" subtitle="Enter the pre-handover week and Programme Buddy back-plans the 23-week route.">
         <View style={styles.formRow}>
           <View style={styles.inputWrap}>
             <Text style={styles.label}>Plot No</Text>
-            <TextInput value={plotNo} onChangeText={setPlotNo} style={styles.input} placeholder="101" />
+            <TextInput value={plotNo} onChangeText={setPlotNo} style={styles.input} placeholder="1" />
           </View>
           <View style={styles.inputWrap}>
-            <Text style={styles.label}>Stage 9 Complete Week</Text>
-            <TextInput value={stage9Week} onChangeText={setStage9Week} style={styles.input} keyboardType="number-pad" placeholder="23" />
+            <Text style={styles.label}>Pre-handover week</Text>
+            <TextInput value={preHandoverWeek} onChangeText={setPreHandoverWeek} style={styles.input} keyboardType="number-pad" placeholder="23" />
           </View>
           <View style={styles.inputWrapWide}>
-            <Text style={styles.label}>Plot template</Text>
+            <Text style={styles.label}>House type</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.templateChips}>
                 {plotTemplates.map((template) => {
@@ -56,14 +56,14 @@ export default function MasterProgrammeScreen() {
         </View>
       </SectionCard>
 
-      <SectionCard title="Master Build Programme" subtitle="Milestone numbers are generated from each plot template, so a 2 bed, 5 bed or apartment can run to different programme lengths.">
+      <SectionCard title="Master stage-number matrix" subtitle="Numbers only. Use the stage key below for meanings.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.tableRow}>
-              <Text style={[styles.headerCell, styles.plotCell]}>Plot No</Text>
-              <Text style={[styles.headerCell, styles.templateCell]}>Template</Text>
-              <Text style={[styles.headerCell, styles.weekInputCell]}>Stage 9 Complete Week</Text>
-              <Text style={[styles.headerCell, styles.weekInputCell]}>Stage 1 Start Week</Text>
+              <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
+              <Text style={[styles.headerCell, styles.templateCell]}>Type</Text>
+              <Text style={[styles.headerCell, styles.weekInputCell]}>Start</Text>
+              <Text style={[styles.headerCell, styles.weekInputCell]}>Pre-H/O</Text>
               {WEEK_NUMBERS.map((week) => (
                 <Text key={week} style={styles.weekHeader}>WK{String(week).padStart(2, '0')}</Text>
               ))}
@@ -76,11 +76,12 @@ export default function MasterProgrammeScreen() {
                 <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                   <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
                   <Text style={[styles.bodyCell, styles.templateCell]}>{template.name}</Text>
-                  <Text style={[styles.weekInputBody, styles.weekInputCell]}>{plot.stage9CompleteWeek}</Text>
-                  <Text style={[styles.stageStartBody, styles.weekInputCell]}>{getStage1StartWeekForPlot(plot, plotTemplates)}</Text>
-                  {WEEK_NUMBERS.map((week) => (
-                    <Text key={week} style={styles.weekCell}>{getMilestoneForPlotWeek(plot, week, plotTemplates)}</Text>
-                  ))}
+                  <Text style={[styles.stageStartBody, styles.weekInputCell]}>WK{String(getStage1StartWeekForPlot(plot, plotTemplates)).padStart(2, '0')}</Text>
+                  <Text style={[styles.weekInputBody, styles.weekInputCell]}>WK{String(plot.stage9CompleteWeek).padStart(2, '0')}</Text>
+                  {WEEK_NUMBERS.map((week) => {
+                    const stage = getStageNumberForPlotWeek(plot, week, plotTemplates);
+                    return <Text key={week} style={[styles.weekCell, stage ? styles.activeWeekCell : null]}>{stage}</Text>;
+                  })}
                   <Pressable style={styles.removeButton} onPress={() => removeSitePlot(plot.id)}>
                     <Text style={styles.removeButtonText}>Remove</Text>
                   </Pressable>
@@ -89,6 +90,20 @@ export default function MasterProgrammeScreen() {
             })}
           </View>
         </ScrollView>
+      </SectionCard>
+
+      <SectionCard title="Stage key" subtitle="This is the key behind the number-only cells.">
+        <View style={styles.stageKeyGrid}>
+          {PROGRAMME_STAGE_SEQUENCE.map((stage) => (
+            <View key={stage.stage} style={styles.stageKeyItem}>
+              <Text style={styles.stageKeyNumber}>{stage.stage}</Text>
+              <View style={styles.stageKeyTextWrap}>
+                <Text style={styles.stageKeyLabel}>{stage.label}</Text>
+                <Text style={styles.stageKeyMeta}>{stage.durationWeeks} week{stage.durationWeeks === 1 ? '' : 's'}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
       </SectionCard>
     </AppScreen>
   );
@@ -111,17 +126,24 @@ const styles = StyleSheet.create({
   templateChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
   templateChipTextActive: { color: '#ffffff' },
   tableRow: { flexDirection: 'row', minHeight: 38, alignItems: 'stretch' },
-  altRow: { backgroundColor: '#eaf2fb' },
+  altRow: { backgroundColor: '#f8fbff' },
   headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   plotCell: { width: 90 },
-  templateCell: { width: 120 },
-  weekInputCell: { width: 150 },
+  templateCell: { width: 118 },
+  weekInputCell: { width: 104 },
   actionCell: { width: 86 },
   weekHeader: { width: 58, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
   weekInputBody: { backgroundColor: '#fff4cc', color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
   stageStartBody: { backgroundColor: '#e3f3d8', color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
   weekCell: { width: 58, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
+  activeWeekCell: { backgroundColor: '#dff0ff' },
   removeButton: { width: 86, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#c8d7e6' },
   removeButtonText: { color: '#dc2626', fontSize: 12, fontWeight: '900' },
+  stageKeyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  stageKeyItem: { flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 240, flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 10 },
+  stageKeyNumber: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#173b5f', color: '#ffffff', textAlign: 'center', lineHeight: 34, fontWeight: '900' },
+  stageKeyTextWrap: { flex: 1 },
+  stageKeyLabel: { color: '#0f172a', fontWeight: '900' },
+  stageKeyMeta: { color: '#64748b', fontSize: 12, marginTop: 2 },
 });
