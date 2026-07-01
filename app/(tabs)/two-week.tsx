@@ -1,32 +1,48 @@
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { DAY_NAMES } from '../../utils/siteProgrammeEngine';
-import { getHouseTypeLabel, getPlotBreakdownTemplateText, getTemplateForPlot } from '../../utils/templateProgramme';
+import { getChecklistIdForActivity } from '../../utils/inspectionChecklists';
+import {
+  calendarDayIndexFromWeekDay,
+  getActivitiesForTemplateDay,
+  getActivityRangeForPlot,
+  getHouseTypeLabel,
+  getSortedSitePlots,
+  getTemplateForPlot,
+} from '../../utils/templateProgramme';
 
 export default function TwoWeekProgrammeScreen() {
   const { sitePlots, activityDelays, activityMoves, plotTemplates } = useSitePlanner();
+  const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
   const [startWeek, setStartWeek] = useState(1);
   const activeCodes = useMemo(() => {
     const codes = new Map<string, string>();
-    sitePlots.forEach((plot) => {
+    sortedPlots.forEach((plot) => {
       [startWeek, startWeek + 1].forEach((week) => {
         DAY_NAMES.forEach((_, dayIndex) => {
-          const text = getPlotBreakdownTemplateText(plot, week, dayIndex + 1, activityDelays, plotTemplates, activityMoves);
-          text.split('\n').filter(Boolean).forEach((code) => codes.set(code, code));
+          getActivitiesForTemplateDay(plot, week, dayIndex + 1, activityDelays, plotTemplates, activityMoves).forEach((activity) => codes.set(activity.code, activity.code));
         });
       });
     });
     return Array.from(codes.values()).sort();
-  }, [sitePlots, activityDelays, activityMoves, plotTemplates, startWeek]);
+  }, [sortedPlots, activityDelays, activityMoves, plotTemplates, startWeek]);
+
+  const openInspection = (plotId: string, activityCode: string, trade: string, checklistId: string) => {
+    router.push({
+      pathname: '/inspections',
+      params: { plotId, activityCode, trade, checklistId },
+    } as any);
+  };
 
   return (
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Rolling 2-Week Programme</Text>
-        <Text style={styles.subtitle}>One row per plot. Cells show the actual fix / activity codes for the selected two-week block, including any pulled fixes from the Trades view.</Text>
+        <Text style={styles.subtitle}>Click Inspect on the last day of a fix to complete the QA check. The record is stored under that plot’s QA story.</Text>
       </View>
 
       <SectionCard title="2-week selector" subtitle={`Currently showing WK${String(startWeek).padStart(2, '0')} and WK${String(startWeek + 1).padStart(2, '0')}`}>
@@ -41,7 +57,7 @@ export default function TwoWeekProgrammeScreen() {
         </View>
       </SectionCard>
 
-      <SectionCard title="Rolling programme" subtitle="This is the app version of the Excel rolling programme: Plot No | House Type | dates across the top | actual fix/activity in each day cell.">
+      <SectionCard title="Rolling programme" subtitle="Inspections trigger from the final programmed day of each activity/fix.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.weekHeaderRow}>
@@ -56,7 +72,7 @@ export default function TwoWeekProgrammeScreen() {
               {[startWeek, startWeek + 1].flatMap((week) => DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>WK{String(week).padStart(2, '0')} {day}</Text>))}
             </View>
 
-            {sitePlots.map((plot, rowIndex) => {
+            {sortedPlots.map((plot, rowIndex) => {
               const template = getTemplateForPlot(plot, plotTemplates);
               return (
                 <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
@@ -64,8 +80,28 @@ export default function TwoWeekProgrammeScreen() {
                   <Text style={[styles.bodyCell, styles.templateCell]}>{getHouseTypeLabel(template)}</Text>
                   {[startWeek, startWeek + 1].flatMap((week) =>
                     DAY_NAMES.map((_, dayIndex) => {
-                      const text = getPlotBreakdownTemplateText(plot, week, dayIndex + 1, activityDelays, plotTemplates, activityMoves);
-                      return <Text key={`${plot.id}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
+                      const day = dayIndex + 1;
+                      const currentDay = calendarDayIndexFromWeekDay(week, day);
+                      const activities = getActivitiesForTemplateDay(plot, week, day, activityDelays, plotTemplates, activityMoves);
+                      return (
+                        <View key={`${plot.id}-${week}-${dayIndex}`} style={[styles.dayCell, activities.length ? styles.activeDayCell : null]}>
+                          {activities.map((activity) => {
+                            const range = getActivityRangeForPlot(plot, activity.code, activityDelays, plotTemplates, activityMoves);
+                            const isLastDay = range?.finish === currentDay;
+                            const checklistId = getChecklistIdForActivity(activity.code, activity.trade, activity.stage);
+                            return (
+                              <View key={activity.code} style={styles.activityBlock}>
+                                <Text style={styles.activityCode}>{activity.code}</Text>
+                                {isLastDay ? (
+                                  <Pressable style={styles.inspectButton} onPress={() => openInspection(plot.id, activity.code, activity.trade, checklistId)}>
+                                    <Text style={styles.inspectButtonText}>Inspect</Text>
+                                  </Pressable>
+                                ) : null}
+                              </View>
+                            );
+                          })}
+                        </View>
+                      );
                     }),
                   )}
                 </View>
@@ -107,8 +143,12 @@ const styles = StyleSheet.create({
   templateCell: { width: 130 },
   dayHeader: { width: 140, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
-  dayCell: { width: 140, minHeight: 58, color: '#0f172a', padding: 7, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontSize: 12, fontWeight: '900' },
+  dayCell: { width: 140, minHeight: 70, padding: 6, borderWidth: 1, borderColor: '#c8d7e6', alignItems: 'stretch', justifyContent: 'center', gap: 5 },
   activeDayCell: { backgroundColor: '#dff0ff' },
+  activityBlock: { backgroundColor: '#ffffff', borderRadius: 8, borderWidth: 1, borderColor: '#bfdbfe', padding: 5, gap: 5, alignItems: 'center' },
+  activityCode: { color: '#0f172a', textAlign: 'center', fontSize: 11, fontWeight: '900' },
+  inspectButton: { backgroundColor: '#0f172a', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, alignSelf: 'stretch' },
+  inspectButtonText: { color: '#ffffff', fontSize: 10, fontWeight: '900', textAlign: 'center' },
   codeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   codeItem: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   codeText: { color: '#0f172a', fontWeight: '900', fontSize: 12 },
