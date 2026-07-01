@@ -7,26 +7,26 @@ import { DAY_NAMES } from '../../utils/siteProgrammeEngine';
 import { getPlotBreakdownTemplateText, getTemplateForPlot } from '../../utils/templateProgramme';
 
 export default function TwoWeekProgrammeScreen() {
-  const { sitePlots, activityDelays, plotTemplates } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates } = useSitePlanner();
   const [startWeek, setStartWeek] = useState(1);
   const activeCodes = useMemo(() => {
     const codes = new Map<string, string>();
     sitePlots.forEach((plot) => {
       [startWeek, startWeek + 1].forEach((week) => {
         DAY_NAMES.forEach((_, dayIndex) => {
-          const text = getPlotBreakdownTemplateText(plot, week, dayIndex + 1, activityDelays, plotTemplates);
+          const text = getPlotBreakdownTemplateText(plot, week, dayIndex + 1, activityDelays, plotTemplates, activityMoves);
           text.split('\n').filter(Boolean).forEach((code) => codes.set(code, code));
         });
       });
     });
     return Array.from(codes.values()).sort();
-  }, [sitePlots, activityDelays, plotTemplates, startWeek]);
+  }, [sitePlots, activityDelays, activityMoves, plotTemplates, startWeek]);
 
   return (
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Rolling 2-Week Programme</Text>
-        <Text style={styles.subtitle}>One row per plot. Cells show the actual fix / activity codes for the selected two-week block.</Text>
+        <Text style={styles.subtitle}>One row per plot. Cells show the actual fix / activity codes for the selected two-week block, including any pulled fixes from the Trades view.</Text>
       </View>
 
       <SectionCard title="2-week selector" subtitle={`Currently showing WK${String(startWeek).padStart(2, '0')} and WK${String(startWeek + 1).padStart(2, '0')}`}>
@@ -64,7 +64,7 @@ export default function TwoWeekProgrammeScreen() {
                   <Text style={[styles.bodyCell, styles.templateCell]}>{template.name}</Text>
                   {[startWeek, startWeek + 1].flatMap((week) =>
                     DAY_NAMES.map((_, dayIndex) => {
-                      const text = getPlotBreakdownTemplateText(plot, week, dayIndex + 1, activityDelays, plotTemplates);
+                      const text = getPlotBreakdownTemplateText(plot, week, dayIndex + 1, activityDelays, plotTemplates, activityMoves);
                       return <Text key={`${plot.id}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
                     }),
                   )}
