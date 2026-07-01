@@ -6,7 +6,6 @@ import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import {
-  CHECKLIST_DEFINITIONS,
   CustomChecklistItem,
   getChecklistDefinition,
   getChecklistItems,
