@@ -10,6 +10,15 @@ import {
   TRADE_ORDER,
 } from './siteProgrammeEngine';
 
+export type ConstructionMethod = 'traditional' | 'timberFrame' | 'hybrid' | 'projectSpecific';
+
+export const CONSTRUCTION_METHOD_OPTIONS: { id: ConstructionMethod; label: string }[] = [
+  { id: 'traditional', label: 'Traditional masonry' },
+  { id: 'timberFrame', label: 'Timber frame' },
+  { id: 'hybrid', label: 'Hybrid / MMC' },
+  { id: 'projectSpecific', label: 'Project-specific' },
+];
+
 export type TemplateSitePlot = SitePlot & {
   templateId?: string;
   buildOrder?: number;
@@ -29,6 +38,7 @@ export type PlotTemplate = {
   id: string;
   name: string;
   houseTypeCode: string;
+  constructionMethod?: ConstructionMethod;
   description: string;
   programmeWeeks: number;
   stageCount: number;
@@ -76,6 +86,7 @@ function makeTemplate(id: string, name: string, description: string): PlotTempla
     id,
     name,
     houseTypeCode: defaultHouseTypeCodes[id] ?? name,
+    constructionMethod: 'traditional',
     description,
     programmeWeeks: 23,
     stageCount: 11,
@@ -127,6 +138,14 @@ export function getHouseTypeLabel(template: PlotTemplate) {
   return code || template.name;
 }
 
+export function getConstructionMethod(template: PlotTemplate): ConstructionMethod {
+  return template.constructionMethod ?? 'traditional';
+}
+
+export function getConstructionMethodLabel(method: ConstructionMethod | undefined) {
+  return CONSTRUCTION_METHOD_OPTIONS.find((option) => option.id === (method ?? 'traditional'))?.label ?? 'Traditional masonry';
+}
+
 export function createHouseTypeTemplate(input: { name: string; houseTypeCode: string; baseTemplate?: PlotTemplate }): PlotTemplate {
   const baseTemplate = input.baseTemplate ?? DEFAULT_PLOT_TEMPLATES.find((template) => template.id === 'threeBed') ?? DEFAULT_PLOT_TEMPLATES[0];
   const safeCode = input.houseTypeCode.trim() || input.name.trim() || 'TYPE';
@@ -136,6 +155,7 @@ export function createHouseTypeTemplate(input: { name: string; houseTypeCode: st
     id: `custom-${safeCode.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`,
     name: safeName,
     houseTypeCode: safeCode,
+    constructionMethod: baseTemplate.constructionMethod ?? 'traditional',
     description: `Custom organisation house type based on ${baseTemplate.name}`,
     activities: baseTemplate.activities.map((activity) => ({ ...activity })),
   };
