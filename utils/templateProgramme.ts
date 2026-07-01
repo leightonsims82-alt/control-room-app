@@ -29,6 +29,7 @@ export type ActivityMove = {
 export type PlotTemplate = {
   id: string;
   name: string;
+  houseTypeCode: string;
   description: string;
   programmeWeeks: number;
   stageCount: number;
@@ -62,11 +63,20 @@ const durationOverrides: Record<string, Record<string, number>> = {
   fiveBed: { '1ST CARP': 5, '1ST PLUMB': 3, '1ST ELEC': 3, BOARD: 7, TAPE: 4, DRY: 4, '2ND CARP': 6, '2ND PLUMB': 3, '2ND ELEC': 2, PATCH: 7, DEC: 8, FLOORING: 7, 'FINAL DEC': 7 },
 };
 
+const defaultHouseTypeCodes: Record<string, string> = {
+  apartment: 'APT',
+  twoBed: '2B',
+  threeBed: '3B',
+  fourBed: '4B',
+  fiveBed: '5B',
+};
+
 function makeTemplate(id: string, name: string, description: string): PlotTemplate {
   const taskDurations = durationOverrides[id] ?? {};
   return {
     id,
     name,
+    houseTypeCode: defaultHouseTypeCodes[id] ?? name,
     description,
     programmeWeeks: 23,
     stageCount: 11,
@@ -99,6 +109,25 @@ export function getTemplateForPlot(plot: TemplateSitePlot, templates: PlotTempla
 
 export function getTemplateById(templateId: string | undefined, templates: PlotTemplate[]) {
   return templates.find((template) => template.id === templateId) ?? templates.find((template) => template.id === 'threeBed') ?? templates[0];
+}
+
+export function getHouseTypeLabel(template: PlotTemplate) {
+  const code = template.houseTypeCode?.trim();
+  return code || template.name;
+}
+
+export function createHouseTypeTemplate(input: { name: string; houseTypeCode: string; baseTemplate?: PlotTemplate }): PlotTemplate {
+  const baseTemplate = input.baseTemplate ?? DEFAULT_PLOT_TEMPLATES.find((template) => template.id === 'threeBed') ?? DEFAULT_PLOT_TEMPLATES[0];
+  const safeCode = input.houseTypeCode.trim() || input.name.trim() || 'TYPE';
+  const safeName = input.name.trim() || safeCode;
+  return {
+    ...baseTemplate,
+    id: `custom-${safeCode.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`,
+    name: safeName,
+    houseTypeCode: safeCode,
+    description: `Custom organisation house type based on ${baseTemplate.name}`,
+    activities: baseTemplate.activities.map((activity) => ({ ...activity })),
+  };
 }
 
 function orderedActivities(template: PlotTemplate) {
