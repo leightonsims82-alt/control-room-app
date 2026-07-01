@@ -17,6 +17,7 @@ const ISSUE_SETTINGS_KEY = 'programme-buddy:issue-settings:v1';
 const ISSUE_LOGS_KEY = 'programme-buddy:issue-logs:v1';
 const PLOT_TEMPLATES_KEY = 'programme-buddy:plot-templates:v1';
 const SITE_PROGRAMME_SETUP_KEY = 'programme-buddy:programme-setup:v1';
+const PROGRAMME_NOTES_KEY = 'programme-buddy:programme-notes:v1';
 
 export type TradeContact = {
   id: string;
@@ -42,6 +43,15 @@ export type IssueLog = {
   note: string;
 };
 
+export type ProgrammeNote = {
+  id: string;
+  plotId: string;
+  trade: string;
+  startWeek: number;
+  note: string;
+  updatedAt: string;
+};
+
 const DEFAULT_TRADE_CONTACTS: TradeContact[] = TRADE_ORDER.map((trade) => ({
   id: `trade-${trade.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
   trade,
@@ -64,6 +74,7 @@ type SitePlannerStore = {
   tradeContacts: TradeContact[];
   issueSettings: IssueSettings;
   issueLogs: IssueLog[];
+  programmeNotes: ProgrammeNote[];
   plotTemplates: PlotTemplate[];
   siteSetup: SiteProgrammeSetup;
   isSitePlannerLoaded: boolean;
@@ -72,6 +83,7 @@ type SitePlannerStore = {
   setActivityDelay: (input: ActivityDelay) => Promise<void>;
   upsertTradeContact: (input: TradeContact) => Promise<void>;
   setIssueSettings: (input: IssueSettings) => Promise<void>;
+  setProgrammeNote: (input: { plotId: string; trade: string; startWeek: number; note: string }) => Promise<void>;
   recordIssue: (input: { startWeek: number; recipientCount: number; note: string }) => Promise<void>;
   updateSiteSetup: (input: Partial<SiteProgrammeSetup>) => Promise<void>;
   updatePlotTemplate: (input: PlotTemplate) => Promise<void>;
@@ -131,6 +143,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   const [tradeContacts, setTradeContacts] = useState<TradeContact[]>(DEFAULT_TRADE_CONTACTS);
   const [issueSettingsState, setIssueSettingsState] = useState<IssueSettings>(DEFAULT_ISSUE_SETTINGS);
   const [issueLogs, setIssueLogs] = useState<IssueLog[]>([]);
+  const [programmeNotes, setProgrammeNotes] = useState<ProgrammeNote[]>([]);
   const [plotTemplates, setPlotTemplates] = useState<PlotTemplate[]>(DEFAULT_PLOT_TEMPLATES);
   const [siteSetup, setSiteSetupState] = useState<SiteProgrammeSetup>(DEFAULT_SITE_PROGRAMME_SETUP);
   const [isSitePlannerLoaded, setIsSitePlannerLoaded] = useState(false);
@@ -139,12 +152,13 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
     let mounted = true;
     async function loadPlanner() {
       try {
-        const [storedPlots, storedDelays, storedContacts, storedIssueSettings, storedIssueLogs, storedTemplates, storedSiteSetup] = await Promise.all([
+        const [storedPlots, storedDelays, storedContacts, storedIssueSettings, storedIssueLogs, storedNotes, storedTemplates, storedSiteSetup] = await Promise.all([
           readArray<TemplateSitePlot>(SITE_PLOTS_KEY, DEFAULT_TEMPLATE_PLOTS),
           readArray<ActivityDelay>(SITE_DELAYS_KEY, []),
           readArray<TradeContact>(TRADE_CONTACTS_KEY, DEFAULT_TRADE_CONTACTS),
           readObject<IssueSettings>(ISSUE_SETTINGS_KEY, DEFAULT_ISSUE_SETTINGS),
           readArray<IssueLog>(ISSUE_LOGS_KEY, []),
+          readArray<ProgrammeNote>(PROGRAMME_NOTES_KEY, []),
           readArray<PlotTemplate>(PLOT_TEMPLATES_KEY, DEFAULT_PLOT_TEMPLATES),
           readObject<SiteProgrammeSetup>(SITE_PROGRAMME_SETUP_KEY, DEFAULT_SITE_PROGRAMME_SETUP),
         ]);
@@ -154,6 +168,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           setTradeContacts(mergeDefaultTradeContacts(storedContacts));
           setIssueSettingsState(storedIssueSettings);
           setIssueLogs(storedIssueLogs);
+          setProgrammeNotes(storedNotes);
           setPlotTemplates(mergeDefaultTemplates(storedTemplates));
           setSiteSetupState({ ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup });
         }
@@ -188,11 +203,14 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   const removeSitePlot = async (plotId: string) => {
     const nextPlots = sitePlots.filter((plot) => plot.id !== plotId);
     const nextDelays = activityDelays.filter((delay) => delay.plotId !== plotId);
+    const nextNotes = programmeNotes.filter((note) => note.plotId !== plotId);
     setSitePlots(nextPlots);
     setActivityDelays(nextDelays);
+    setProgrammeNotes(nextNotes);
     await Promise.all([
       AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(nextPlots)),
       AsyncStorage.setItem(SITE_DELAYS_KEY, JSON.stringify(nextDelays)),
+      AsyncStorage.setItem(PROGRAMME_NOTES_KEY, JSON.stringify(nextNotes)),
     ]);
   };
 
@@ -214,6 +232,21 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   const setIssueSettings = async (input: IssueSettings) => {
     setIssueSettingsState(input);
     await AsyncStorage.setItem(ISSUE_SETTINGS_KEY, JSON.stringify(input));
+  };
+
+  const setProgrammeNote = async (input: { plotId: string; trade: string; startWeek: number; note: string }) => {
+    const existing = programmeNotes.find((item) => item.plotId === input.plotId && item.trade === input.trade && item.startWeek === input.startWeek);
+    const cleanedNote = input.note.trim();
+    const nextNote: ProgrammeNote = existing
+      ? { ...existing, note: cleanedNote, updatedAt: new Date().toISOString() }
+      : { id: `programme-note-${Date.now()}`, plotId: input.plotId, trade: input.trade, startWeek: input.startWeek, note: cleanedNote, updatedAt: new Date().toISOString() };
+    const nextNotes = cleanedNote
+      ? existing
+        ? programmeNotes.map((item) => (item.id === existing.id ? nextNote : item))
+        : [...programmeNotes, nextNote]
+      : programmeNotes.filter((item) => item.id !== existing?.id);
+    setProgrammeNotes(nextNotes);
+    await AsyncStorage.setItem(PROGRAMME_NOTES_KEY, JSON.stringify(nextNotes));
   };
 
   const recordIssue = async (input: { startWeek: number; recipientCount: number; note: string }) => {
@@ -262,6 +295,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       tradeContacts,
       issueSettings: issueSettingsState,
       issueLogs,
+      programmeNotes,
       plotTemplates,
       siteSetup,
       isSitePlannerLoaded,
@@ -270,12 +304,13 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       setActivityDelay,
       upsertTradeContact,
       setIssueSettings,
+      setProgrammeNote,
       recordIssue,
       updateSiteSetup,
       updatePlotTemplate,
       updateTemplateActivityDuration,
     }),
-    [sitePlots, activityDelays, tradeContacts, issueSettingsState, issueLogs, plotTemplates, siteSetup, isSitePlannerLoaded],
+    [sitePlots, activityDelays, tradeContacts, issueSettingsState, issueLogs, programmeNotes, plotTemplates, siteSetup, isSitePlannerLoaded],
   );
 
   return <SitePlannerContext.Provider value={value}>{children}</SitePlannerContext.Provider>;
