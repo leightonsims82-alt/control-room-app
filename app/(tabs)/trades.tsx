@@ -3,9 +3,10 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { TradeContact, useSitePlanner } from '../../data/sitePlannerStore';
-import { DAY_NAMES } from '../../utils/siteProgrammeEngine';
 import { createManagerProgrammeText, createTradeProgrammeText, getSavedSupervisorEmails } from '../../utils/programmeIssue';
 import { getActivitiesForTemplateDay, getActivityMoveDeltaToTarget, getTradeTemplateText } from '../../utils/templateProgramme';
+
+const TRADE_DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 type DragPayload = {
   plotId: string;
@@ -98,7 +99,7 @@ export default function TradesScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Trade 2-Week Programmes</Text>
-        <Text style={styles.subtitle}>Drag a fix into another day cell to pull it back or push it out. The selected fix and every following fix move with it.</Text>
+        <Text style={styles.subtitle}>Drag a fix into another day cell to pull it back or push it out. Saturday and Sunday are visible as blank drop boxes when needed.</Text>
       </View>
 
       <SectionCard title="Select trade and issue week" subtitle="Choose the trade and the live two-week block to issue or review.">
@@ -130,7 +131,7 @@ export default function TradesScreen() {
         </View>
       </SectionCard>
 
-      <SectionCard title={`2 WEEK ${selectedTrade.toUpperCase()} PROGRAMME`} subtitle="Drag any fix pill into a new day box. Example: drag 2nd fix plumbing backwards to overlap with 2nd fix electrical; all later fixes follow.">
+      <SectionCard title={`2 WEEK ${selectedTrade.toUpperCase()} PROGRAMME`} subtitle="Drag any fix pill into a new day box. Weekend columns stay blank unless you manually drop work into them.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.topHeaderRow}>
@@ -147,7 +148,7 @@ export default function TradesScreen() {
               <Text style={[styles.headerCell, styles.tradeCell]}>Trade</Text>
               <Text style={[styles.headerCell, styles.fixCell]}>Fix</Text>
               {[activeIssueWeek, activeIssueWeek + 1].flatMap((week) =>
-                DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>WK{String(week).padStart(2, '0')} {day}</Text>),
+                TRADE_DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>WK{String(week).padStart(2, '0')} {day}</Text>),
               )}
               <Text style={[styles.headerCell, styles.outputCell]}>Output / Recovery Notes</Text>
               <Text style={[styles.headerCell, styles.resetCell]}>Reset</Text>
@@ -158,7 +159,7 @@ export default function TradesScreen() {
                 <Text style={[styles.emptyCell, styles.plotCell]}>-</Text>
                 <Text style={[styles.emptyCell, styles.tradeCell]}>{selectedTrade}</Text>
                 <Text style={[styles.emptyCell, styles.fixCell]}>No activity</Text>
-                {Array.from({ length: 10 }).map((_, index) => <View key={index} style={styles.emptyDayCell} />)}
+                {Array.from({ length: 14 }).map((_, index) => <View key={index} style={styles.emptyDayCell} />)}
                 <Text style={[styles.emptyCell, styles.outputCell]}>No trade activity in selected window.</Text>
                 <Text style={[styles.emptyCell, styles.resetCell]}>-</Text>
               </View>
@@ -175,13 +176,13 @@ export default function TradesScreen() {
                   <Text style={[styles.bodyCell, styles.tradeCell]}>{selectedTrade}</Text>
                   <Text style={[styles.bodyCell, styles.fixCell]}>{fixText || 'Activity'}</Text>
                   {[activeIssueWeek, activeIssueWeek + 1].flatMap((week) =>
-                    DAY_NAMES.map((_, dayIndex) => {
+                    TRADE_DAY_NAMES.map((_, dayIndex) => {
                       const day = dayIndex + 1;
                       const activities = getActivitiesForTemplateDay(plot, week, day, activityDelays, plotTemplates, activityMoves).filter((activity) => activity.trade === selectedTrade);
                       return (
                         <View
                           key={`${plot.id}-${selectedTrade}-${week}-${dayIndex}`}
-                          style={[styles.dayDropCell, activities.length ? styles.activeDayCell : null]}
+                          style={[styles.dayDropCell, day > 5 ? styles.weekendCell : null, activities.length ? styles.activeDayCell : null]}
                           {...({
                             onDragOver: (event: any) => event.preventDefault(),
                             onDrop: (event: any) => {
@@ -327,7 +328,7 @@ function getTradeActivities(
   if (!plot) return [];
   const activities = [];
   for (let week = startWeek; week <= startWeek + 1; week += 1) {
-    for (let day = 1; day <= 5; day += 1) {
+    for (let day = 1; day <= 7; day += 1) {
       activities.push(...getActivitiesForTemplateDay(plot, week, day, delays, templates, moves).filter((activity) => activity.trade === trade));
     }
   }
@@ -390,7 +391,7 @@ const styles = StyleSheet.create({
   tableRow: { flexDirection: 'row', alignItems: 'stretch' },
   altRow: { backgroundColor: '#f8fbff' },
   weekHeaderBlank: { backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce', minHeight: 28 },
-  weekGroup: { width: 700, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  weekGroup: { width: 980, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   plotCell: { width: 90 },
   tradeCell: { width: 150 },
@@ -400,6 +401,7 @@ const styles = StyleSheet.create({
   dayHeader: { width: 140, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
   dayDropCell: { width: 140, minHeight: 64, padding: 5, gap: 4, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff', alignItems: 'stretch', justifyContent: 'center' },
+  weekendCell: { backgroundColor: '#f8fafc' },
   activeDayCell: { backgroundColor: '#dff0ff' },
   activityPill: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#2563eb', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 4, cursor: 'grab' as any },
   activityPillText: { color: '#0f172a', fontSize: 11, fontWeight: '900', textAlign: 'center' },
