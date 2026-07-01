@@ -4,7 +4,7 @@ import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { PROGRAMME_STAGE_SEQUENCE, WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
-import { getStage1StartWeekForPlot, getStageNumberForPlotWeek, getTemplateForPlot } from '../../utils/templateProgramme';
+import { getHouseTypeLabel, getStage1StartWeekForPlot, getStageNumberForPlotWeek, getTemplateForPlot } from '../../utils/templateProgramme';
 
 export default function MasterProgrammeScreen() {
   const { sitePlots, plotTemplates, upsertSitePlot, removeSitePlot } = useSitePlanner();
@@ -29,7 +29,7 @@ export default function MasterProgrammeScreen() {
         <Text style={styles.subtitle}>Excel-style stage matrix. One row per plot, week columns across the top, stage numbers only in the cells.</Text>
       </View>
 
-      <SectionCard title="Plot input" subtitle="Enter the plot number and pre-handover week. The boxes stay blank until you type into them.">
+      <SectionCard title="Plot input" subtitle="Enter the plot number and pre-handover week. House type codes are managed in Setup.">
         <View style={styles.formRow}>
           <View style={styles.inputWrap}>
             <Text style={styles.label}>Plot No</Text>
@@ -47,7 +47,7 @@ export default function MasterProgrammeScreen() {
                   const active = template.id === templateId;
                   return (
                     <Pressable key={template.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => setTemplateId(template.id)}>
-                      <Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>{template.name}</Text>
+                      <Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>{getHouseTypeLabel(template)}</Text>
                     </Pressable>
                   );
                 })}
@@ -79,7 +79,7 @@ export default function MasterProgrammeScreen() {
               return (
                 <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                   <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
-                  <Text style={[styles.bodyCell, styles.templateCell]}>{template.name}</Text>
+                  <Text style={[styles.bodyCell, styles.templateCell]}>{getHouseTypeLabel(template)}</Text>
                   <Text style={[styles.stageStartBody, styles.weekInputCell]}>WK{String(getStage1StartWeekForPlot(plot, plotTemplates)).padStart(2, '0')}</Text>
                   <Text style={[styles.weekInputBody, styles.weekInputCell]}>WK{String(plot.stage9CompleteWeek).padStart(2, '0')}</Text>
                   {WEEK_NUMBERS.map((week) => {
