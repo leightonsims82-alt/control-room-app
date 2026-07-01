@@ -1,4 +1,5 @@
 import { ConstructionMethod } from './templateProgramme';
+import { ProgrammeStageNumber } from './siteProgrammeEngine';
 
 export type ChecklistApplicability = 'all' | ConstructionMethod;
 
@@ -29,64 +30,42 @@ export type ChecklistDefinition = {
 export const INSPECTION_STATUS_OPTIONS = ['Pass', 'Fail', 'N/A'] as const;
 export type InspectionStatus = typeof INSPECTION_STATUS_OPTIONS[number];
 
-const universalItems: ChecklistItem[] = [
+const commonReadinessItems: ChecklistItem[] = [
   {
     id: 'info-available',
-    section: 'General plot readiness',
-    label: 'All relevant information available at plot',
-    guidance: 'Latest drawings, specifications, details, levels, manufacturer information and inspection requirements are available at the plot before inspection starts.',
+    section: 'Readiness',
+    label: 'Information available at plot',
+    guidance: 'Latest relevant drawing/detail/specification is available before the inspection is completed.',
     appliesTo: ['all'],
-    photoRequired: false,
-  },
-  {
-    id: 'inspection-standard',
-    section: 'General plot readiness',
-    label: 'Plot presented to inspection standard',
-    guidance: 'Plot is clean, safe, accessible and complete enough for the stage inspection to be carried out properly.',
-    appliesTo: ['all'],
-    photoRequired: true,
   },
   {
     id: 'plot-accessible',
-    section: 'General plot readiness',
+    section: 'Readiness',
     label: 'Plot accessible',
-    guidance: 'Safe access is available to inspect all required areas.',
-    appliesTo: ['all'],
-  },
-  {
-    id: 'works-visible',
-    section: 'General plot readiness',
-    label: 'Works visible before covering',
-    guidance: 'Relevant work is visible and has not been covered before inspection and photographs.',
+    guidance: 'Safe access is available to inspect the work without obstruction.',
     appliesTo: ['all'],
     photoRequired: true,
   },
   {
-    id: 'area-clear',
-    section: 'General plot readiness',
-    label: 'Area clean and free from obstruction',
-    guidance: 'Spoil, arisings, loose materials and unnecessary obstructions have been removed from the inspection area.',
+    id: 'work-visible',
+    section: 'Readiness',
+    label: 'Work visible before covering',
+    guidance: 'The relevant work is visible and has not been covered before inspection/photos.',
     appliesTo: ['all'],
-  },
-  {
-    id: 'safety-controls',
-    section: 'General plot readiness',
-    label: 'Safety controls in place where required',
-    guidance: 'Barriers, edge protection or exclusion controls are in place where required.',
-    appliesTo: ['all'],
+    photoRequired: true,
   },
 ];
 
 export const CHECKLIST_DEFINITIONS: ChecklistDefinition[] = [
   {
     id: 'foundation-formation',
-    title: 'Stage 1 — Foundation formation',
+    title: 'Foundation formation',
     stage: 'Stage 1',
-    description: 'Formation inspection before concrete. Foundation type should be confirmed as strip/trench fill, piled or raft.',
+    description: 'Formation inspection before concrete. Select strip/trench fill, piled or raft in the description if needed.',
     items: [
-      { id: 'foundation-type', section: 'Information', label: 'Foundation type confirmed', guidance: 'Strip/trench fill, piled or raft foundation type confirmed against latest design.', photoRequired: true },
+      { id: 'foundation-type', section: 'Information', label: 'Foundation type confirmed', guidance: 'Strip/trench fill, piled or raft confirmed against the latest design.', photoRequired: true },
       { id: 'levels-indicated', section: 'Information', label: 'Concrete levels indicated', guidance: 'Concrete level markers/datum are indicated at the plot before pour.' },
-      { id: 'centre-lines', section: 'Setting out', label: 'Centre lines marked', guidance: 'Centre lines/foundation lines are clearly marked and visible for inspection.', photoRequired: true },
+      { id: 'centre-lines', section: 'Setting out', label: 'Centre lines marked', guidance: 'Centre lines/foundation lines are clearly marked and visible.', photoRequired: true },
       { id: 'formation-clean', section: 'Formation', label: 'Formation clean and suitable', guidance: 'Formation is clean, accessible, free from loose material and suitable for inspection.', photoRequired: true },
       { id: 'arisings-removed', section: 'Formation', label: 'Arisings removed', guidance: 'Arisings/spoil have been removed from the formation/trench area.' },
       { id: 'no-soft-spots', section: 'Formation', label: 'No obvious soft spots', guidance: 'No visible soft spots, made ground or unsuitable material left in the formation.' },
@@ -98,157 +77,137 @@ export const CHECKLIST_DEFINITIONS: ChecklistDefinition[] = [
     id: 'internal-drainage',
     title: 'Internal / below-ground drainage',
     stage: 'Stage 2',
-    description: 'Drainage inspection before covering, backfill, floor or slab works. Tolerances are displayed so the inspector can use a slope calculator on site.',
+    description: 'Drainage inspection before covering, backfill, floor or slab works. Tolerances are shown on screen; measurements can be added in the description only if useful.',
     items: [
-      { id: 'drain-layout', section: 'Information', label: 'Drainage layout available', guidance: 'Latest drainage drawing/layout, pipe routes, pipe sizes, gradients and rodding access are available.' },
-      { id: '100mm-fall', section: 'Falls / gradients', label: '100mm drain gradient checked', guidance: 'Minimum gradient not flatter than 1:80 where applicable, unless the design states otherwise.', photoRequired: true },
-      { id: '150mm-fall', section: 'Falls / gradients', label: '150mm drain gradient checked', guidance: 'Minimum gradient not flatter than 1:150 where applicable, unless the design states otherwise.', photoRequired: true },
-      { id: 'low-flow-fall', section: 'Falls / gradients', label: 'Low-flow 100mm drain checked', guidance: 'Minimum 1:40 where flow is less than 1.0L/sec, unless the design states otherwise.' },
-      { id: 'no-backfall', section: 'Falls / gradients', label: 'No visible or measured backfall', guidance: 'Drainage has no visible or measured backfall when checked on site.' },
-      { id: 'pipe-bedding', section: 'Bedding / support', label: 'Pipe bedding and support suitable', guidance: 'Pipes are firmly supported, with hard spots removed and no bricks/blocks/random packing under pipes.', photoRequired: true },
-      { id: 'pipe-ends-capped', section: 'Protection', label: 'Open pipe ends capped', guidance: 'Open pipe ends are capped/protected to prevent debris entering.' },
-      { id: 'wall-clearance', section: 'Pipes through walls / foundations', label: 'Pipe through wall/foundation clearance', guidance: '50mm clearance all round, or sleeve with 50mm clearance all round, where this detail applies.', photoRequired: true },
-      { id: 'flexible-joints', section: 'Pipes through walls / foundations', label: 'Flexible joints positioned correctly', guidance: 'Flexible joints located as close as feasible and max 150mm from wall face where required.' },
-      { id: 'rocker-length', section: 'Pipes through walls / foundations', label: 'Rocker pipe length checked', guidance: 'Rocker pipe length max 600mm where required by detail.' },
-      { id: 'rodding-access', section: 'Access / maintenance', label: 'Rodding access provided', guidance: 'Rodding access / inspection chamber locations provided as design.' },
-      { id: 'drainage-photos', section: 'Protection before covering', label: 'Drainage photographed before covering', guidance: 'Drainage runs, junctions, bedding, penetrations and key details photographed before covering.', photoRequired: true },
-    ],
-  },
-  {
-    id: 'slab-suspended-floor',
-    title: 'Stage 2 — Suspended floor / beam and block',
-    stage: 'Stage 2',
-    description: 'Suspended floor inspection including band course masonry already built before floor/follow-on works.',
-    items: [
-      { id: 'floor-layout', section: 'Information', label: 'Floor layout and bearing details available', guidance: 'Latest floor layout, beam direction, bearing details, service openings and ventilation details are available.' },
-      { id: 'band-bonding', section: 'Band course masonry', label: 'Band course bonding checked', guidance: 'Masonry bonding is consistent and correctly set out.', appliesTo: ['traditional', 'timberFrame', 'hybrid'], photoRequired: true },
-      { id: 'bed-perp-filled', section: 'Band course masonry', label: 'Bed and perp joints fully filled', guidance: 'No open or incomplete bed/perp joints in the band course.', appliesTo: ['traditional', 'timberFrame', 'hybrid'] },
-      { id: 'perp-alignment', section: 'Band course masonry', label: 'Perp alignment checked', guidance: 'Perp joints should not cumulatively run in the same direction for more than 5 joints; centre line generally within ±15mm over the next 5 successive perps.', appliesTo: ['traditional', 'timberFrame', 'hybrid'] },
-      { id: 'clear-cavity', section: 'Band course masonry', label: 'Cavity clear at floor / band course', guidance: 'No mortar droppings, debris or obstruction in the cavity.', appliesTo: ['traditional', 'timberFrame', 'hybrid'], photoRequired: true },
-      { id: '50mm-clear-cavity', section: 'Band course masonry', label: '50mm clear cavity maintained', guidance: 'Minimum 50mm residual clear cavity maintained where partial fill insulation is used.', appliesTo: ['traditional', 'timberFrame', 'hybrid'] },
-      { id: 'beam-bearing', section: 'Bearing / support', label: 'Beam bearing checked', guidance: 'Beams have bearing to design/manufacturer requirement and are not bearing on loose material.', photoRequired: true },
-      { id: 'beam-layout', section: 'Beam and block layout', label: 'Beam/block layout matches design', guidance: 'Beam spacing, direction, infill blocks and openings match latest floor design.' },
-      { id: 'subfloor-void', section: 'Sub-floor ventilation', label: 'Sub-floor void and ventilation clear', guidance: 'Void clear of debris and ventilation paths/air bricks installed and unobstructed where required.', photoRequired: true },
-      { id: 'services-protected', section: 'Services', label: 'Services and drainage protected', guidance: 'Service penetrations, drainage and ducts are in correct positions, protected and capped where required.' },
+      { id: 'drain-layout', section: 'Information', label: 'Drainage layout available', guidance: 'Latest drainage layout, pipe routes, sizes, gradients and rodding access are available.' },
+      { id: '100mm-fall', section: 'Falls / gradients', label: '100mm pipe gradient', guidance: 'Not flatter than 1:80 where applicable, unless design states otherwise.', photoRequired: true },
+      { id: '150mm-fall', section: 'Falls / gradients', label: '150mm pipe gradient', guidance: 'Not flatter than 1:150 where applicable, unless design states otherwise.', photoRequired: true },
+      { id: 'low-flow-fall', section: 'Falls / gradients', label: 'Low-flow 100mm pipe', guidance: '1:40 where flow is less than 1.0L/sec, unless design states otherwise.' },
+      { id: 'no-backfall', section: 'Falls / gradients', label: 'No visible backfall', guidance: 'No visible or measured backfall when checked on site.' },
+      { id: 'pipe-bedding', section: 'Bedding / support', label: 'Bedding and support suitable', guidance: 'Pipe supported throughout its length. No bricks, blocks, hard spots or random packing below pipe.', photoRequired: true },
+      { id: 'pipe-ends-capped', section: 'Protection', label: 'Open pipe ends capped', guidance: 'Open ends capped/protected to prevent debris entering.' },
+      { id: 'wall-clearance', section: 'Walls / foundations', label: 'Pipe clearance through wall/foundation', guidance: '50mm clearance all round, or sleeve with 50mm clearance all round, where this detail applies.', photoRequired: true },
+      { id: 'flexible-joints', section: 'Walls / foundations', label: 'Flexible joints positioned', guidance: 'Flexible joints as close as feasible and max 150mm from wall face where required.' },
+      { id: 'rocker-length', section: 'Walls / foundations', label: 'Rocker length checked', guidance: 'Rocker pipe length max 600mm where required by detail.' },
+      { id: 'rodding-access', section: 'Access', label: 'Rodding access provided', guidance: 'Rodding access / inspection chamber locations provided as design.' },
+      { id: 'drainage-photos', section: 'Evidence', label: 'Drainage photographed before covering', guidance: 'Runs, junctions, bedding, penetrations and key details photographed before covering.', photoRequired: true },
     ],
   },
   {
     id: 'slab-ground-bearing',
-    title: 'Stage 2 — Ground-bearing slab',
+    title: 'Ground-bearing slab / oversite',
     stage: 'Stage 2',
-    description: 'Ground-bearing slab / oversite inspection before concrete pour.',
+    description: 'Slab / oversite inspection before concrete or before covering the floor build-up.',
     items: [
-      { id: 'slab-info', section: 'Information', label: 'Slab details available', guidance: 'Latest slab detail, FFL, slab level, thickness, insulation, DPM/gas membrane and service positions available.' },
-      { id: 'subbase', section: 'Fill / sub-base', label: 'Fill/sub-base suitable and compacted', guidance: 'Clean, stable suitable fill compacted in layers with no soft spots, organic material or excessive voids.', photoRequired: true },
-      { id: 'blinding', section: 'Blinding', label: 'Blinding suitable for DPM', guidance: 'Blinding provides a firm, even, smooth surface with no sharp hardcore likely to puncture the membrane.' },
-      { id: 'dpm-lap', section: 'DPM / gas membrane', label: 'DPM laps and junctions checked', guidance: 'DPM clean/undamaged, linked to DPC and minimum 100mm lap unless welded/manufacturer detail states otherwise.', photoRequired: true },
-      { id: 'dpc-level', section: 'DPM / gas membrane', label: 'DPC level checked where visible', guidance: 'DPC minimum 150mm above external finished ground/paving level where applicable.' },
-      { id: 'insulation', section: 'Insulation', label: 'Insulation type/thickness checked', guidance: 'Insulation type and thickness match design, boards tightly butted, stable and protected.' },
-      { id: 'reinforcement', section: 'Reinforcement', label: 'Reinforcement checked if required', guidance: 'Mesh/bar type, laps, spacers/chairs and cover to design where reinforcement is required.' },
-      { id: 'pre-pour-photos', section: 'Pre-pour readiness', label: 'Photos taken before pour', guidance: 'Sub-base, blinding, DPM, services, insulation and reinforcement photographed before concrete hides the build-up.', photoRequired: true },
-    ],
-  },
-  {
-    id: 'superstructure-3a',
-    title: 'Stage 3A — Joists / floor deck',
-    stage: 'Stage 3',
-    description: 'Inspection when joists are installed and floor deck is laid.',
-    items: [
-      { id: 'joist-layout', section: 'Joists / deck', label: 'Joist layout available and followed', guidance: 'Latest joist/floor layout available and joist size/type/centres match design.', photoRequired: true },
-      { id: 'joist-bearing', section: 'Joists / deck', label: 'Joist bearings checked', guidance: 'Joist bearing to design/manufacturer requirement; hangers/straps installed where required.' },
-      { id: 'trimmers', section: 'Joists / deck', label: 'Openings and trimmers formed correctly', guidance: 'Stairwell/service openings formed and supported to design.' },
-      { id: 'deck-fixed', section: 'Joists / deck', label: 'Floor deck fixed correctly', guidance: 'Deck fixed to manufacturer/design requirement; joints supported/staggered as required.' },
-      { id: 'no-unauthorised-cuts', section: 'Joists / deck', label: 'No unauthorised cutting/notching', guidance: 'No unauthorised cutting, drilling or notching to joists or structural members.' },
-      { id: 'traditional-chasing', section: 'Masonry / frame interface', label: 'Traditional masonry interface checked', guidance: 'Masonry around floor zone, cavities, ties and insulation remain clean and correct.', appliesTo: ['traditional', 'hybrid'] },
-      { id: 'frame-service-zones', section: 'Timber frame interface', label: 'Timber frame service zones protected', guidance: 'Services kept within service zones; no unauthorised cutting to structural studs/panels.', appliesTo: ['timberFrame', 'hybrid'] },
-    ],
-  },
-  {
-    id: 'superstructure-3b',
-    title: 'Stage 3B — Roof framing / gables',
-    stage: 'Stage 3',
-    description: 'Inspection after roof framing and gables/spandrels are up.',
-    items: [
-      { id: 'roof-layout', section: 'Roof structure', label: 'Roof/truss layout available', guidance: 'Latest truss/roof layout, bracing, restraint and manufacturer details available at plot.', photoRequired: true },
-      { id: 'trusses-positioned', section: 'Trusses', label: 'Trusses installed to layout', guidance: 'Truss type, positions, spacing, bearings, clips and fixings match design/manufacturer details.', photoRequired: true },
-      { id: 'truss-bracing', section: 'Trusses', label: 'Truss bracing installed', guidance: 'Temporary/permanent bracing installed to truss design/manufacturer requirement.' },
-      { id: 'no-truss-alteration', section: 'Trusses', label: 'No unauthorised truss alteration', guidance: 'No cutting, drilling, notching or modification to trusses without design approval.' },
-      { id: 'gables', section: 'Gables / restraint', label: 'Gables and restraint checked', guidance: 'Gables built to line/height; restraint straps and wall plate restraint installed to design.' },
-      { id: 'spandrels', section: 'Spandrel panels', label: 'Spandrel panels checked where used', guidance: 'Panel reference/orientation/support/fixings/bracing/fire/acoustic details match design/manufacturer detail.', photoRequired: true },
-      { id: 'wall-tie-spacing', section: 'Masonry outer leaf', label: 'Wall tie spacing checked', guidance: 'General spacing max 900mm horizontal x 450mm vertical; within 225mm of openings/joints at max 300mm vertical spacing.', appliesTo: ['traditional', 'timberFrame', 'hybrid'], photoRequired: true },
-      { id: 'tie-embedment-clean', section: 'Masonry outer leaf', label: 'Wall ties clean and embedded', guidance: 'Minimum 50mm embedment into each leaf; ties clean, drip centred in clear cavity and facing down.', appliesTo: ['traditional', 'timberFrame', 'hybrid'] },
-      { id: 'cavity-trays', section: 'Openings / trays', label: 'Cavity trays, stop ends and weepholes checked', guidance: 'Cavity trays/combined lintel protection installed; stop ends where required; minimum 2 weepholes per opening and max 450mm centres.', appliesTo: ['traditional', 'timberFrame', 'hybrid'], photoRequired: true },
-      { id: 'lintel-bearing', section: 'Openings / trays', label: 'Lintel bearing checked', guidance: 'Correct lintel, level on solid mortar bed, end bearing to design/manufacturer requirement and masonry overhang not more than 25mm.', appliesTo: ['traditional', 'hybrid'] },
-      { id: 'timber-frame-membranes', section: 'Timber frame', label: 'Timber frame membranes/barriers checked', guidance: 'Breather membrane, cavity barriers, fire stopping and differential movement details intact and to manufacturer detail.', appliesTo: ['timberFrame', 'hybrid'], photoRequired: true },
+      { id: 'slab-detail', section: 'Information', label: 'Slab details available', guidance: 'Latest slab detail, FFL, thickness, DPM/gas membrane, insulation and service positions available.' },
+      { id: 'subbase', section: 'Sub-base', label: 'Sub-base suitable', guidance: 'Clean, stable suitable fill compacted and free from soft spots/organic material.', photoRequired: true },
+      { id: 'blinding', section: 'Blinding', label: 'Blinding suitable', guidance: 'Firm, even, smooth surface with no sharp hardcore likely to puncture membrane.' },
+      { id: 'dpm', section: 'DPM / membrane', label: 'DPM / gas membrane checked', guidance: 'Membrane clean, undamaged, lapped/sealed and linked to DPC/detail as required.', photoRequired: true },
+      { id: 'insulation', section: 'Insulation', label: 'Insulation checked', guidance: 'Type/thickness to design. Boards tightly butted, stable and protected.' },
+      { id: 'reinforcement', section: 'Reinforcement', label: 'Reinforcement checked where required', guidance: 'Mesh/bar type, laps, spacers/chairs and cover to design.', photoRequired: true },
     ],
   },
   {
     id: 'first-fix-carpentry',
-    title: '1st Fix — Carpentry',
+    title: '1st Fix Carpentry',
     stage: 'Stage 5',
-    description: 'Carpentry first fix before works are covered.',
+    description: 'Carpentry first fix before boarding or covering.',
     items: [
       { id: 'stud-layout', section: 'Carpentry', label: 'Stud / partition layout checked', guidance: 'Partitions, openings, stairs and trimming match latest layout.' },
       { id: 'pattressing', section: 'Carpentry', label: 'Noggins / pattressing installed', guidance: 'Provided for radiators, kitchen units, sanitaryware, handrails, boards and fittings.', photoRequired: true },
       { id: 'door-openings', section: 'Carpentry', label: 'Door openings checked', guidance: 'Openings suit frame schedule and are square/plumb.' },
-      { id: 'service-holes', section: 'Carpentry', label: 'Service holes/notches controlled', guidance: 'No unauthorised cutting, drilling or notching to structural members.' },
+      { id: 'service-holes', section: 'Carpentry', label: 'No unauthorised cuts/notches', guidance: 'No unauthorised cutting, drilling or notching to structural members.' },
       { id: 'tf-service-zones', section: 'Timber frame', label: 'Timber frame service zones maintained', guidance: 'Services remain in designated service zones; structural studs/panels not cut without approval.', appliesTo: ['timberFrame', 'hybrid'] },
     ],
   },
   {
     id: 'first-fix-plumbing',
-    title: '1st Fix — Plumbing / heating',
+    title: '1st Fix Plumbing / Heating',
     stage: 'Stage 5',
     description: 'Plumbing and heating first fix before covering.',
     items: [
-      { id: 'plumbing-layout', section: 'Plumbing', label: 'Plumbing/heating layout available and followed', guidance: 'Hot/cold, sanitary, radiator/UFH/manifold/cylinder/service routes match latest design.' },
+      { id: 'plumbing-layout', section: 'Plumbing', label: 'Plumbing/heating layout followed', guidance: 'Hot/cold, sanitary, radiator/UFH/manifold/cylinder/service routes match latest design.' },
       { id: 'pipes-supported', section: 'Plumbing', label: 'Pipework clipped and protected', guidance: 'Pipework supported, protected through studs/joists/masonry and not loose or damaged.', photoRequired: true },
       { id: 'open-ends-capped', section: 'Plumbing', label: 'Open pipe ends capped', guidance: 'Pipe ends capped to prevent debris ingress.' },
-      { id: 'pressure-test', section: 'Testing', label: 'Pressure test evidence available where required', guidance: 'Pressure test completed/recorded before covering where required.' },
-      { id: 'tf-protection-plates', section: 'Timber frame', label: 'Protection plates fitted where needed', guidance: 'Protection plates/grommets fitted where services pass through timber members.', appliesTo: ['timberFrame', 'hybrid'] },
+      { id: 'pressure-test', section: 'Testing', label: 'Pressure test evidence available', guidance: 'Pressure test completed/recorded before covering where required.' },
     ],
   },
   {
     id: 'first-fix-electrical',
-    title: '1st Fix — Electrical',
+    title: '1st Fix Electrical',
     stage: 'Stage 5',
     description: 'Electrical first fix before covering.',
     items: [
-      { id: 'electrical-layout', section: 'Electrical', label: 'Electrical layout available and followed', guidance: 'Socket, switch, lighting, smoke/heat alarm, consumer unit and isolator positions match latest layout.' },
+      { id: 'electrical-layout', section: 'Electrical', label: 'Electrical layout followed', guidance: 'Socket, switch, lighting, smoke/heat alarm, consumer unit and isolator positions match latest layout.' },
       { id: 'safe-zones', section: 'Electrical', label: 'Cable routes / safe zones checked', guidance: 'Cable routes follow recognised safe zones or are suitably protected.', photoRequired: true },
       { id: 'cables-protected', section: 'Electrical', label: 'Cables protected and undamaged', guidance: 'No crushed, nicked, trapped cables or sharp metal edges without protection.' },
       { id: 'back-boxes', section: 'Electrical', label: 'Back boxes fixed securely', guidance: 'Back boxes fixed securely, plumb and in the correct locations/heights.' },
-      { id: 'tf-electrical-zones', section: 'Timber frame', label: 'Timber frame electrical protection checked', guidance: 'Cables kept in service zones with protection plates where passing through timber.', appliesTo: ['timberFrame', 'hybrid'] },
-    ],
-  },
-  {
-    id: 'first-fix-ventilation',
-    title: '1st Fix — Ventilation',
-    stage: 'Stage 5',
-    description: 'Extract / MEV / MVHR ductwork before covering.',
-    items: [
-      { id: 'vent-layout', section: 'Ventilation', label: 'Ventilation design available and followed', guidance: 'Fan/MVHR/terminal positions and duct routes match latest ventilation design.' },
-      { id: 'ducts-supported', section: 'Ventilation', label: 'Ducts clipped and supported', guidance: 'Ducts supported to prevent sagging, crushing or kinking.', photoRequired: true },
-      { id: 'duct-route', section: 'Ventilation', label: 'Duct route coordinated', guidance: 'No clashes with structure, fire/acoustic lines, services or future boarding.' },
-      { id: 'condensate', section: 'Ventilation', label: 'Condensate route considered', guidance: 'Condensate route/fall allowed where required.' },
     ],
   },
   {
     id: 'pre-plaster',
-    title: 'Pre-plaster / pre-board inspection',
+    title: 'Pre-plaster / pre-board',
     stage: 'Stage 5',
-    description: 'Holistic final check after all first fix trades and before plasterboard/drylining hides the work.',
+    description: 'Holistic final check after first fix trades and before plasterboard/drylining hides the work.',
     items: [
-      { id: 'all-first-fix-complete', section: 'Completion check', label: 'All 1st fix inspections complete', guidance: 'Carpentry, plumbing/heating, electrical and ventilation first fix checks completed or recorded as not applicable.', photoRequired: true },
-      { id: 'services-coordinated', section: 'Coordination', label: 'Services coordinated', guidance: 'No obvious clashes between plumbing, electrics, heating, ventilation, structure and future board/fixing zones.' },
-      { id: 'services-protected', section: 'Coordination', label: 'Services protected before boarding', guidance: 'Pipework, cables and ducts protected from boarding/fixing damage and supported correctly.' },
-      { id: 'fire-stopping', section: 'Fire / acoustic / thermal', label: 'Fire stopping and cavity barriers checked', guidance: 'Fire-stopping locations complete or clearly scheduled before boarding; cavity/fire barriers not damaged or displaced.', photoRequired: true },
-      { id: 'insulation', section: 'Fire / acoustic / thermal', label: 'Thermal/acoustic insulation checked', guidance: 'Insulation correct type/thickness, complete, tight, not gapped, slumped, wet or contaminated.' },
-      { id: 'avcl', section: 'Timber frame / vapour control', label: 'AVCL / vapour control checked where required', guidance: 'AVCL/vapour control layer details, laps, seals and penetrations protected where applicable.', appliesTo: ['timberFrame', 'hybrid'], photoRequired: true },
-      { id: 'no-tf-cuts', section: 'Timber frame', label: 'No unauthorised timber frame cutting', guidance: 'No unauthorised cutting, drilling or notching of structural timber frame studs/panels.', appliesTo: ['timberFrame', 'hybrid'] },
-      { id: 'traditional-chases', section: 'Traditional masonry', label: 'Chases and masonry penetrations checked', guidance: 'Chases/penetrations controlled, protected, made good where required and not excessive.', appliesTo: ['traditional', 'hybrid'] },
-      { id: 'wet-areas', section: 'Boarding readiness', label: 'Wet areas and board types confirmed', guidance: 'Moisture/fire/acoustic/tile backing board locations confirmed; noggins/supports in place.' },
-      { id: 'photos-before-board', section: 'Evidence', label: 'Photos taken before boarding', guidance: 'All key first fix, fire, acoustic, thermal, AVCL and service details photographed before covering.', photoRequired: true },
+      { id: 'all-first-fix-complete', section: 'Completion', label: 'All first fix works complete', guidance: 'Carpentry, plumbing/heating, electrical and ventilation first fix complete or recorded as not applicable.', photoRequired: true },
+      { id: 'services-coordinated', section: 'Coordination', label: 'Services coordinated', guidance: 'No obvious clashes between plumbing, electrics, heating, ventilation, structure and future boards.' },
+      { id: 'fire-stopping', section: 'Fire / acoustic / thermal', label: 'Fire stopping / cavity barriers checked', guidance: 'Fire-stopping locations complete or clearly scheduled before boarding.', photoRequired: true },
+      { id: 'insulation', section: 'Fire / acoustic / thermal', label: 'Thermal/acoustic insulation checked', guidance: 'Correct type/thickness, complete, tight, not gapped, slumped, wet or contaminated.' },
+      { id: 'photos-before-board', section: 'Evidence', label: 'Photos taken before boarding', guidance: 'Key first fix, fire, acoustic, thermal and service details photographed before covering.', photoRequired: true },
+    ],
+  },
+  {
+    id: 'second-fix-trade',
+    title: '2nd Fix Trade QA',
+    stage: 'Stage 7',
+    description: 'Simple second fix trade inspection for carpentry, plumbing, electrical or other second fix activities.',
+    items: [
+      { id: 'works-complete', section: 'Completion', label: 'Works complete to programme item', guidance: 'The trade item is complete enough to be signed off for this plot/fix.', photoRequired: true },
+      { id: 'aligned-secure', section: 'Quality', label: 'Installed plumb/level/secure', guidance: 'Visible items are aligned, securely fixed and free from obvious damage.' },
+      { id: 'operational', section: 'Testing', label: 'Operation checked where applicable', guidance: 'Doors, drawers, fittings, valves, sockets, lights or equipment operate where applicable.' },
+      { id: 'protection-clean', section: 'Protection', label: 'Protected and clean for next trade', guidance: 'Completed work protected and area left ready for following trades.' },
+    ],
+  },
+  {
+    id: 'finals-trade',
+    title: 'Finals Trade QA',
+    stage: 'Stage 9',
+    description: 'Finals inspection for trade completion before flooring, final decoration or pre-handover.',
+    items: [
+      { id: 'finals-complete', section: 'Completion', label: 'Finals complete', guidance: 'Final trade works are complete and no obvious outstanding items remain.', photoRequired: true },
+      { id: 'tested', section: 'Testing', label: 'Testing / operation complete', guidance: 'Accessible items have been tested or checked where applicable.' },
+      { id: 'damage-free', section: 'Quality', label: 'No obvious damage', guidance: 'No obvious visible damage, poor finish or incomplete making good.' },
+      { id: 'ready-next-stage', section: 'Handover', label: 'Ready for next stage', guidance: 'Area is clean, accessible and ready for the next trade or handover activity.' },
+    ],
+  },
+  {
+    id: 'pre-handover',
+    title: 'Pre-handover',
+    stage: 'Stage 11',
+    description: 'Simple plot pre-handover inspection before customer/homeowner handover.',
+    items: [
+      { id: 'plot-ready', section: 'Readiness', label: 'Plot substantially complete', guidance: 'Plot is complete enough for pre-handover inspection and all areas can be viewed.', photoRequired: true },
+      { id: 'clean-accessible', section: 'Readiness', label: 'Clean and accessible', guidance: 'Plot clean enough to inspect; surfaces visible and access available.' },
+      { id: 'doors-windows', section: 'Openings', label: 'Doors and windows operate', guidance: 'Doors/windows open, close, latch and lock without obvious binding or damage.' },
+      { id: 'kitchen', section: 'Kitchen', label: 'Kitchen complete', guidance: 'Units, doors, drawers, worktops, sink, appliances and sealant complete and undamaged.', photoRequired: true },
+      { id: 'bathrooms', section: 'Wet rooms', label: 'Bathrooms / WC complete', guidance: 'Sanitaryware secure and undamaged; taps/wastes tested; sealant complete.', photoRequired: true },
+      { id: 'electrical', section: 'Services', label: 'Electrical items operational', guidance: 'Lights, sockets, smoke/heat alarms, extract fans and consumer unit labels checked where accessible.' },
+      { id: 'plumbing-heating', section: 'Services', label: 'Plumbing / heating operational', guidance: 'Hot/cold water, heating, radiators and visible fittings checked with no obvious leaks.' },
+      { id: 'decoration', section: 'Finishes', label: 'Decoration and finishes acceptable', guidance: 'No obvious unfinished paintwork, damage, poor making good or incomplete trims.' },
+      { id: 'external', section: 'External', label: 'External works safe and complete', guidance: 'Paths, drainage, DPC/vents, boundaries and immediate external areas checked where part of handover.' },
+      { id: 'handover-pack', section: 'Documents', label: 'Handover documents available', guidance: 'Certificates, manuals, warranties, meter/stop tap information and keys/fobs available where required.' },
+    ],
+  },
+  {
+    id: 'trade-fix-inspection',
+    title: 'Trade Fix QA',
+    stage: 'Programme item',
+    description: 'Simple trade inspection used when a programme item does not have a specific checklist yet.',
+    items: [
+      { id: 'work-complete', section: 'Completion', label: 'Work complete for this fix', guidance: 'The programmed fix/activity is complete for this plot.', photoRequired: true },
+      { id: 'work-quality', section: 'Quality', label: 'Work quality acceptable', guidance: 'Visible work is neat, secure, undamaged and ready for the next stage.' },
+      { id: 'trade-clear', section: 'Coordination', label: 'Area ready for following trade', guidance: 'Area left clean, safe, protected and ready for the next trade/activity.' },
     ],
   },
 ];
@@ -276,5 +235,24 @@ export function getChecklistItems(checklistId: string, method: ConstructionMetho
     appliesTo: ['all'],
     photoRequired: false,
   }));
-  return [...universalItems, ...definition.items, ...customChecklistItems].filter((item) => appliesToMethod(item, method));
+  return [...commonReadinessItems, ...definition.items, ...customChecklistItems].filter((item) => appliesToMethod(item, method));
+}
+
+export function getChecklistIdForActivity(activityCode: string, trade: string, stage: ProgrammeStageNumber) {
+  const code = activityCode.toUpperCase();
+  const tradeName = trade.toLowerCase();
+
+  if (code === 'FND') return 'foundation-formation';
+  if (code === 'DNG') return 'internal-drainage';
+  if (code === 'SLAB') return 'slab-ground-bearing';
+  if (code === '1ST CARP') return 'first-fix-carpentry';
+  if (code === '1ST PLUMB' || code === '1ST SPRINKLER') return 'first-fix-plumbing';
+  if (code === '1ST ELEC') return 'first-fix-electrical';
+  if (code === 'PRE-PLASTER QA' || code === 'PP') return 'pre-plaster';
+  if (code.startsWith('2ND') || stage === 7) return 'second-fix-trade';
+  if (code.includes('FINALS') || stage === 9) return 'finals-trade';
+  if (code === 'PRE HANDOVER') return 'pre-handover';
+  if (tradeName.includes('handover')) return 'pre-handover';
+
+  return 'trade-fix-inspection';
 }
