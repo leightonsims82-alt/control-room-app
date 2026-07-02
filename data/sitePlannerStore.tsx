@@ -1,12 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
+import { INSPECTION_RESULTS_KEY, INSPECTION_STORY_KEY } from '../utils/inspectionRecords';
 import { ActivityDelay, TRADE_ORDER } from '../utils/siteProgrammeEngine';
 import {
   ActivityMove,
   createHouseTypeTemplate,
   DEFAULT_PLOT_TEMPLATES,
   DEFAULT_SITE_PROGRAMME_SETUP,
-  DEFAULT_TEMPLATE_PLOTS,
   getSortedSitePlots,
   PlotTemplate,
   SiteProgrammeSetup,
@@ -93,6 +93,7 @@ type SitePlannerStore = {
   upsertSitePlot: (input: SitePlotInput) => Promise<void>;
   bulkUpsertSitePlots: (inputs: SitePlotInput[]) => Promise<void>;
   removeSitePlot: (plotId: string) => Promise<void>;
+  clearSitePlotData: () => Promise<void>;
   setActivityDelay: (input: ActivityDelay) => Promise<void>;
   setActivityMove: (input: { plotId: string; activityCode: string; deltaDays: number }) => Promise<void>;
   resetActivityMovesForPlot: (plotId: string) => Promise<void>;
@@ -193,7 +194,7 @@ function applyPlotInputs(currentPlots: TemplateSitePlot[], inputs: SitePlotInput
 }
 
 export function SitePlannerProvider({ children }: PropsWithChildren) {
-  const [sitePlots, setSitePlots] = useState<TemplateSitePlot[]>(DEFAULT_TEMPLATE_PLOTS);
+  const [sitePlots, setSitePlots] = useState<TemplateSitePlot[]>([]);
   const [activityDelays, setActivityDelays] = useState<ActivityDelay[]>([]);
   const [activityMoves, setActivityMoves] = useState<ActivityMove[]>([]);
   const [tradeContacts, setTradeContacts] = useState<TradeContact[]>(DEFAULT_TRADE_CONTACTS);
@@ -209,7 +210,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
     async function loadPlanner() {
       try {
         const [storedPlots, storedDelays, storedMoves, storedContacts, storedIssueSettings, storedIssueLogs, storedNotes, storedTemplates, storedSiteSetup] = await Promise.all([
-          readArray<TemplateSitePlot>(SITE_PLOTS_KEY, DEFAULT_TEMPLATE_PLOTS),
+          readArray<TemplateSitePlot>(SITE_PLOTS_KEY, []),
           readArray<ActivityDelay>(SITE_DELAYS_KEY, []),
           readArray<ActivityMove>(ACTIVITY_MOVES_KEY, []),
           readArray<TradeContact>(TRADE_CONTACTS_KEY, DEFAULT_TRADE_CONTACTS),
@@ -268,6 +269,23 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       AsyncStorage.setItem(SITE_DELAYS_KEY, JSON.stringify(nextDelays)),
       AsyncStorage.setItem(ACTIVITY_MOVES_KEY, JSON.stringify(nextMoves)),
       AsyncStorage.setItem(PROGRAMME_NOTES_KEY, JSON.stringify(nextNotes)),
+    ]);
+  };
+
+  const clearSitePlotData = async () => {
+    setSitePlots([]);
+    setActivityDelays([]);
+    setActivityMoves([]);
+    setProgrammeNotes([]);
+    setIssueLogs([]);
+    await Promise.all([
+      AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify([])),
+      AsyncStorage.setItem(SITE_DELAYS_KEY, JSON.stringify([])),
+      AsyncStorage.setItem(ACTIVITY_MOVES_KEY, JSON.stringify([])),
+      AsyncStorage.setItem(PROGRAMME_NOTES_KEY, JSON.stringify([])),
+      AsyncStorage.setItem(ISSUE_LOGS_KEY, JSON.stringify([])),
+      AsyncStorage.removeItem(INSPECTION_RESULTS_KEY),
+      AsyncStorage.removeItem(INSPECTION_STORY_KEY),
     ]);
   };
 
@@ -388,6 +406,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       upsertSitePlot,
       bulkUpsertSitePlots,
       removeSitePlot,
+      clearSitePlotData,
       setActivityDelay,
       setActivityMove,
       resetActivityMovesForPlot,
