@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../components/AppScreen';
 import { SectionCard } from '../components/SectionCard';
@@ -19,7 +19,12 @@ import {
 } from '../utils/templateProgramme';
 
 const TRADE_DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const TRADE_EXPORT_META_KEY = 'programme-buddy:trade-export-meta:v1';
+
+type IssueSheetDefaults = {
+  developerName: string;
+  siteManagerName: string;
+  programmeProducedBy: string;
+};
 
 function csv(value: string | number | undefined) {
   const text = String(value ?? '');
@@ -38,30 +43,28 @@ function issueDateTime() {
   };
 }
 
+function getIssueSheetDefaults(siteSetup: unknown): IssueSheetDefaults {
+  const value = siteSetup as Partial<IssueSheetDefaults>;
+  return {
+    developerName: value.developerName ?? '',
+    siteManagerName: value.siteManagerName ?? '',
+    programmeProducedBy: value.programmeProducedBy ?? '',
+  };
+}
+
 export default function ExportsScreen() {
-  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, programmeNotes } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, programmeNotes, recordIssue } = useSitePlanner();
   const [inspectionStory, setInspectionStory] = useState<PlotInspectionStoryRecord[]>([]);
   const [selectedTrade, setSelectedTrade] = useState<string>(TRADE_ORDER[0]);
   const [tradeStartWeek, setTradeStartWeek] = useState('1');
-  const [developerName, setDeveloperName] = useState('');
-  const [siteManagerName, setSiteManagerName] = useState('');
-  const [producedBy, setProducedBy] = useState('');
   const [exportStatus, setExportStatus] = useState('');
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
   const qaStats = getInspectionStats(inspectionStory);
   const activeTradeWeek = Math.max(1, Math.min(51, Number(tradeStartWeek) || 1));
-
-  useEffect(() => {
-    async function loadTradeExportMeta() {
-      const stored = await AsyncStorage.getItem(TRADE_EXPORT_META_KEY);
-      if (!stored) return;
-      const meta = JSON.parse(stored) as { developerName?: string; siteManagerName?: string; producedBy?: string };
-      setDeveloperName(meta.developerName ?? '');
-      setSiteManagerName(meta.siteManagerName ?? '');
-      setProducedBy(meta.producedBy ?? '');
-    }
-    loadTradeExportMeta();
-  }, []);
+  const issueDefaults = getIssueSheetDefaults(siteSetup);
+  const developerName = issueDefaults.developerName;
+  const siteManagerName = issueDefaults.siteManagerName;
+  const producedBy = issueDefaults.programmeProducedBy;
 
   useFocusEffect(
     useCallback(() => {
@@ -201,11 +204,6 @@ export default function ExportsScreen() {
     ].join('\n');
   }, [inspectionStory, qaStats.failed, qaStats.images, qaStats.incomplete, qaStats.passed, qaStats.reinspectionDue, qaStats.total, sitePlots.length, siteSetup.programmeStartDate, siteSetup.siteName, sortedPlots]);
 
-  const saveTradeExportMeta = async () => {
-    await AsyncStorage.setItem(TRADE_EXPORT_META_KEY, JSON.stringify({ developerName, siteManagerName, producedBy }));
-    setExportStatus('Header details saved.');
-  };
-
   const shareCsv = async (fileName: string, csvText: string) => {
     setExportStatus('Preparing spreadsheet...');
     try {
@@ -215,6 +213,15 @@ export default function ExportsScreen() {
       console.warn('Unable to share spreadsheet', error);
       setExportStatus('Unable to create spreadsheet on this device. You can still copy the preview text.');
     }
+  };
+
+  const markTradeIssued = async () => {
+    await recordIssue({
+      startWeek: activeTradeWeek,
+      recipientCount: 0,
+      note: `${selectedTrade} spreadsheet programme issued from Exports for WK${String(activeTradeWeek).padStart(2, '0')} + WK${String(activeTradeWeek + 1).padStart(2, '0')}`,
+    });
+    setExportStatus('Trade programme marked as issued.');
   };
 
   return (
@@ -241,24 +248,8 @@ export default function ExportsScreen() {
 
       {exportStatus ? <Text style={styles.statusText}>{exportStatus}</Text> : null}
 
-      <SectionCard title="Trade programme spreadsheet preview" subtitle="Professional issue sheet. Make any final programme changes before copying/sending this spreadsheet output.">
+      <SectionCard title="Trade programme spreadsheet preview" subtitle="Professional issue sheet. Header details come from Setup. Make final programme changes before sharing.">
         <View style={styles.formGrid}>
-          <View style={styles.inputWrap}>
-            <Text style={styles.label}>Developer name</Text>
-            <TextInput value={developerName} onChangeText={setDeveloperName} style={styles.input} placeholder="Developer / client" />
-          </View>
-          <View style={styles.inputWrap}>
-            <Text style={styles.label}>Site name</Text>
-            <TextInput value={siteSetup.siteName} editable={false} style={[styles.input, styles.lockedInput]} />
-          </View>
-          <View style={styles.inputWrap}>
-            <Text style={styles.label}>Site manager name</Text>
-            <TextInput value={siteManagerName} onChangeText={setSiteManagerName} style={styles.input} placeholder="Site manager" />
-          </View>
-          <View style={styles.inputWrap}>
-            <Text style={styles.label}>Produced by</Text>
-            <TextInput value={producedBy} onChangeText={setProducedBy} style={styles.input} placeholder="Person producing programme" />
-          </View>
           <View style={styles.inputWrapSmall}>
             <Text style={styles.label}>Start week</Text>
             <TextInput value={tradeStartWeek} onChangeText={setTradeStartWeek} style={styles.input} keyboardType="number-pad" />
@@ -275,9 +266,6 @@ export default function ExportsScreen() {
               </View>
             </ScrollView>
           </View>
-          <Pressable style={styles.saveButton} onPress={saveTradeExportMeta}>
-            <Text style={styles.saveButtonText}>Save Header Details</Text>
-          </Pressable>
         </View>
         <View style={styles.issueMetaGrid}>
           <InfoBox label="Developer" value={developerName || 'TBC'} />
@@ -287,14 +275,20 @@ export default function ExportsScreen() {
           <InfoBox label="Date issued" value={issueDateTime().date} />
           <InfoBox label="Time issued" value={issueDateTime().time} />
         </View>
+        <Text style={styles.helperText}>To amend Developer, Site Manager or Produced By, open Setup → Trade issue sheet defaults.</Text>
         <ScrollView horizontal>
           <TextInput value={tradeSpreadsheetCsv} editable={false} multiline selectTextOnFocus style={[styles.exportBox, styles.extraWideExportBox]} />
         </ScrollView>
         <View style={styles.exportActions}>
-          <Text style={styles.helperText}>Review this preview, then create the spreadsheet file for Excel or sharing.</Text>
-          <Pressable style={styles.saveButton} onPress={() => shareCsv(`${siteSetup.siteName}-${selectedTrade}-WK${String(activeTradeWeek).padStart(2, '0')}`, tradeSpreadsheetCsv)}>
-            <Text style={styles.saveButtonText}>Create / Share Spreadsheet</Text>
-          </Pressable>
+          <Text style={styles.helperText}>Review this preview, create/share the spreadsheet, then mark the issue when it has been sent.</Text>
+          <View style={styles.actionButtons}>
+            <Pressable style={styles.saveButton} onPress={() => shareCsv(`${siteSetup.siteName}-${selectedTrade}-WK${String(activeTradeWeek).padStart(2, '0')}`, tradeSpreadsheetCsv)}>
+              <Text style={styles.saveButtonText}>Create / Share Spreadsheet</Text>
+            </Pressable>
+            <Pressable style={styles.secondaryButton} onPress={markTradeIssued}>
+              <Text style={styles.secondaryButtonText}>Mark Issued</Text>
+            </Pressable>
+          </View>
         </View>
       </SectionCard>
 
@@ -355,12 +349,12 @@ const styles = StyleSheet.create({
   inputWrapSmall: { gap: 6, width: 120 },
   label: { color: '#334155', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
   input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', fontWeight: '800' },
-  lockedInput: { backgroundColor: '#f1f5f9', color: '#64748b' },
   saveButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-end' },
   saveButtonText: { color: '#ffffff', fontWeight: '900' },
   secondaryButton: { alignSelf: 'flex-start', backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginTop: 10 },
   secondaryButtonText: { color: '#ffffff', fontWeight: '900', fontSize: 13 },
   exportActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' },
+  actionButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, alignItems: 'center' },
   helperText: { color: '#64748b', fontSize: 12, lineHeight: 18, flex: 1, minWidth: 250 },
   statusText: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', color: '#1e40af', borderRadius: 12, padding: 12, fontWeight: '900' },
   tradeChips: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
