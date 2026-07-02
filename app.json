@@ -10,13 +10,18 @@
     "platforms": ["ios", "android", "web"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.siteprog.app"
+      "bundleIdentifier": "com.siteprog.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Programme Buddy uses the camera to attach QA evidence photos to plot inspections.",
+        "NSPhotoLibraryUsageDescription": "Programme Buddy uses your photo library to attach QA evidence photos to plot inspections."
+      }
     },
     "android": {
       "package": "com.siteprog.app",
       "adaptiveIcon": {
         "backgroundColor": "#0f172a"
-      }
+      },
+      "permissions": ["CAMERA", "READ_MEDIA_IMAGES", "READ_EXTERNAL_STORAGE"]
     },
     "web": {
       "bundler": "metro",
@@ -24,6 +29,15 @@
       "name": "Programme Buddy",
       "shortName": "Programme Buddy"
     },
-    "plugins": ["expo-router"]
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Programme Buddy uses your photo library to attach QA evidence photos to plot inspections.",
+          "cameraPermission": "Programme Buddy uses the camera to attach QA evidence photos to plot inspections."
+        }
+      ]
+    ]
   }
 }
