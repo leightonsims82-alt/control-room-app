@@ -107,7 +107,7 @@ export const DEFAULT_PLOT_TEMPLATES: PlotTemplate[] = [
   makeTemplate('twoBed', '2 Bedroom', 'Smaller house template'),
   makeTemplate('threeBed', '3 Bedroom', 'Standard 23-week house template'),
   makeTemplate('fourBed', '4 Bedroom', 'Larger house with +1 style extensions to fix and finish tasks'),
-  makeTemplate('fiveBed', '5 Bedroom', 'Largest house template with longer fix and finish tasks'),
+  makeTemplate('fiveBed', '5 Bedroom', 'Largest house template'),
 ];
 
 export const DEFAULT_TEMPLATE_PLOTS: TemplateSitePlot[] = [];
@@ -212,10 +212,14 @@ export function getStage1StartWeekForPlot(plot: TemplateSitePlot, templates: Plo
 export function getStageNumberForPlotWeek(plot: TemplateSitePlot, week: number, templates: PlotTemplate[]) {
   const relativeWeek = week - getStage1StartWeekForPlot(plot, templates) + 1;
   if (relativeWeek < 1 || relativeWeek > 23) return '';
-  const stage = getStageNumberForRelativeWeek(relativeWeek);
-  if (!plot.holdStage) return stage;
-  if (stage < plot.holdStage) return stage;
-  if (stage === plot.holdStage) return `${stage}H`;
+  if (!plot.holdStage) return getStageNumberForRelativeWeek(relativeWeek);
+  const activeStages = PROGRAMME_STAGE_SEQUENCE
+    .filter((item) => relativeWeek >= item.startWeek && relativeWeek <= item.finishWeek)
+    .map((item) => item.stage);
+  const stageText = activeStages.join('/');
+  if (!stageText) return '';
+  if (activeStages.every((stage) => stage < plot.holdStage!)) return stageText;
+  if (activeStages.some((stage) => stage === plot.holdStage)) return `${stageText}H`;
   return `H${plot.holdStage}`;
 }
 
