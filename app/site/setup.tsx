@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
@@ -14,12 +14,33 @@ import {
   TemplateActivity,
 } from '../../utils/templateProgramme';
 
+type SiteAcquaintance = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: 'Invited' | 'Active' | 'Removed';
+  accessScope: 'Current live site only';
+  canCreateSites: false;
+  canManageBilling: false;
+  addedAt: string;
+};
+
+function getSiteAcquaintances(siteSetup: unknown): SiteAcquaintance[] {
+  const value = (siteSetup as { siteAcquaintances?: SiteAcquaintance[] }).siteAcquaintances;
+  return Array.isArray(value) ? value.filter((item) => item.status !== 'Removed') : [];
+}
+
 export default function SiteSetupScreen() {
   const { siteSetup, plotTemplates, updateSiteSetup, addPlotTemplate, updatePlotTemplate, updateTemplateActivityDuration } = useSitePlanner();
   const [selectedTemplateId, setSelectedTemplateId] = useState(plotTemplates[2]?.id ?? plotTemplates[0]?.id ?? 'threeBed');
   const [newHouseTypeCode, setNewHouseTypeCode] = useState('');
   const [newHouseTypeName, setNewHouseTypeName] = useState('');
+  const [newAccessName, setNewAccessName] = useState('');
+  const [newAccessEmail, setNewAccessEmail] = useState('');
+  const [newAccessRole, setNewAccessRole] = useState('Assistant Site Manager');
   const selectedTemplate = plotTemplates.find((template) => template.id === selectedTemplateId) ?? plotTemplates[0];
+  const siteAcquaintances = getSiteAcquaintances(siteSetup);
 
   const updateActivity = (activityCode: string, changes: Partial<TemplateActivity>) => {
     if (!selectedTemplate) return;
@@ -41,12 +62,47 @@ export default function SiteSetupScreen() {
     setNewHouseTypeName('');
   };
 
+  const saveSiteAcquaintances = async (nextAcquaintances: SiteAcquaintance[]) => {
+    await updateSiteSetup({ siteAcquaintances: nextAcquaintances } as any);
+  };
+
+  const addSiteAcquaintance = async () => {
+    const email = newAccessEmail.trim().toLowerCase();
+    const name = newAccessName.trim() || email;
+    if (!email) return;
+    const existing = siteAcquaintances.some((item) => item.email.toLowerCase() === email);
+    if (existing) return;
+    const nextAcquaintance: SiteAcquaintance = {
+      id: `site-acquaintance-${Date.now()}`,
+      name,
+      email,
+      role: newAccessRole.trim() || 'Assistant Site Manager',
+      status: 'Invited',
+      accessScope: 'Current live site only',
+      canCreateSites: false,
+      canManageBilling: false,
+      addedAt: new Date().toISOString(),
+    };
+    await saveSiteAcquaintances([...siteAcquaintances, nextAcquaintance]);
+    setNewAccessName('');
+    setNewAccessEmail('');
+    setNewAccessRole('Assistant Site Manager');
+  };
+
+  const updateAcquaintanceStatus = async (id: string, status: SiteAcquaintance['status']) => {
+    await saveSiteAcquaintances(siteAcquaintances.map((item) => (item.id === id ? { ...item, status } : item)));
+  };
+
+  const removeAcquaintance = async (id: string) => {
+    await saveSiteAcquaintances(siteAcquaintances.filter((item) => item.id !== id));
+  };
+
   return (
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.eyebrow}>Programme Buddy Setup</Text>
         <Text style={styles.title}>Build Sequence Key</Text>
-        <Text style={styles.subtitle}>This is the source data behind the master programme, plot setup, trade programmes and inspection checklists.</Text>
+        <Text style={styles.subtitle}>This is the source data behind the master programme, plot setup, trade programmes, inspection checklists and site-only team access.</Text>
       </View>
 
       <View style={styles.card}>
@@ -69,6 +125,48 @@ export default function SiteSetupScreen() {
             <TextInput value={siteSetup.workingWeek} onChangeText={(workingWeek) => updateSiteSetup({ workingWeek })} placeholder="Monday to Friday" style={styles.input} />
           </Field>
         </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Site acquaintances</Text>
+        <Text style={styles.helpText}>People added here are linked to this live site only. They can help on this project, but they must not be allowed to create or run another site from their connection to you.</Text>
+        <View style={styles.accessNotice}>
+          <Text style={styles.accessNoticeTitle}>Live access rule</Text>
+          <Text style={styles.accessNoticeText}>Access scope: {siteSetup.siteName} only · Can create sites: No · Can manage billing: No · Can use your team access for another project: No</Text>
+        </View>
+        <View style={styles.formGrid}>
+          <Field label="Name">
+            <TextInput value={newAccessName} onChangeText={setNewAccessName} placeholder="Manager name" style={styles.input} />
+          </Field>
+          <Field label="Email">
+            <TextInput value={newAccessEmail} onChangeText={setNewAccessEmail} placeholder="name@example.com" style={styles.input} autoCapitalize="none" keyboardType="email-address" />
+          </Field>
+          <Field label="Role on this site">
+            <TextInput value={newAccessRole} onChangeText={setNewAccessRole} placeholder="Assistant Site Manager" style={styles.input} />
+          </Field>
+          <Pressable style={styles.secondaryButton} onPress={addSiteAcquaintance}>
+            <Text style={styles.secondaryButtonText}>Add Acquaintance</Text>
+          </Pressable>
+        </View>
+
+        {siteAcquaintances.length === 0 ? <Text style={styles.empty}>No site acquaintances added yet.</Text> : null}
+        {siteAcquaintances.map((person) => (
+          <View key={person.id} style={styles.accessRow}>
+            <View style={styles.accessMain}>
+              <Text style={styles.accessName}>{person.name}</Text>
+              <Text style={styles.accessMeta}>{person.email} · {person.role}</Text>
+              <Text style={styles.accessRule}>{person.status} · {person.accessScope} · Cannot create another site</Text>
+            </View>
+            <View style={styles.accessActions}>
+              <Pressable style={styles.smallButton} onPress={() => updateAcquaintanceStatus(person.id, 'Active')}>
+                <Text style={styles.smallButtonText}>Activate</Text>
+              </Pressable>
+              <Pressable style={styles.removeButton} onPress={() => removeAcquaintance(person.id)}>
+                <Text style={styles.removeButtonText}>Remove</Text>
+              </Pressable>
+            </View>
+          </View>
+        ))}
       </View>
 
       <View style={styles.card}>
@@ -201,7 +299,7 @@ function toStageNumber(value: string, fallback: ProgrammeStageNumber): Programme
   return PROGRAMME_STAGE_SEQUENCE.some((stage) => stage.stage === parsed) ? (parsed as ProgrammeStageNumber) : fallback;
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
@@ -225,6 +323,20 @@ const styles = StyleSheet.create({
   label: { color: '#475569', fontSize: 13, fontWeight: '900' },
   input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', backgroundColor: '#ffffff', fontWeight: '800' },
   helpText: { color: '#64748b', fontSize: 12, lineHeight: 18 },
+  empty: { color: '#64748b', fontWeight: '700' },
+  accessNotice: { backgroundColor: '#ecfeff', borderWidth: 1, borderColor: '#67e8f9', borderRadius: 14, padding: 14 },
+  accessNoticeTitle: { color: '#155e75', fontWeight: '900' },
+  accessNoticeText: { color: '#155e75', fontSize: 12, lineHeight: 18, marginTop: 4, fontWeight: '700' },
+  accessRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, padding: 12, backgroundColor: '#ffffff' },
+  accessMain: { flex: 1 },
+  accessName: { color: '#0f172a', fontWeight: '900', fontSize: 15 },
+  accessMeta: { color: '#64748b', fontSize: 12, marginTop: 3, fontWeight: '700' },
+  accessRule: { color: '#166534', fontSize: 12, marginTop: 3, fontWeight: '900' },
+  accessActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  smallButton: { backgroundColor: '#dcfce7', borderWidth: 1, borderColor: '#86efac', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  smallButtonText: { color: '#166534', fontSize: 12, fontWeight: '900' },
+  removeButton: { backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecaca', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  removeButtonText: { color: '#dc2626', fontSize: 12, fontWeight: '900' },
   summaryBox: { minWidth: 150, backgroundColor: '#eff6ff', borderRadius: 12, padding: 12 },
   summaryLabel: { color: '#2563eb', fontSize: 12, fontWeight: '900' },
   summaryValue: { color: '#0f172a', fontSize: 24, fontWeight: '900' },
