@@ -5,9 +5,10 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { AppScreen } from '../components/AppScreen';
 import { SectionCard } from '../components/SectionCard';
 import { useSitePlanner } from '../data/sitePlannerStore';
-import { DAY_NAMES, TRADE_ORDER } from '../utils/siteProgrammeEngine';
 import { getInspectionStats, INSPECTION_STORY_KEY, PlotInspectionStoryRecord } from '../utils/inspectionRecords';
 import { formatProgrammeDate } from '../utils/programmeDates';
+import { shareCsvFile } from '../utils/shareCsvFile';
+import { DAY_NAMES, TRADE_ORDER } from '../utils/siteProgrammeEngine';
 import {
   getActivitiesForTemplateDay,
   getHouseTypeLabel,
@@ -45,6 +46,7 @@ export default function ExportsScreen() {
   const [developerName, setDeveloperName] = useState('');
   const [siteManagerName, setSiteManagerName] = useState('');
   const [producedBy, setProducedBy] = useState('');
+  const [exportStatus, setExportStatus] = useState('');
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
   const qaStats = getInspectionStats(inspectionStory);
   const activeTradeWeek = Math.max(1, Math.min(51, Number(tradeStartWeek) || 1));
@@ -201,6 +203,18 @@ export default function ExportsScreen() {
 
   const saveTradeExportMeta = async () => {
     await AsyncStorage.setItem(TRADE_EXPORT_META_KEY, JSON.stringify({ developerName, siteManagerName, producedBy }));
+    setExportStatus('Header details saved.');
+  };
+
+  const shareCsv = async (fileName: string, csvText: string) => {
+    setExportStatus('Preparing spreadsheet...');
+    try {
+      await shareCsvFile({ fileName, csvText });
+      setExportStatus('Spreadsheet ready to share.');
+    } catch (error) {
+      console.warn('Unable to share spreadsheet', error);
+      setExportStatus('Unable to create spreadsheet on this device. You can still copy the preview text.');
+    }
   };
 
   return (
@@ -224,6 +238,8 @@ export default function ExportsScreen() {
           <Text style={styles.summaryValue}>{qaStats.reinspectionDue}</Text>
         </View>
       </View>
+
+      {exportStatus ? <Text style={styles.statusText}>{exportStatus}</Text> : null}
 
       <SectionCard title="Trade programme spreadsheet preview" subtitle="Professional issue sheet. Make any final programme changes before copying/sending this spreadsheet output.">
         <View style={styles.formGrid}>
@@ -274,6 +290,12 @@ export default function ExportsScreen() {
         <ScrollView horizontal>
           <TextInput value={tradeSpreadsheetCsv} editable={false} multiline selectTextOnFocus style={[styles.exportBox, styles.extraWideExportBox]} />
         </ScrollView>
+        <View style={styles.exportActions}>
+          <Text style={styles.helperText}>Review this preview, then create the spreadsheet file for Excel or sharing.</Text>
+          <Pressable style={styles.saveButton} onPress={() => shareCsv(`${siteSetup.siteName}-${selectedTrade}-WK${String(activeTradeWeek).padStart(2, '0')}`, tradeSpreadsheetCsv)}>
+            <Text style={styles.saveButtonText}>Create / Share Spreadsheet</Text>
+          </Pressable>
+        </View>
       </SectionCard>
 
       <SectionCard title="Weekly control report" subtitle="Copy this into an email or site report.">
@@ -284,18 +306,27 @@ export default function ExportsScreen() {
         <ScrollView horizontal>
           <TextInput value={masterCsv} editable={false} multiline selectTextOnFocus style={[styles.exportBox, styles.wideExportBox]} />
         </ScrollView>
+        <Pressable style={styles.secondaryButton} onPress={() => shareCsv(`${siteSetup.siteName}-master-programme`, masterCsv)}>
+          <Text style={styles.secondaryButtonText}>Create Master Spreadsheet</Text>
+        </Pressable>
       </SectionCard>
 
       <SectionCard title="Rolling 2-week CSV" subtitle="Copy and paste into Excel for the first live 2-week window.">
         <ScrollView horizontal>
           <TextInput value={rollingCsv} editable={false} multiline selectTextOnFocus style={[styles.exportBox, styles.wideExportBox]} />
         </ScrollView>
+        <Pressable style={styles.secondaryButton} onPress={() => shareCsv(`${siteSetup.siteName}-rolling-two-week`, rollingCsv)}>
+          <Text style={styles.secondaryButtonText}>Create Rolling 2-Week Spreadsheet</Text>
+        </Pressable>
       </SectionCard>
 
       <SectionCard title="QA story CSV" subtitle="Copy and paste into Excel to create a QA history register.">
         <ScrollView horizontal>
           <TextInput value={qaCsv} editable={false} multiline selectTextOnFocus style={[styles.exportBox, styles.wideExportBox]} />
         </ScrollView>
+        <Pressable style={styles.secondaryButton} onPress={() => shareCsv(`${siteSetup.siteName}-qa-story`, qaCsv)}>
+          <Text style={styles.secondaryButtonText}>Create QA Spreadsheet</Text>
+        </Pressable>
       </SectionCard>
     </AppScreen>
   );
@@ -327,6 +358,11 @@ const styles = StyleSheet.create({
   lockedInput: { backgroundColor: '#f1f5f9', color: '#64748b' },
   saveButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-end' },
   saveButtonText: { color: '#ffffff', fontWeight: '900' },
+  secondaryButton: { alignSelf: 'flex-start', backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginTop: 10 },
+  secondaryButtonText: { color: '#ffffff', fontWeight: '900', fontSize: 13 },
+  exportActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' },
+  helperText: { color: '#64748b', fontSize: 12, lineHeight: 18, flex: 1, minWidth: 250 },
+  statusText: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', color: '#1e40af', borderRadius: 12, padding: 12, fontWeight: '900' },
   tradeChips: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
   tradeChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
   tradeChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
