@@ -1,13 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 import { INSPECTION_RESULTS_KEY, INSPECTION_STORY_KEY } from '../utils/inspectionRecords';
-import { ActivityDelay, TRADE_ORDER } from '../utils/siteProgrammeEngine';
+import { ActivityDelay, ProgrammeStageNumber, TRADE_ORDER } from '../utils/siteProgrammeEngine';
 import {
   ActivityMove,
   createHouseTypeTemplate,
   DEFAULT_PLOT_TEMPLATES,
   DEFAULT_SITE_PROGRAMME_SETUP,
   getSortedSitePlots,
+  isProgrammeStageNumber,
   PlotTemplate,
   SiteProgrammeSetup,
   TemplateSitePlot,
@@ -94,6 +95,7 @@ type SitePlannerStore = {
   bulkUpsertSitePlots: (inputs: SitePlotInput[]) => Promise<void>;
   removeSitePlot: (plotId: string) => Promise<void>;
   clearSitePlotData: () => Promise<void>;
+  holdPlotAtStage: (input: { plotId: string; holdStage?: ProgrammeStageNumber; holdReason?: string }) => Promise<void>;
   setActivityDelay: (input: ActivityDelay) => Promise<void>;
   setActivityMove: (input: { plotId: string; activityCode: string; deltaDays: number }) => Promise<void>;
   resetActivityMovesForPlot: (plotId: string) => Promise<void>;
@@ -127,13 +129,46 @@ async function readObject<T>(key: string, fallback: T) {
   return JSON.parse(stored) as T;
 }
 
+async function clearInspectionDataForPlot(plotId: string) {
+  const [storedResults, storedStory] = await Promise.all([
+    AsyncStorage.getItem(INSPECTION_RESULTS_KEY),
+    AsyncStorage.getItem(INSPECTION_STORY_KEY),
+  ]);
+
+  if (storedResults) {
+    const results = JSON.parse(storedResults) as Record<string, unknown>;
+    const nextResults = Object.fromEntries(Object.entries(results).filter(([key]) => !key.startsWith(`${plotId}:`)));
+    await AsyncStorage.setItem(INSPECTION_RESULTS_KEY, JSON.stringify(nextResults));
+  }
+
+  if (storedStory) {
+    const story = JSON.parse(storedStory) as { plotId?: string }[];
+    const nextStory = story.filter((record) => record.plotId !== plotId);
+    await AsyncStorage.setItem(INSPECTION_STORY_KEY, JSON.stringify(nextStory));
+  }
+}
+
 function mergeDefaultTradeContacts(stored: TradeContact[]) {
   const storedByTrade = new Map(stored.map((contact) => [contact.trade, contact]));
   return DEFAULT_TRADE_CONTACTS.map((contact) => storedByTrade.get(contact.trade) ?? contact);
 }
 
+function normaliseHoldStage(plot: TemplateSitePlot) {
+  return isProgrammeStageNumber(plot.holdStage) ? plot.holdStage : undefined;
+}
+
 function normalisePlots(stored: TemplateSitePlot[]) {
-  return stored.map((plot, index) => ({ ...plot, buildOrder: plot.buildOrder || index + 1, templateId: plot.templateId || 'threeBed' }));
+  return stored.map((plot, index) => {
+    const holdStage = normaliseHoldStage(plot);
+    return {
+      ...plot,
+      buildOrder: plot.buildOrder || index + 1,
+      templateId: plot.templateId || 'threeBed',
+      holdStage,
+      holdReason: holdStage ? plot.holdReason ?? '' : undefined,
+      holdUpdatedAt: holdStage ? plot.holdUpdatedAt : undefined,
+    };
+  });
 }
 
 function normaliseTemplate(template: PlotTemplate) {
@@ -269,6 +304,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       AsyncStorage.setItem(SITE_DELAYS_KEY, JSON.stringify(nextDelays)),
       AsyncStorage.setItem(ACTIVITY_MOVES_KEY, JSON.stringify(nextMoves)),
       AsyncStorage.setItem(PROGRAMME_NOTES_KEY, JSON.stringify(nextNotes)),
+      clearInspectionDataForPlot(plotId),
     ]);
   };
 
@@ -287,6 +323,25 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       AsyncStorage.removeItem(INSPECTION_RESULTS_KEY),
       AsyncStorage.removeItem(INSPECTION_STORY_KEY),
     ]);
+  };
+
+  const holdPlotAtStage = async (input: { plotId: string; holdStage?: ProgrammeStageNumber; holdReason?: string }) => {
+    const nextPlots = sitePlots.map((plot) => {
+      if (plot.id !== input.plotId) return plot;
+      if (!input.holdStage) {
+        const { holdStage, holdReason, holdUpdatedAt, ...releasedPlot } = plot;
+        return releasedPlot;
+      }
+      return {
+        ...plot,
+        holdStage: input.holdStage,
+        holdReason: input.holdReason?.trim() ?? '',
+        holdUpdatedAt: new Date().toISOString(),
+      };
+    });
+    const sorted = getSortedSitePlots(nextPlots);
+    setSitePlots(sorted);
+    await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(sorted));
   };
 
   const setActivityDelay = async (input: ActivityDelay) => {
@@ -407,6 +462,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       bulkUpsertSitePlots,
       removeSitePlot,
       clearSitePlotData,
+      holdPlotAtStage,
       setActivityDelay,
       setActivityMove,
       resetActivityMovesForPlot,
