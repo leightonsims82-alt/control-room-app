@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
@@ -12,38 +13,33 @@ import {
   INSPECTION_STATUS_OPTIONS,
   InspectionStatus,
 } from '../../utils/inspectionChecklists';
+import {
+  CUSTOM_INSPECTION_ITEMS_KEY,
+  INSPECTION_RESULTS_KEY,
+  INSPECTION_STORY_KEY,
+  PlotInspectionStoryRecord,
+} from '../../utils/inspectionRecords';
 import { getConstructionMethod, getConstructionMethodLabel, getHouseTypeLabel, getSortedSitePlots, getTemplateForPlot } from '../../utils/templateProgramme';
-
-const CUSTOM_ITEMS_KEY = 'programme-buddy:inspection-custom-items:v1';
-const INSPECTION_RESULTS_KEY = 'programme-buddy:inspection-results:v1';
-const INSPECTION_STORY_KEY = 'programme-buddy:plot-inspection-story:v1';
 
 type InspectionResult = {
   status?: InspectionStatus;
   trade?: string;
   description?: string;
   imageRef?: string;
+  imageName?: string;
   updatedAt?: string;
 };
 
 type InspectionResults = Record<string, InspectionResult>;
 
-type PlotInspectionStoryRecord = {
-  id: string;
-  plotId: string;
-  checklistId: string;
-  checklistTitle: string;
-  activityCode?: string;
-  trade?: string;
-  status: 'Passed' | 'Failed' | 'Incomplete';
-  completedCount: number;
-  itemCount: number;
-  failCount: number;
-  completedAt: string;
-};
-
 function resultKey(plotId: string, checklistId: string, itemId: string) {
   return `${plotId}:${checklistId}:${itemId}`;
+}
+
+function imageNameFromUri(uri?: string) {
+  if (!uri) return '';
+  const clean = uri.split('?')[0];
+  return clean.split('/').pop() || 'QA photo';
 }
 
 export default function InspectionsScreen() {
@@ -59,6 +55,7 @@ export default function InspectionsScreen() {
   const [storyRecords, setStoryRecords] = useState<PlotInspectionStoryRecord[]>([]);
   const [newItemLabel, setNewItemLabel] = useState('');
   const [newItemGuidance, setNewItemGuidance] = useState('');
+  const [photoError, setPhotoError] = useState('');
 
   useEffect(() => {
     if (params.plotId) setSelectedPlotId(params.plotId);
@@ -74,7 +71,7 @@ export default function InspectionsScreen() {
   useEffect(() => {
     async function loadInspectionData() {
       const [storedCustomItems, storedResults, storedStory] = await Promise.all([
-        AsyncStorage.getItem(CUSTOM_ITEMS_KEY),
+        AsyncStorage.getItem(CUSTOM_INSPECTION_ITEMS_KEY),
         AsyncStorage.getItem(INSPECTION_RESULTS_KEY),
         AsyncStorage.getItem(INSPECTION_STORY_KEY),
       ]);
@@ -93,6 +90,7 @@ export default function InspectionsScreen() {
   const plotStory = storyRecords.filter((record) => record.plotId === selectedPlot?.id);
   const completedCount = selectedPlot ? checklistItems.filter((item) => results[resultKey(selectedPlot.id, selectedChecklist.id, item.id)]?.status).length : 0;
   const failCount = selectedPlot ? checklistItems.filter((item) => results[resultKey(selectedPlot.id, selectedChecklist.id, item.id)]?.status === 'Fail').length : 0;
+  const imageCount = selectedPlot ? checklistItems.filter((item) => results[resultKey(selectedPlot.id, selectedChecklist.id, item.id)]?.imageRef).length : 0;
   const inspectionStatus: PlotInspectionStoryRecord['status'] = failCount ? 'Failed' : completedCount === checklistItems.length && checklistItems.length ? 'Passed' : 'Incomplete';
 
   const updateResult = async (itemId: string, update: InspectionResult) => {
@@ -111,6 +109,30 @@ export default function InspectionsScreen() {
     await AsyncStorage.setItem(INSPECTION_RESULTS_KEY, JSON.stringify(nextResults));
   };
 
+  const attachPhoto = async (itemId: string, source: 'camera' | 'library') => {
+    setPhotoError('');
+    const permission = source === 'camera' ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== 'granted') {
+      setPhotoError(source === 'camera' ? 'Camera permission was not granted.' : 'Photo library permission was not granted.');
+      return;
+    }
+
+    const pickerResult = source === 'camera'
+      ? await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 0.65 })
+      : await ImagePicker.launchImageLibraryAsync({ allowsEditing: false, quality: 0.65 });
+
+    if (pickerResult.canceled || !pickerResult.assets?.[0]?.uri) return;
+    const asset = pickerResult.assets[0];
+    await updateResult(itemId, {
+      imageRef: asset.uri,
+      imageName: asset.fileName ?? imageNameFromUri(asset.uri),
+    });
+  };
+
+  const clearPhoto = async (itemId: string) => {
+    await updateResult(itemId, { imageRef: '', imageName: '' });
+  };
+
   const saveInspectionToStory = async () => {
     if (!selectedPlot) return;
     const nextRecord: PlotInspectionStoryRecord = {
@@ -124,6 +146,7 @@ export default function InspectionsScreen() {
       completedCount,
       itemCount: checklistItems.length,
       failCount,
+      imageCount,
       completedAt: new Date().toISOString(),
     };
     const nextStory = [nextRecord, ...storyRecords];
@@ -144,7 +167,7 @@ export default function InspectionsScreen() {
       },
     ];
     setCustomItems(nextItems);
-    await AsyncStorage.setItem(CUSTOM_ITEMS_KEY, JSON.stringify(nextItems));
+    await AsyncStorage.setItem(CUSTOM_INSPECTION_ITEMS_KEY, JSON.stringify(nextItems));
     setNewItemLabel('');
     setNewItemGuidance('');
   };
@@ -152,7 +175,7 @@ export default function InspectionsScreen() {
   const removeCustomItem = async (id: string) => {
     const nextItems = customItems.filter((item) => item.id !== id);
     setCustomItems(nextItems);
-    await AsyncStorage.setItem(CUSTOM_ITEMS_KEY, JSON.stringify(nextItems));
+    await AsyncStorage.setItem(CUSTOM_INSPECTION_ITEMS_KEY, JSON.stringify(nextItems));
   };
 
   const openStoryRecord = (record: PlotInspectionStoryRecord) => {
@@ -165,7 +188,7 @@ export default function InspectionsScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Plot QA Story</Text>
-        <Text style={styles.subtitle}>Inspections are started from the programme. This page stores the story for each plot: what was inspected, when, by trade, and with images/comments.</Text>
+        <Text style={styles.subtitle}>Inspections are started from the programme. Attach camera or gallery evidence to each check item.</Text>
       </View>
 
       <SectionCard title="Select plot" subtitle="Choose a plot to view its QA history. New inspections should be triggered from the programme cell.">
@@ -194,6 +217,10 @@ export default function InspectionsScreen() {
             <Text style={styles.summaryLabel}>QA records</Text>
             <Text style={styles.summaryValue}>{plotStory.length}</Text>
           </View>
+          <View style={styles.summaryBox}>
+            <Text style={styles.summaryLabel}>Images this check</Text>
+            <Text style={styles.summaryValue}>{imageCount}</Text>
+          </View>
         </View>
       </SectionCard>
 
@@ -206,9 +233,11 @@ export default function InspectionsScreen() {
           </View>
           <View style={[styles.statusSummary, inspectionStatus === 'Failed' ? styles.statusSummaryFailed : inspectionStatus === 'Passed' ? styles.statusSummaryPassed : null]}>
             <Text style={styles.statusSummaryValue}>{inspectionStatus}</Text>
-            <Text style={styles.statusSummaryMeta}>{completedCount}/{checklistItems.length} checked</Text>
+            <Text style={styles.statusSummaryMeta}>{completedCount}/{checklistItems.length} checked · {imageCount} image{imageCount === 1 ? '' : 's'}</Text>
           </View>
         </View>
+
+        {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
 
         <View style={styles.simpleTableHeader}>
           <Text style={[styles.tableHeaderText, styles.checkCol]}>Check</Text>
@@ -255,12 +284,29 @@ export default function InspectionsScreen() {
                 style={[styles.input, styles.descCol]}
                 multiline
               />
-              <TextInput
-                value={result.imageRef ?? ''}
-                onChangeText={(imageRef) => updateResult(item.id, { imageRef })}
-                placeholder="Image ref"
-                style={[styles.input, styles.imageCol]}
-              />
+              <View style={[styles.imagePanel, styles.imageCol]}>
+                {result.imageRef ? (
+                  <Image source={{ uri: result.imageRef }} style={styles.imagePreview} resizeMode="cover" />
+                ) : (
+                  <View style={styles.imagePlaceholder}>
+                    <Text style={styles.imagePlaceholderText}>No image</Text>
+                  </View>
+                )}
+                <Text style={styles.imageName} numberOfLines={1}>{result.imageName || imageNameFromUri(result.imageRef) || 'Evidence photo'}</Text>
+                <View style={styles.imageButtons}>
+                  <Pressable style={styles.imageButton} onPress={() => attachPhoto(item.id, 'camera')}>
+                    <Text style={styles.imageButtonText}>Camera</Text>
+                  </Pressable>
+                  <Pressable style={styles.imageButton} onPress={() => attachPhoto(item.id, 'library')}>
+                    <Text style={styles.imageButtonText}>Gallery</Text>
+                  </Pressable>
+                </View>
+                {result.imageRef ? (
+                  <Pressable style={styles.clearImageButton} onPress={() => clearPhoto(item.id)}>
+                    <Text style={styles.clearImageText}>Remove</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           );
         })}
@@ -277,7 +323,7 @@ export default function InspectionsScreen() {
             <View style={styles.storyMain}>
               <Text style={styles.storyTitle}>{record.checklistTitle}</Text>
               <Text style={styles.storyMeta}>{record.activityCode || 'Manual QA'}{record.trade ? ` | ${record.trade}` : ''} | {new Date(record.completedAt).toLocaleDateString()}</Text>
-              <Text style={styles.storyMeta}>{record.completedCount}/{record.itemCount} checked · {record.failCount} failed</Text>
+              <Text style={styles.storyMeta}>{record.completedCount}/{record.itemCount} checked · {record.failCount} failed · {record.imageCount ?? 0} image{(record.imageCount ?? 0) === 1 ? '' : 's'}</Text>
             </View>
             <View style={[styles.storyStatus, record.status === 'Failed' ? styles.storyFailed : record.status === 'Passed' ? styles.storyPassed : null]}>
               <Text style={styles.storyStatusText}>{record.status}</Text>
@@ -337,6 +383,7 @@ const styles = StyleSheet.create({
   statusSummaryPassed: { backgroundColor: '#dcfce7', borderColor: '#86efac' },
   statusSummaryValue: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
   statusSummaryMeta: { color: '#64748b', fontSize: 12, fontWeight: '800', marginTop: 3 },
+  photoError: { color: '#dc2626', backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecaca', borderRadius: 10, padding: 10, fontWeight: '800' },
   simpleTableHeader: { flexDirection: 'row', backgroundColor: '#173b5f', borderRadius: 10, overflow: 'hidden' },
   tableHeaderText: { color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, textAlign: 'center' },
   simpleTableRow: { flexDirection: 'row', alignItems: 'stretch', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, overflow: 'hidden', backgroundColor: '#ffffff' },
@@ -345,7 +392,7 @@ const styles = StyleSheet.create({
   statusCol: { width: 100, padding: 8, gap: 6 },
   tradeCol: { width: 140 },
   descCol: { width: 260 },
-  imageCol: { width: 160 },
+  imageCol: { width: 190 },
   sectionLabel: { color: '#2563eb', fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
   itemTitle: { color: '#0f172a', fontSize: 14, fontWeight: '900', marginTop: 2 },
   guidance: { color: '#475569', fontSize: 12, lineHeight: 17, fontWeight: '700', marginTop: 3 },
@@ -355,7 +402,17 @@ const styles = StyleSheet.create({
   statusFail: { backgroundColor: '#dc2626', borderColor: '#dc2626' },
   statusText: { color: '#475569', fontSize: 11, fontWeight: '900' },
   statusTextActive: { color: '#ffffff' },
-  input: { minHeight: 78, borderLeftWidth: 1, borderLeftColor: '#e2e8f0', padding: 8, color: '#0f172a', backgroundColor: '#ffffff', fontSize: 12, fontWeight: '700', textAlignVertical: 'top' },
+  input: { minHeight: 116, borderLeftWidth: 1, borderLeftColor: '#e2e8f0', padding: 8, color: '#0f172a', backgroundColor: '#ffffff', fontSize: 12, fontWeight: '700', textAlignVertical: 'top' },
+  imagePanel: { minHeight: 116, borderLeftWidth: 1, borderLeftColor: '#e2e8f0', padding: 8, gap: 6, backgroundColor: '#ffffff' },
+  imagePreview: { width: '100%', height: 78, borderRadius: 10, backgroundColor: '#e2e8f0' },
+  imagePlaceholder: { width: '100%', height: 78, borderRadius: 10, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center' },
+  imagePlaceholderText: { color: '#94a3b8', fontSize: 12, fontWeight: '900' },
+  imageName: { color: '#64748b', fontSize: 10, fontWeight: '800' },
+  imageButtons: { flexDirection: 'row', gap: 6 },
+  imageButton: { flex: 1, backgroundColor: '#0f172a', borderRadius: 8, paddingVertical: 7, alignItems: 'center' },
+  imageButtonText: { color: '#ffffff', fontSize: 10, fontWeight: '900' },
+  clearImageButton: { borderWidth: 1, borderColor: '#fecaca', backgroundColor: '#fff1f2', borderRadius: 8, paddingVertical: 6, alignItems: 'center' },
+  clearImageText: { color: '#dc2626', fontSize: 10, fontWeight: '900' },
   saveButton: { alignSelf: 'flex-start', backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
   saveButtonText: { color: '#ffffff', fontWeight: '900' },
   empty: { color: '#64748b', fontWeight: '700' },
