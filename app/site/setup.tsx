@@ -26,9 +26,24 @@ type SiteAcquaintance = {
   addedAt: string;
 };
 
+type IssueSheetDefaults = {
+  developerName: string;
+  siteManagerName: string;
+  programmeProducedBy: string;
+};
+
 function getSiteAcquaintances(siteSetup: unknown): SiteAcquaintance[] {
   const value = (siteSetup as { siteAcquaintances?: SiteAcquaintance[] }).siteAcquaintances;
   return Array.isArray(value) ? value.filter((item) => item.status !== 'Removed') : [];
+}
+
+function getIssueSheetDefaults(siteSetup: unknown): IssueSheetDefaults {
+  const value = siteSetup as Partial<IssueSheetDefaults>;
+  return {
+    developerName: value.developerName ?? '',
+    siteManagerName: value.siteManagerName ?? '',
+    programmeProducedBy: value.programmeProducedBy ?? '',
+  };
 }
 
 export default function SiteSetupScreen() {
@@ -41,6 +56,7 @@ export default function SiteSetupScreen() {
   const [newAccessRole, setNewAccessRole] = useState('Assistant Site Manager');
   const selectedTemplate = plotTemplates.find((template) => template.id === selectedTemplateId) ?? plotTemplates[0];
   const siteAcquaintances = getSiteAcquaintances(siteSetup);
+  const issueSheetDefaults = getIssueSheetDefaults(siteSetup);
 
   const updateActivity = (activityCode: string, changes: Partial<TemplateActivity>) => {
     if (!selectedTemplate) return;
@@ -53,6 +69,10 @@ export default function SiteSetupScreen() {
   const updateConstructionMethod = (constructionMethod: ConstructionMethod) => {
     if (!selectedTemplate) return;
     updatePlotTemplate({ ...selectedTemplate, constructionMethod });
+  };
+
+  const updateIssueSheetDefault = async (input: Partial<IssueSheetDefaults>) => {
+    await updateSiteSetup({ ...input } as any);
   };
 
   const saveNewHouseType = async () => {
@@ -102,7 +122,7 @@ export default function SiteSetupScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>Programme Buddy Setup</Text>
         <Text style={styles.title}>Build Sequence Key</Text>
-        <Text style={styles.subtitle}>This is the source data behind the master programme, plot setup, trade programmes, inspection checklists and site-only team access.</Text>
+        <Text style={styles.subtitle}>This is the source data behind the master programme, plot setup, trade programmes, inspection checklists, exports and site-only team access.</Text>
       </View>
 
       <View style={styles.card}>
@@ -123,6 +143,22 @@ export default function SiteSetupScreen() {
           </Field>
           <Field label="Working week">
             <TextInput value={siteSetup.workingWeek} onChangeText={(workingWeek) => updateSiteSetup({ workingWeek })} placeholder="Monday to Friday" style={styles.input} />
+          </Field>
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Trade issue sheet defaults</Text>
+        <Text style={styles.helpText}>These details appear on every trade programme spreadsheet issue sheet, so exports use one source of truth.</Text>
+        <View style={styles.formGrid}>
+          <Field label="Developer name">
+            <TextInput value={issueSheetDefaults.developerName} onChangeText={(developerName) => updateIssueSheetDefault({ developerName })} placeholder="Developer / client" style={styles.input} />
+          </Field>
+          <Field label="Site manager name">
+            <TextInput value={issueSheetDefaults.siteManagerName} onChangeText={(siteManagerName) => updateIssueSheetDefault({ siteManagerName })} placeholder="Site manager" style={styles.input} />
+          </Field>
+          <Field label="Produced by">
+            <TextInput value={issueSheetDefaults.programmeProducedBy} onChangeText={(programmeProducedBy) => updateIssueSheetDefault({ programmeProducedBy })} placeholder="Person producing programme" style={styles.input} />
           </Field>
         </View>
       </View>
