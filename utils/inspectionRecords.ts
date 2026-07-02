@@ -15,6 +15,7 @@ export type PlotInspectionStoryRecord = {
   completedCount: number;
   itemCount: number;
   failCount: number;
+  imageCount?: number;
   completedAt: string;
 };
 
@@ -37,6 +38,7 @@ export function getInspectionStats(records: PlotInspectionStoryRecord[]) {
   const incomplete = records.filter((record) => record.status === 'Incomplete').length;
   const reinspectionDue = failed + incomplete;
   const plotsWithQa = new Set(records.map((record) => record.plotId)).size;
+  const images = records.reduce((total, record) => total + (record.imageCount ?? 0), 0);
   return {
     total: records.length,
     passed,
@@ -44,6 +46,7 @@ export function getInspectionStats(records: PlotInspectionStoryRecord[]) {
     incomplete,
     reinspectionDue,
     plotsWithQa,
+    images,
   };
 }
 
@@ -57,7 +60,7 @@ export function createPlotQaStoryExport(input: {
     .sort((a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime())
     .map((record) => {
       const date = new Date(record.completedAt).toLocaleDateString('en-GB');
-      return `${date} | ${record.checklistTitle} | ${record.activityCode || 'Manual QA'} | ${record.trade || 'Trade TBC'} | ${record.status} | ${record.completedCount}/${record.itemCount} checked | ${record.failCount} failed`;
+      return `${date} | ${record.checklistTitle} | ${record.activityCode || 'Manual QA'} | ${record.trade || 'Trade TBC'} | ${record.status} | ${record.completedCount}/${record.itemCount} checked | ${record.failCount} failed | ${record.imageCount ?? 0} images`;
     });
 
   return [
