@@ -7,13 +7,14 @@ import { PROGRAMME_STAGE_SEQUENCE, WEEK_NUMBERS } from '../../utils/siteProgramm
 import { getHouseTypeLabel, getPlotBuildOrder, getSortedSitePlots, getStage1StartWeekForPlot, getStageNumberForPlotWeek, getTemplateForPlot } from '../../utils/templateProgramme';
 
 export default function MasterProgrammeScreen() {
-  const { sitePlots, plotTemplates, upsertSitePlot, bulkUpsertSitePlots, removeSitePlot } = useSitePlanner();
+  const { sitePlots, plotTemplates, upsertSitePlot, bulkUpsertSitePlots, removeSitePlot, clearSitePlotData } = useSitePlanner();
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
   const [plotNo, setPlotNo] = useState('');
   const [buildOrder, setBuildOrder] = useState('');
   const [preHandoverWeek, setPreHandoverWeek] = useState('');
   const [templateId, setTemplateId] = useState(plotTemplates[2]?.id ?? 'threeBed');
   const [bulkText, setBulkText] = useState('');
+  const [clearConfirm, setClearConfirm] = useState(false);
   const nextPlotHint = String(sitePlots.length + 1);
   const nextBuildOrderHint = String(sitePlots.length + 1);
   const nextPreHandoverHint = String((sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.stage9CompleteWeek)) : 22) + 1);
@@ -42,6 +43,7 @@ export default function MasterProgrammeScreen() {
     setPlotNo('');
     setBuildOrder('');
     setPreHandoverWeek('');
+    setClearConfirm(false);
   };
 
   const importBulkPlots = async () => {
@@ -49,6 +51,17 @@ export default function MasterProgrammeScreen() {
     if (!inputs.length) return;
     await bulkUpsertSitePlots(inputs);
     setBulkText('');
+    setClearConfirm(false);
+  };
+
+  const clearAllPlotData = async () => {
+    if (!sitePlots.length) return;
+    if (!clearConfirm) {
+      setClearConfirm(true);
+      return;
+    }
+    await clearSitePlotData();
+    setClearConfirm(false);
   };
 
   return (
@@ -109,6 +122,17 @@ export default function MasterProgrammeScreen() {
         </View>
       </SectionCard>
 
+      <SectionCard title="Reset plot data" subtitle="Use this before closed testing when you want to start with a completely blank site programme.">
+        <Text style={styles.resetText}>This clears all saved plots, plot delays, dragged trade moves, programme notes, issue logs and plot QA records from this device. House type templates and site setup stay in place.</Text>
+        <Pressable
+          disabled={!sitePlots.length}
+          style={[styles.clearButton, clearConfirm ? styles.clearButtonArmed : null, !sitePlots.length ? styles.clearButtonDisabled : null]}
+          onPress={clearAllPlotData}
+        >
+          <Text style={styles.clearButtonText}>{sitePlots.length ? (clearConfirm ? 'Press Again To Clear Plot Data' : `Clear ${sitePlots.length} Plot${sitePlots.length === 1 ? '' : 's'}`) : 'No Plot Data To Clear'}</Text>
+        </Pressable>
+      </SectionCard>
+
       <SectionCard title="Master stage-number matrix" subtitle="Sorted by Build Order. Numbers only. Use the stage key below for meanings.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
@@ -123,6 +147,12 @@ export default function MasterProgrammeScreen() {
               ))}
               <Text style={[styles.headerCell, styles.actionCell]}>Action</Text>
             </View>
+
+            {sortedPlots.length === 0 ? (
+              <View style={styles.emptyMatrixRow}>
+                <Text style={styles.emptyMatrixText}>No plots saved. Add a plot above or paste your plot schedule into Bulk Plot Entry.</Text>
+              </View>
+            ) : null}
 
             {sortedPlots.map((plot, rowIndex) => {
               const template = getTemplateForPlot(plot, plotTemplates);
@@ -193,6 +223,11 @@ const styles = StyleSheet.create({
   bulkHelp: { flex: 1, minWidth: 280, color: '#64748b', fontSize: 12, lineHeight: 18 },
   saveButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
   saveButtonText: { color: '#ffffff', fontWeight: '900' },
+  resetText: { color: '#64748b', fontSize: 13, lineHeight: 20, fontWeight: '700' },
+  clearButton: { alignSelf: 'flex-start', backgroundColor: '#dc2626', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  clearButtonArmed: { backgroundColor: '#991b1b' },
+  clearButtonDisabled: { backgroundColor: '#cbd5e1' },
+  clearButtonText: { color: '#ffffff', fontWeight: '900' },
   templateChips: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
   templateChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
   templateChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
@@ -212,6 +247,8 @@ const styles = StyleSheet.create({
   stageStartBody: { backgroundColor: '#e3f3d8', color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
   weekCell: { width: 58, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
   activeWeekCell: { backgroundColor: '#dff0ff' },
+  emptyMatrixRow: { width: 980, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#f8fafc', padding: 18 },
+  emptyMatrixText: { color: '#64748b', fontWeight: '800' },
   removeButton: { width: 86, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#c8d7e6' },
   removeButtonText: { color: '#dc2626', fontSize: 12, fontWeight: '900' },
   stageKeyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
