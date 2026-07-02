@@ -44,7 +44,7 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Programme Buddy</Text>
-          <Text style={styles.subtitle}>Programme, trade issue sheet, QA trigger, plot story, exports and control-room dashboard.</Text>
+          <Text style={styles.subtitle}>Programme, trade issue sheet, QA trigger, plot story, exports, billing and control-room dashboard.</Text>
         </View>
         <View style={styles.badge}><Text style={styles.badgeText}>Control room</Text></View>
       </View>
@@ -85,6 +85,13 @@ export default function DashboardScreen() {
             <Text style={styles.programmeText}>Copy-ready Excel CSV, QA register and weekly report outputs</Text>
           </View>
         </Pressable>
+        <Pressable style={styles.programmeCard} onPress={() => router.push('/billing')}>
+          <Ionicons name="card-outline" size={24} color="#f97316" />
+          <View style={styles.cardTextWrap}>
+            <Text style={styles.programmeTitle}>Billing & Team</Text>
+            <Text style={styles.programmeText}>Local storage plan, future cloud add-on and paid manager seats</Text>
+          </View>
+        </Pressable>
       </View>
 
       <View style={styles.statsGrid}>
@@ -120,7 +127,7 @@ export default function DashboardScreen() {
         </View>
       </SectionCard>
 
-      <SectionCard title="Current build logic" subtitle="The workflow now links programme → inspection → plot story → dashboard → exports.">
+      <SectionCard title="Current build logic" subtitle="The workflow now links programme → inspection → plot story → dashboard → exports → billing.">
         <View style={styles.ruleRow}>
           <Text style={styles.ruleNumber}>1</Text>
           <Text style={styles.ruleText}>The programme is sorted by build order, not plot number.</Text>
@@ -135,7 +142,7 @@ export default function DashboardScreen() {
         </View>
         <View style={styles.ruleRow}>
           <Text style={styles.ruleNumber}>4</Text>
-          <Text style={styles.ruleText}>Exports give copy-ready programme, QA register and weekly control report outputs.</Text>
+          <Text style={styles.ruleText}>Billing separates the base single user plan from paid manager seats and future cloud backup add-ons.</Text>
         </View>
       </SectionCard>
     </AppScreen>
