@@ -8,17 +8,15 @@ import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { StatCard } from '../../components/StatCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
-import { PROGRAMME_STAGE_SEQUENCE } from '../../utils/siteProgrammeEngine';
 import { getInspectionStats, INSPECTION_STORY_KEY, PlotInspectionStoryRecord } from '../../utils/inspectionRecords';
 import { formatProgrammeDate } from '../../utils/programmeDates';
-import { getSortedSitePlots, getStage1StartWeekForPlot } from '../../utils/templateProgramme';
+import { getSortedSitePlots } from '../../utils/templateProgramme';
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { sitePlots, plotTemplates, siteSetup } = useSitePlanner();
+  const { sitePlots, siteSetup } = useSitePlanner();
   const [inspectionStory, setInspectionStory] = useState<PlotInspectionStoryRecord[]>([]);
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
-  const earliestStart = sitePlots.length ? Math.min(...sitePlots.map((plot) => getStage1StartWeekForPlot(plot, plotTemplates))) : 0;
   const latestHandover = sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.stage9CompleteWeek)) : 0;
   const qaStats = getInspectionStats(inspectionStory);
   const failedRecords = inspectionStory.filter((record) => record.status === 'Failed').slice(0, 5);
@@ -46,7 +44,7 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Programme Buddy</Text>
-          <Text style={styles.subtitle}>Programme, trade issue sheet, QA trigger, plot story and control-room dashboard.</Text>
+          <Text style={styles.subtitle}>Programme, trade issue sheet, QA trigger, plot story, exports and control-room dashboard.</Text>
         </View>
         <View style={styles.badge}><Text style={styles.badgeText}>Control room</Text></View>
       </View>
@@ -78,6 +76,13 @@ export default function DashboardScreen() {
           <View style={styles.cardTextWrap}>
             <Text style={styles.programmeTitle}>Plot QA Story</Text>
             <Text style={styles.programmeText}>Plot-by-plot QA timeline, checks, comments and image refs</Text>
+          </View>
+        </Pressable>
+        <Pressable style={styles.programmeCard} onPress={() => router.push('/exports')}>
+          <Ionicons name="download-outline" size={24} color="#0f172a" />
+          <View style={styles.cardTextWrap}>
+            <Text style={styles.programmeTitle}>Exports</Text>
+            <Text style={styles.programmeText}>Copy-ready Excel CSV, QA register and weekly report outputs</Text>
           </View>
         </Pressable>
       </View>
@@ -115,7 +120,7 @@ export default function DashboardScreen() {
         </View>
       </SectionCard>
 
-      <SectionCard title="Current build logic" subtitle="The workflow now links programme → inspection → plot story → dashboard.">
+      <SectionCard title="Current build logic" subtitle="The workflow now links programme → inspection → plot story → dashboard → exports.">
         <View style={styles.ruleRow}>
           <Text style={styles.ruleNumber}>1</Text>
           <Text style={styles.ruleText}>The programme is sorted by build order, not plot number.</Text>
@@ -127,6 +132,10 @@ export default function DashboardScreen() {
         <View style={styles.ruleRow}>
           <Text style={styles.ruleNumber}>3</Text>
           <Text style={styles.ruleText}>Saved inspections feed back as Passed, Failed or Incomplete status on the programme and dashboard.</Text>
+        </View>
+        <View style={styles.ruleRow}>
+          <Text style={styles.ruleNumber}>4</Text>
+          <Text style={styles.ruleText}>Exports give copy-ready programme, QA register and weekly control report outputs.</Text>
         </View>
       </SectionCard>
     </AppScreen>
