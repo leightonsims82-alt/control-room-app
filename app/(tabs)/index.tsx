@@ -8,6 +8,7 @@ import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { StatCard } from '../../components/StatCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
+import { canUseAppWithoutPayment } from '../../utils/accessControl';
 import { getInspectionStats, INSPECTION_STORY_KEY, PlotInspectionStoryRecord } from '../../utils/inspectionRecords';
 import { formatProgrammeDate } from '../../utils/programmeDates';
 import { getSortedSitePlots } from '../../utils/templateProgramme';
@@ -19,6 +20,7 @@ export default function DashboardScreen() {
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
   const latestHandover = sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.stage9CompleteWeek)) : 0;
   const qaStats = getInspectionStats(inspectionStory);
+  const freeTestingAccess = canUseAppWithoutPayment();
   const failedRecords = inspectionStory.filter((record) => record.status === 'Failed').slice(0, 5);
   const nextHandovers = sortedPlots
     .slice()
@@ -44,12 +46,26 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Programme Buddy</Text>
-          <Text style={styles.subtitle}>Programme, trade issue sheet, QA trigger, plot story, exports, billing and control-room dashboard.</Text>
+          <Text style={styles.subtitle}>Programme, trade issue sheet, QA trigger, plot story, exports, billing, onboarding and control-room dashboard.</Text>
         </View>
-        <View style={styles.badge}><Text style={styles.badgeText}>Control room</Text></View>
+        <View style={freeTestingAccess ? styles.freeBadge : styles.badge}><Text style={freeTestingAccess ? styles.freeBadgeText : styles.badgeText}>{freeTestingAccess ? 'Test access open' : 'Control room'}</Text></View>
       </View>
 
       <View style={styles.openProgrammeGrid}>
+        <Pressable style={styles.programmeCard} onPress={() => router.push('/onboarding')}>
+          <Ionicons name="map-outline" size={24} color="#0f766e" />
+          <View style={styles.cardTextWrap}>
+            <Text style={styles.programmeTitle}>Onboarding</Text>
+            <Text style={styles.programmeText}>First-time route for closed testing and setup walkthrough</Text>
+          </View>
+        </Pressable>
+        <Pressable style={styles.programmeCard} onPress={() => router.push('/access')}>
+          <Ionicons name="lock-open-outline" size={24} color="#16a34a" />
+          <View style={styles.cardTextWrap}>
+            <Text style={styles.programmeTitle}>Access & Readiness</Text>
+            <Text style={styles.programmeText}>Free test access plus live launch requirements checklist</Text>
+          </View>
+        </Pressable>
         <Pressable style={styles.programmeCard} onPress={() => router.push('/(tabs)/master')}>
           <Ionicons name="calendar-outline" size={24} color="#2563eb" />
           <View style={styles.cardTextWrap}>
@@ -98,6 +114,7 @@ export default function DashboardScreen() {
         <StatCard label="Plots" value={sitePlots.length} helper="Programme rows" icon={<Ionicons name="business-outline" size={26} color="#2563eb" />} />
         <StatCard label="QA records" value={qaStats.total} helper={`${qaStats.passed} passed / ${qaStats.failed} failed`} icon={<Ionicons name="shield-checkmark-outline" size={26} color="#16a34a" />} />
         <StatCard label="Rechecks due" value={qaStats.reinspectionDue} helper="Failed or incomplete QA" icon={<Ionicons name="warning-outline" size={26} color="#dc2626" />} />
+        <StatCard label="Access" value={freeTestingAccess ? 'Open' : 'Live'} helper={freeTestingAccess ? 'Closed testing' : 'Payment controlled'} icon={<Ionicons name="lock-open-outline" size={26} color="#16a34a" />} />
         <StatCard label="Latest pre-H/O" value={latestHandover ? `WK${String(latestHandover).padStart(2, '0')}` : '-'} helper={latestHandover ? formatProgrammeDate(siteSetup.programmeStartDate, latestHandover, 5) : 'Last plot'} icon={<Ionicons name="flag-outline" size={26} color="#f97316" />} />
       </View>
 
@@ -127,22 +144,22 @@ export default function DashboardScreen() {
         </View>
       </SectionCard>
 
-      <SectionCard title="Current build logic" subtitle="The workflow now links programme → inspection → plot story → dashboard → exports → billing.">
+      <SectionCard title="Current build logic" subtitle="The workflow now links onboarding → programme → inspection → plot story → dashboard → exports → billing.">
         <View style={styles.ruleRow}>
           <Text style={styles.ruleNumber}>1</Text>
-          <Text style={styles.ruleText}>The programme is sorted by build order, not plot number.</Text>
+          <Text style={styles.ruleText}>Closed testing access is open for now, so testers are not stopped by payment while the workflow is being proven.</Text>
         </View>
         <View style={styles.ruleRow}>
           <Text style={styles.ruleNumber}>2</Text>
-          <Text style={styles.ruleText}>Final day of a fix triggers the QA inspection directly from the programme cell.</Text>
+          <Text style={styles.ruleText}>The programme is sorted by build order, not plot number.</Text>
         </View>
         <View style={styles.ruleRow}>
           <Text style={styles.ruleNumber}>3</Text>
-          <Text style={styles.ruleText}>Saved inspections feed back as Passed, Failed or Incomplete status on the programme and dashboard.</Text>
+          <Text style={styles.ruleText}>Final day of a fix triggers the QA inspection directly from the programme cell.</Text>
         </View>
         <View style={styles.ruleRow}>
           <Text style={styles.ruleNumber}>4</Text>
-          <Text style={styles.ruleText}>Billing separates the base single user plan from paid manager seats and future cloud backup add-ons.</Text>
+          <Text style={styles.ruleText}>Live subscriptions, cloud storage and account controls are tracked but will be enforced later by the backend.</Text>
         </View>
       </SectionCard>
     </AppScreen>
@@ -155,6 +172,8 @@ const styles = StyleSheet.create({
   subtitle: { marginTop: 4, fontSize: 14, color: '#64748b', lineHeight: 20 },
   badge: { backgroundColor: '#fef3c7', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
   badgeText: { color: '#92400e', fontWeight: '900', fontSize: 12 },
+  freeBadge: { backgroundColor: '#dcfce7', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
+  freeBadgeText: { color: '#166534', fontWeight: '900', fontSize: 12 },
   openProgrammeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   programmeCard: { flex: 1, minWidth: 240, backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', padding: 18, flexDirection: 'row', gap: 14, alignItems: 'center' },
   cardTextWrap: { flex: 1 },
