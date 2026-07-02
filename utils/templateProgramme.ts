@@ -22,6 +22,9 @@ export const CONSTRUCTION_METHOD_OPTIONS: { id: ConstructionMethod; label: strin
 export type TemplateSitePlot = SitePlot & {
   templateId?: string;
   buildOrder?: number;
+  holdStage?: ProgrammeStageNumber;
+  holdReason?: string;
+  holdUpdatedAt?: string;
 };
 
 export type TemplateActivity = ProgrammeActivity;
@@ -107,13 +110,21 @@ export const DEFAULT_PLOT_TEMPLATES: PlotTemplate[] = [
   makeTemplate('fiveBed', '5 Bedroom', 'Largest house template with longer fix and finish tasks'),
 ];
 
-export const DEFAULT_TEMPLATE_PLOTS: TemplateSitePlot[] = Array.from({ length: 10 }, (_, index) => ({
-  id: `plot-${index + 1}`,
-  plotNo: String(index + 1),
-  buildOrder: index + 1,
-  stage9CompleteWeek: 23 + index,
-  templateId: 'threeBed',
-}));
+export const DEFAULT_TEMPLATE_PLOTS: TemplateSitePlot[] = [];
+
+export function isProgrammeStageNumber(value: unknown): value is ProgrammeStageNumber {
+  return PROGRAMME_STAGE_SEQUENCE.some((item) => item.stage === Number(value));
+}
+
+export function getPlotHoldLabel(plot: TemplateSitePlot) {
+  return plot.holdStage ? `Stage ${plot.holdStage}` : 'Not held';
+}
+
+export function getPlotHoldDetail(plot: TemplateSitePlot) {
+  if (!plot.holdStage) return 'Plot is not currently held.';
+  const reason = plot.holdReason?.trim();
+  return reason ? `Held at Stage ${plot.holdStage}: ${reason}` : `Held at Stage ${plot.holdStage}`;
+}
 
 export function getPlotBuildOrder(plot: TemplateSitePlot, fallbackIndex = 0) {
   return Number.isFinite(plot.buildOrder) && plot.buildOrder && plot.buildOrder > 0 ? plot.buildOrder : fallbackIndex + 1;
@@ -167,6 +178,10 @@ function orderedActivities(template: PlotTemplate) {
   return template.activities.slice().filter((activity) => activity.durationDays > 0).sort((a, b) => a.order - b.order);
 }
 
+function activityAllowedByHold(plot: TemplateSitePlot, activity: TemplateActivity) {
+  return !plot.holdStage || activity.stage <= plot.holdStage;
+}
+
 export function calendarDayIndexFromWeekDay(week: number, day: number) {
   return (week - 1) * 7 + day;
 }
@@ -197,7 +212,11 @@ export function getStage1StartWeekForPlot(plot: TemplateSitePlot, templates: Plo
 export function getStageNumberForPlotWeek(plot: TemplateSitePlot, week: number, templates: PlotTemplate[]) {
   const relativeWeek = week - getStage1StartWeekForPlot(plot, templates) + 1;
   if (relativeWeek < 1 || relativeWeek > 23) return '';
-  return getStageNumberForRelativeWeek(relativeWeek);
+  const stage = getStageNumberForRelativeWeek(relativeWeek);
+  if (!plot.holdStage) return stage;
+  if (stage < plot.holdStage) return stage;
+  if (stage === plot.holdStage) return `${stage}H`;
+  return `H${plot.holdStage}`;
 }
 
 export function getMilestoneForPlotWeek(plot: TemplateSitePlot, week: number, templates: PlotTemplate[]) {
@@ -245,6 +264,7 @@ export function getActivityBaseStartDay(template: PlotTemplate, activityCode: st
 }
 
 function getActivityCalendarDays(plot: TemplateSitePlot, template: PlotTemplate, activity: TemplateActivity, delays: ActivityDelay[], moves: ActivityMove[] = []) {
+  if (!activityAllowedByHold(plot, activity)) return [];
   const stage1StartBusinessDay = dayIndexFromWeekDay(getStage1StartWeekForPlot(plot, [template]), 1);
   const scheduled = getTemplateActivityRanges(template).find((item) => item.activity.code === activity.code);
   const relativeStart = scheduled?.start ?? 1;
@@ -268,7 +288,7 @@ function activityRange(plot: TemplateSitePlot, template: PlotTemplate, activity:
 export function getActivityRangeForPlot(plot: TemplateSitePlot, activityCode: string, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
   const template = getTemplateForPlot(plot, templates);
   const activity = template.activities.find((item) => item.code === activityCode);
-  if (!activity) return null;
+  if (!activity || !activityAllowedByHold(plot, activity)) return null;
   return activityRange(plot, template, activity, delays, moves);
 }
 
@@ -283,7 +303,7 @@ export function getActivityMoveDeltaToTarget(plot: TemplateSitePlot, activityCod
 export function getActivitiesForTemplateDay(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
   const template = getTemplateForPlot(plot, templates);
   const currentDay = calendarDayIndexFromWeekDay(week, day);
-  return orderedActivities(template).filter((activity) => getActivityCalendarDays(plot, template, activity, delays, moves).includes(currentDay));
+  return orderedActivities(template).filter((activity) => activityAllowedByHold(plot, activity) && getActivityCalendarDays(plot, template, activity, delays, moves).includes(currentDay));
 }
 
 export function getPlotBreakdownTemplateText(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], moves: ActivityMove[] = []) {
