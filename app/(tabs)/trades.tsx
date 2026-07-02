@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { TradeContact, useSitePlanner } from '../../data/sitePlannerStore';
 import { createManagerProgrammeText, createTradeProgrammeText, getSavedSupervisorEmails } from '../../utils/programmeIssue';
-import { getActivitiesForTemplateDay, getActivityMoveDeltaToTarget, getTradeTemplateText } from '../../utils/templateProgramme';
+import { getActivitiesForTemplateDay, getActivityMoveDeltaToTarget } from '../../utils/templateProgramme';
 
 const TRADE_DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -30,6 +30,17 @@ export default function TradesScreen() {
     resetActivityMovesForPlot,
     recordIssue,
   } = useSitePlanner();
+  const { width, height } = useWindowDimensions();
+  const isLandscapePhone = width > height && width < 1000;
+  const viewportWidth = Math.min(width - 40, 1100);
+  const plotWidth = isLandscapePhone ? 56 : 90;
+  const tradeWidth = isLandscapePhone ? 76 : 150;
+  const fixWidth = isLandscapePhone ? 92 : 150;
+  const outputWidth = isLandscapePhone ? 230 : 300;
+  const resetWidth = isLandscapePhone ? 64 : 88;
+  const dayWidth = isLandscapePhone ? Math.max(68, Math.floor((viewportWidth - plotWidth - tradeWidth - fixWidth - 12) / 7)) : 140;
+  const weekWidth = dayWidth * 7;
+  const compactText = isLandscapePhone;
   const [selectedTradeId, setSelectedTradeId] = useState(tradeContacts[0]?.id ?? '');
   const activeContact = tradeContacts.find((contact) => contact.id === selectedTradeId) ?? tradeContacts[0];
   const [draftContact, setDraftContact] = useState<TradeContact | undefined>(activeContact);
@@ -99,7 +110,7 @@ export default function TradesScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Trade 2-Week Programmes</Text>
-        <Text style={styles.subtitle}>Drag a fix into another day cell to pull it back or push it out. Saturday and Sunday are visible as blank drop boxes when needed.</Text>
+        <Text style={styles.subtitle}>Drag a fix into another day cell to pull it back or push it out. In phone landscape, one full 7-day week is sized to fit on screen.</Text>
       </View>
 
       <SectionCard title="Select trade and issue week" subtitle="Choose the trade and the live two-week block to issue or review.">
@@ -135,33 +146,33 @@ export default function TradesScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.topHeaderRow}>
-              <Text style={[styles.weekHeaderBlank, styles.plotCell]} />
-              <Text style={[styles.weekHeaderBlank, styles.tradeCell]} />
-              <Text style={[styles.weekHeaderBlank, styles.fixCell]} />
-              <Text style={styles.weekGroup}>WEEK 1</Text>
-              <Text style={styles.weekGroup}>WEEK 2</Text>
-              <Text style={[styles.weekHeaderBlank, styles.outputCell]} />
-              <Text style={[styles.weekHeaderBlank, styles.resetCell]} />
+              <Text style={[styles.weekHeaderBlank, { width: plotWidth }]} />
+              <Text style={[styles.weekHeaderBlank, { width: tradeWidth }]} />
+              <Text style={[styles.weekHeaderBlank, { width: fixWidth }]} />
+              <Text style={[styles.weekGroup, { width: weekWidth }]}>WEEK 1</Text>
+              <Text style={[styles.weekGroup, { width: weekWidth }]}>WEEK 2</Text>
+              <Text style={[styles.weekHeaderBlank, { width: outputWidth }]} />
+              <Text style={[styles.weekHeaderBlank, { width: resetWidth }]} />
             </View>
             <View style={styles.tableRow}>
-              <Text style={[styles.headerCell, styles.plotCell]}>Plot No</Text>
-              <Text style={[styles.headerCell, styles.tradeCell]}>Trade</Text>
-              <Text style={[styles.headerCell, styles.fixCell]}>Fix</Text>
+              <Text style={[styles.headerCell, { width: plotWidth }]}>Plot</Text>
+              <Text style={[styles.headerCell, { width: tradeWidth }]}>Trade</Text>
+              <Text style={[styles.headerCell, { width: fixWidth }]}>Fix</Text>
               {[activeIssueWeek, activeIssueWeek + 1].flatMap((week) =>
-                TRADE_DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>WK{String(week).padStart(2, '0')} {day}</Text>),
+                TRADE_DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={[styles.dayHeader, { width: dayWidth }, compactText ? styles.compactDayHeader : null]}>WK{String(week).padStart(2, '0')} {day}</Text>),
               )}
-              <Text style={[styles.headerCell, styles.outputCell]}>Output / Recovery Notes</Text>
-              <Text style={[styles.headerCell, styles.resetCell]}>Reset</Text>
+              <Text style={[styles.headerCell, { width: outputWidth }]}>Output / Recovery Notes</Text>
+              <Text style={[styles.headerCell, { width: resetWidth }]}>Reset</Text>
             </View>
 
             {visiblePlots.length === 0 ? (
               <View style={styles.tableRow}>
-                <Text style={[styles.emptyCell, styles.plotCell]}>-</Text>
-                <Text style={[styles.emptyCell, styles.tradeCell]}>{selectedTrade}</Text>
-                <Text style={[styles.emptyCell, styles.fixCell]}>No activity</Text>
-                {Array.from({ length: 14 }).map((_, index) => <View key={index} style={styles.emptyDayCell} />)}
-                <Text style={[styles.emptyCell, styles.outputCell]}>No trade activity in selected window.</Text>
-                <Text style={[styles.emptyCell, styles.resetCell]}>-</Text>
+                <Text style={[styles.emptyCell, { width: plotWidth }]}>-</Text>
+                <Text style={[styles.emptyCell, { width: tradeWidth }]}>{selectedTrade}</Text>
+                <Text style={[styles.emptyCell, { width: fixWidth }]}>No activity</Text>
+                {Array.from({ length: 14 }).map((_, index) => <View key={index} style={[styles.emptyDayCell, { width: dayWidth }]} />)}
+                <Text style={[styles.emptyCell, { width: outputWidth }]}>No trade activity in selected window.</Text>
+                <Text style={[styles.emptyCell, { width: resetWidth }]}>-</Text>
               </View>
             ) : null}
 
@@ -172,9 +183,9 @@ export default function TradesScreen() {
               const plotHasMoves = activityMoves.some((move) => move.plotId === plot.id);
               return (
                 <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
-                  <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
-                  <Text style={[styles.bodyCell, styles.tradeCell]}>{selectedTrade}</Text>
-                  <Text style={[styles.bodyCell, styles.fixCell]}>{fixText || 'Activity'}</Text>
+                  <Text style={[styles.bodyCell, { width: plotWidth }]}>{plot.plotNo}</Text>
+                  <Text style={[styles.bodyCell, { width: tradeWidth }, compactText ? styles.compactCellText : null]}>{selectedTrade}</Text>
+                  <Text style={[styles.bodyCell, { width: fixWidth }, compactText ? styles.compactCellText : null]}>{fixText || 'Activity'}</Text>
                   {[activeIssueWeek, activeIssueWeek + 1].flatMap((week) =>
                     TRADE_DAY_NAMES.map((_, dayIndex) => {
                       const day = dayIndex + 1;
@@ -182,7 +193,7 @@ export default function TradesScreen() {
                       return (
                         <View
                           key={`${plot.id}-${selectedTrade}-${week}-${dayIndex}`}
-                          style={[styles.dayDropCell, day > 5 ? styles.weekendCell : null, activities.length ? styles.activeDayCell : null]}
+                          style={[styles.dayDropCell, { width: dayWidth }, day > 5 ? styles.weekendCell : null, activities.length ? styles.activeDayCell : null]}
                           {...({
                             onDragOver: (event: any) => event.preventDefault(),
                             onDrop: (event: any) => {
@@ -204,7 +215,7 @@ export default function TradesScreen() {
                                 },
                               } as any)}
                             >
-                              <Text style={styles.activityPillText}>{activity.displayText}</Text>
+                              <Text style={[styles.activityPillText, compactText ? styles.compactPillText : null]}>{activity.displayText}</Text>
                             </View>
                           ))}
                         </View>
@@ -216,9 +227,9 @@ export default function TradesScreen() {
                     onChangeText={(note) => setProgrammeNote({ plotId: plot.id, trade: selectedTrade, startWeek: activeIssueWeek, note })}
                     placeholder={output ? `${output} — add missed target / recovery note` : 'Add missed target / recovery note'}
                     multiline
-                    style={[styles.outputInput, styles.outputCell]}
+                    style={[styles.outputInput, { width: outputWidth }]}
                   />
-                  <Pressable style={[styles.resetButton, !plotHasMoves ? styles.resetButtonDisabled : null]} onPress={() => resetActivityMovesForPlot(plot.id)}>
+                  <Pressable style={[styles.resetButton, { width: resetWidth }, !plotHasMoves ? styles.resetButtonDisabled : null]} onPress={() => resetActivityMovesForPlot(plot.id)}>
                     <Text style={styles.resetButtonText}>{plotHasMoves ? 'Reset' : '-'}</Text>
                   </Pressable>
                 </View>
@@ -391,24 +402,22 @@ const styles = StyleSheet.create({
   tableRow: { flexDirection: 'row', alignItems: 'stretch' },
   altRow: { backgroundColor: '#f8fbff' },
   weekHeaderBlank: { backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce', minHeight: 28 },
-  weekGroup: { width: 980, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  weekGroup: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
-  plotCell: { width: 90 },
-  tradeCell: { width: 150 },
-  fixCell: { width: 150 },
-  outputCell: { width: 300 },
-  resetCell: { width: 88 },
-  dayHeader: { width: 140, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  dayHeader: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  compactDayHeader: { fontSize: 10, paddingHorizontal: 3 },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
-  dayDropCell: { width: 140, minHeight: 64, padding: 5, gap: 4, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff', alignItems: 'stretch', justifyContent: 'center' },
+  compactCellText: { fontSize: 10, paddingHorizontal: 3 },
+  dayDropCell: { minHeight: 64, padding: 4, gap: 3, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff', alignItems: 'stretch', justifyContent: 'center' },
   weekendCell: { backgroundColor: '#f8fafc' },
   activeDayCell: { backgroundColor: '#dff0ff' },
-  activityPill: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#2563eb', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 4, cursor: 'grab' as any },
+  activityPill: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#2563eb', borderRadius: 8, paddingHorizontal: 5, paddingVertical: 4, cursor: 'grab' as any },
   activityPillText: { color: '#0f172a', fontSize: 11, fontWeight: '900', textAlign: 'center' },
+  compactPillText: { fontSize: 9 },
   emptyCell: { color: '#64748b', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
-  emptyDayCell: { width: 140, minHeight: 42, borderWidth: 1, borderColor: '#c8d7e6' },
+  emptyDayCell: { minHeight: 42, borderWidth: 1, borderColor: '#c8d7e6' },
   outputInput: { minHeight: 64, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fffdf2', fontSize: 12, fontWeight: '700', textAlignVertical: 'top' },
-  resetButton: { width: 88, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fff7ed' },
+  resetButton: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fff7ed' },
   resetButtonDisabled: { backgroundColor: '#f8fafc' },
   resetButtonText: { color: '#0f172a', fontWeight: '900', fontSize: 12 },
   formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
