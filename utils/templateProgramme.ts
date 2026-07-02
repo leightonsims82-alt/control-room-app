@@ -50,6 +50,7 @@ export type SiteProgrammeSetup = {
   defaultProgrammeWeeks: number;
   stageCount: number;
   workingWeek: string;
+  programmeStartDate: string;
 };
 
 export const DEFAULT_SITE_PROGRAMME_SETUP: SiteProgrammeSetup = {
@@ -57,6 +58,7 @@ export const DEFAULT_SITE_PROGRAMME_SETUP: SiteProgrammeSetup = {
   defaultProgrammeWeeks: 23,
   stageCount: 11,
   workingWeek: 'Monday to Friday',
+  programmeStartDate: '2026-01-05',
 };
 
 export const STAGE_LABELS: Record<number, string> = PROGRAMME_STAGE_SEQUENCE.reduce(
