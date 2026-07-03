@@ -7,11 +7,12 @@ import { useSitePlanner } from '../../data/sitePlannerStore';
 import { DAY_NAMES, TRADE_ORDER } from '../../utils/siteProgrammeEngine';
 import { getActiveTemplateTrades, getTradeTemplateText, plotHasTradeWorkForTemplate } from '../../utils/templateProgramme';
 
-const PROGRAMME_START_DATE = new Date(2026, 6, 6); // 6 July 2026. Replace later with the site setup start date.
+const PROGRAMME_START_DATE = new Date(2026, 6, 6);
 const SHORT_DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const DAY_WIDTH = 92;
 const PLOT_WIDTH = 92;
 const WEEK_WIDTH = DAY_WIDTH * 5;
+const ALL_TRADES = 'All trades';
 
 function formatWeekLabel(week: number) {
   return `WK${String(week).padStart(2, '0')}`;
@@ -23,58 +24,48 @@ function getProgrammeDate(week: number, dayIndex: number) {
   return date;
 }
 
+function getCurrentProgrammeWeek() {
+  const today = new Date();
+  const days = Math.floor((today.getTime() - PROGRAMME_START_DATE.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.min(51, Math.max(1, Math.floor(days / 7) + 1));
+}
+
 function formatShortDate(date: Date) {
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 }
 
 function formatDateRange(startWeek: number) {
-  const start = getProgrammeDate(startWeek, 0);
-  const end = getProgrammeDate(startWeek + 1, 4);
-  return `${formatShortDate(start)} - ${formatShortDate(end)}`;
+  return `${formatShortDate(getProgrammeDate(startWeek, 0))} - ${formatShortDate(getProgrammeDate(startWeek + 1, 4))}`;
 }
 
 function simplifyActivity(text: string) {
   const clean = text.trim();
   if (!clean) return '';
-
-  const replacements: Record<string, string> = {
-    foundation: 'FND',
-    foundations: 'FND',
-    drainage: 'DNG',
-    drain: 'DNG',
-    slab: 'SLAB',
-    scaffold: 'SCAFF',
-    scaffolding: 'SCAFF',
-    brickwork: 'BWK',
-    blockwork: 'BWK',
-    roof: 'ROOF',
-    roofing: 'ROOF',
-    windows: 'WINDOWS',
-    window: 'WINDOWS',
-    plaster: 'PLASTER',
-    plastering: 'PLASTER',
-    decoration: 'DEC',
-    decorating: 'DEC',
-    second: '2ND FIX',
-    first: '1ST FIX',
-    completion: 'COMP',
-    handover: 'HANDOVER',
-  };
-
   const lower = clean.toLowerCase();
-  const match = Object.keys(replacements).find((key) => lower.includes(key));
-  if (match) return replacements[match];
-
+  if (lower.includes('foundation')) return 'FND';
+  if (lower.includes('drain')) return 'DNG';
+  if (lower.includes('slab')) return 'SLAB';
+  if (lower.includes('scaffold')) return 'SCAFF';
+  if (lower.includes('brick') || lower.includes('block')) return 'BWK';
+  if (lower.includes('roof')) return 'ROOF';
+  if (lower.includes('window')) return 'WINDOWS';
+  if (lower.includes('plaster')) return 'PLASTER';
+  if (lower.includes('decor')) return 'DEC';
+  if (lower.includes('second')) return '2ND FIX';
+  if (lower.includes('first')) return '1ST FIX';
+  if (lower.includes('completion')) return 'COMP';
   return clean.length > 12 ? clean.slice(0, 12).toUpperCase() : clean.toUpperCase();
 }
 
 export default function TwoWeekProgrammeScreen() {
   const { sitePlots, activityDelays, plotTemplates } = useSitePlanner();
-  const [startWeek, setStartWeek] = useState(1);
+  const [startWeek, setStartWeek] = useState(getCurrentProgrammeWeek());
+  const [selectedTrade, setSelectedTrade] = useState(ALL_TRADES);
   const activeTrades = useMemo(() => getActiveTemplateTrades(sitePlots, startWeek, activityDelays, plotTemplates), [sitePlots, startWeek, activityDelays, plotTemplates]);
   const tradesToShow = activeTrades.length ? activeTrades : TRADE_ORDER;
-  const visibleTradeCount = activeTrades.length || TRADE_ORDER.length;
+  const filteredTradesToShow = selectedTrade === ALL_TRADES ? tradesToShow : tradesToShow.filter((trade) => trade === selectedTrade);
   const twoWeekDates = formatDateRange(startWeek);
+  const filterTrades = [ALL_TRADES, ...tradesToShow];
 
   return (
     <AppScreen>
@@ -106,9 +97,30 @@ export default function TwoWeekProgrammeScreen() {
           </Pressable>
         </View>
 
+        <View style={styles.quickActionRow}>
+          <Pressable style={styles.currentWeekButton} onPress={() => setStartWeek(getCurrentProgrammeWeek())}>
+            <Ionicons name="locate-outline" size={16} color="#1d4ed8" />
+            <Text style={styles.currentWeekButtonText}>Jump to current week</Text>
+          </Pressable>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.filterRow}>
+            {filterTrades.map((trade) => {
+              const isActive = selectedTrade === trade;
+              return (
+                <Pressable key={trade} style={[styles.filterPill, isActive && styles.filterPillActive]} onPress={() => setSelectedTrade(trade)}>
+                  <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>{trade}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
+
         <View style={styles.summaryStrip}>
           <MiniStat label="Active plots" value={sitePlots.length || 26} />
-          <MiniStat label="Trades shown" value={visibleTradeCount} />
+          <MiniStat label="Trades shown" value={filteredTradesToShow.length} />
+          <MiniStat label="Filter" value={selectedTrade === ALL_TRADES ? 'All' : selectedTrade} />
           <MiniStat label="Window" value="10 days" />
         </View>
       </View>
@@ -118,33 +130,26 @@ export default function TwoWeekProgrammeScreen() {
         <View style={styles.legendPill}><Text style={styles.legendCode}>FND</Text><Text style={styles.legendText}>Short site activity codes</Text></View>
       </View>
 
-      {tradesToShow.map((trade) => {
+      {filteredTradesToShow.map((trade) => {
         const visiblePlots = sitePlots.filter((plot) => plotHasTradeWorkForTemplate(plot, trade, startWeek, activityDelays, plotTemplates));
         const hasWork = visiblePlots.length > 0;
-
         return (
           <SectionCard key={trade} title={trade} subtitle={hasWork ? `${visiblePlots.length} plot${visiblePlots.length === 1 ? '' : 's'} active between ${twoWeekDates}` : 'No activity in this 2-week window'}>
             <ScrollView horizontal showsHorizontalScrollIndicator>
               <View style={styles.tableWrap}>
                 <View style={styles.weekHeaderRow}>
                   <Text style={[styles.weekHeaderBlank, styles.plotCell]} />
-                  {[startWeek, startWeek + 1].map((week) => (
-                    <Text key={week} style={styles.weekGroup}>{formatWeekLabel(week)}</Text>
-                  ))}
+                  {[startWeek, startWeek + 1].map((week) => <Text key={week} style={styles.weekGroup}>{formatWeekLabel(week)}</Text>)}
                 </View>
-
                 <View style={styles.dateHeaderRow}>
                   <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
-                  {[startWeek, startWeek + 1].flatMap((week) =>
-                    SHORT_DAY_NAMES.map((day, dayIndex) => (
-                      <View key={`${week}-${day}`} style={styles.dayHeader}>
-                        <Text style={styles.dayHeaderName}>{day}</Text>
-                        <Text style={styles.dayHeaderDate}>{formatShortDate(getProgrammeDate(week, dayIndex))}</Text>
-                      </View>
-                    )),
-                  )}
+                  {[startWeek, startWeek + 1].flatMap((week) => SHORT_DAY_NAMES.map((day, dayIndex) => (
+                    <View key={`${week}-${day}`} style={styles.dayHeader}>
+                      <Text style={styles.dayHeaderName}>{day}</Text>
+                      <Text style={styles.dayHeaderDate}>{formatShortDate(getProgrammeDate(week, dayIndex))}</Text>
+                    </View>
+                  )))}
                 </View>
-
                 {!hasWork ? (
                   <View style={styles.emptyStateRow}>
                     <Text style={[styles.emptyCell, styles.plotCell]}>-</Text>
@@ -154,21 +159,14 @@ export default function TwoWeekProgrammeScreen() {
                     </View>
                   </View>
                 ) : null}
-
                 {visiblePlots.map((plot, rowIndex) => (
                   <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                     <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
-                    {[startWeek, startWeek + 1].flatMap((week) =>
-                      DAY_NAMES.map((_, dayIndex) => {
-                        const rawText = getTradeTemplateText(plot, trade, week, dayIndex + 1, activityDelays, plotTemplates);
-                        const text = simplifyActivity(rawText);
-                        return (
-                          <Text key={`${plot.id}-${trade}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>
-                            {text}
-                          </Text>
-                        );
-                      }),
-                    )}
+                    {[startWeek, startWeek + 1].flatMap((week) => DAY_NAMES.map((_, dayIndex) => {
+                      const rawText = getTradeTemplateText(plot, trade, week, dayIndex + 1, activityDelays, plotTemplates);
+                      const text = simplifyActivity(rawText);
+                      return <Text key={`${plot.id}-${trade}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
+                    }))}
                   </View>
                 ))}
               </View>
@@ -204,6 +202,14 @@ const styles = StyleSheet.create({
   weekCentre: { alignItems: 'center', flex: 1, minWidth: 180 },
   weekLabel: { color: '#0f172a', fontWeight: '900', fontSize: 18 },
   weekDateLabel: { color: '#64748b', fontWeight: '800', fontSize: 12, marginTop: 2 },
+  quickActionRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 10 },
+  currentWeekButton: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#eff6ff', borderRadius: 999, borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 12, paddingVertical: 8 },
+  currentWeekButtonText: { color: '#1d4ed8', fontSize: 12, fontWeight: '900' },
+  filterRow: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
+  filterPill: { backgroundColor: '#f8fafc', borderRadius: 999, borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 13, paddingVertical: 9 },
+  filterPillActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  filterPillText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
+  filterPillTextActive: { color: '#ffffff' },
   summaryStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   miniStat: { flex: 1, minWidth: 120, backgroundColor: '#f8fafc', borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', padding: 12 },
   miniStatValue: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
