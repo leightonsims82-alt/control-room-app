@@ -6,7 +6,7 @@ import { useSitePlanner } from '../../data/sitePlannerStore';
 import { getEffectiveProgrammeWeeks, TemplateActivity } from '../../utils/templateProgramme';
 
 export default function SiteSetupScreen() {
-  const { siteSetup, plotTemplates, updateSiteSetup, updatePlotTemplate, updateTemplateActivityDuration } = useSitePlanner();
+  const { siteSetup, plotTemplates, sitePlots, resetPlotData, updateSiteSetup, updatePlotTemplate, updateTemplateActivityDuration } = useSitePlanner();
   const [selectedTemplateId, setSelectedTemplateId] = useState(plotTemplates[2]?.id ?? plotTemplates[0]?.id ?? 'threeBed');
   const selectedTemplate = plotTemplates.find((template) => template.id === selectedTemplateId) ?? plotTemplates[0];
 
@@ -23,7 +23,7 @@ export default function SiteSetupScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>Site Setup</Text>
         <Text style={styles.title}>Programme & Plot Templates</Text>
-        <Text style={styles.subtitle}>Set site defaults and edit task names, trades, stages, durations and overlap rules by plot type.</Text>
+        <Text style={styles.subtitle}>Set site defaults, reset test data and edit task names, trades, stages, durations and overlap rules by plot type.</Text>
       </View>
 
       <View style={styles.card}>
@@ -42,6 +42,17 @@ export default function SiteSetupScreen() {
             <TextInput value={siteSetup.workingWeek} onChangeText={(workingWeek) => updateSiteSetup({ workingWeek })} placeholder="Monday to Friday" style={styles.input} />
           </Field>
         </View>
+      </View>
+
+      <View style={styles.warningCard}>
+        <View style={styles.warningTextWrap}>
+          <Text style={styles.warningTitle}>Plot data reset</Text>
+          <Text style={styles.warningText}>Clears all current plots and plot delays so you can add your own site data and test for glitches from a clean start.</Text>
+          <Text style={styles.warningMeta}>Current plots: {sitePlots.length}</Text>
+        </View>
+        <Pressable style={styles.dangerButton} onPress={resetPlotData}>
+          <Text style={styles.dangerButtonText}>Reset plot data</Text>
+        </Pressable>
       </View>
 
       <View style={styles.card}>
@@ -130,6 +141,13 @@ const styles = StyleSheet.create({
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
   subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
   card: { backgroundColor: '#ffffff', borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', padding: 18, gap: 16 },
+  warningCard: { backgroundColor: '#fff7ed', borderRadius: 18, borderWidth: 1, borderColor: '#fed7aa', padding: 18, gap: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' },
+  warningTextWrap: { flex: 1, minWidth: 240 },
+  warningTitle: { color: '#9a3412', fontSize: 18, fontWeight: '900' },
+  warningText: { color: '#9a3412', fontSize: 13, lineHeight: 19, marginTop: 5 },
+  warningMeta: { color: '#7c2d12', fontSize: 12, fontWeight: '900', marginTop: 8 },
+  dangerButton: { backgroundColor: '#c2410c', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11 },
+  dangerButtonText: { color: '#ffffff', fontWeight: '900', fontSize: 13 },
   cardTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
   formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
   field: { gap: 8, minWidth: 180, flex: 1 },
