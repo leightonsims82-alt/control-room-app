@@ -19,6 +19,7 @@ import {
   INSPECTION_STORY_KEY,
   PlotInspectionStoryRecord,
 } from '../../utils/inspectionRecords';
+import { savePhotoToBuddyFolder } from '../../utils/photoStorage';
 import { getConstructionMethod, getConstructionMethodLabel, getHouseTypeLabel, getSortedSitePlots, getTemplateForPlot } from '../../utils/templateProgramme';
 
 type InspectionResult = {
@@ -123,10 +124,21 @@ export default function InspectionsScreen() {
 
     if (pickerResult.canceled || !pickerResult.assets?.[0]?.uri) return;
     const asset = pickerResult.assets[0];
-    await updateResult(itemId, {
-      imageRef: asset.uri,
-      imageName: asset.fileName ?? imageNameFromUri(asset.uri),
+    const sourceName = asset.fileName ?? imageNameFromUri(asset.uri);
+    const storedPhoto = await savePhotoToBuddyFolder({
+      sourceUri: asset.uri,
+      fileName: sourceName,
+      plotNo: selectedPlot?.plotNo,
+      checklistId: selectedChecklist.id,
+      itemId,
     });
+    await updateResult(itemId, {
+      imageRef: storedPhoto.uri,
+      imageName: storedPhoto.fileName,
+    });
+    if (!storedPhoto.copied) {
+      setPhotoError('Photo attached. It could not be copied into the Buddy evidence folder on this device, so the original app URI has been used.');
+    }
   };
 
   const clearPhoto = async (itemId: string) => {
@@ -237,6 +249,7 @@ export default function InspectionsScreen() {
           </View>
         </View>
 
+        <Text style={styles.storageNotice}>Photo storage: evidence is copied into the app-controlled ProgrammeBuddyEvidence folder. Camera photos are not intentionally saved to the device Gallery.</Text>
         {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
 
         <View style={styles.simpleTableHeader}>
@@ -383,6 +396,7 @@ const styles = StyleSheet.create({
   statusSummaryPassed: { backgroundColor: '#dcfce7', borderColor: '#86efac' },
   statusSummaryValue: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
   statusSummaryMeta: { color: '#64748b', fontSize: 12, fontWeight: '800', marginTop: 3 },
+  storageNotice: { color: '#166534', backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 10, padding: 10, fontSize: 12, fontWeight: '800', lineHeight: 18 },
   photoError: { color: '#dc2626', backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecaca', borderRadius: 10, padding: 10, fontWeight: '800' },
   simpleTableHeader: { flexDirection: 'row', backgroundColor: '#173b5f', borderRadius: 10, overflow: 'hidden' },
   tableHeaderText: { color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, textAlign: 'center' },
