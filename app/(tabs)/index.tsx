@@ -46,7 +46,7 @@ export default function DashboardScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Programme Buddy</Text>
-          <Text style={styles.subtitle}>Programme, trade issue sheet, QA trigger, plot story, exports, billing, onboarding and control-room dashboard.</Text>
+          <Text style={styles.subtitle}>Programme, trade issue sheet, QA trigger, plot story, exports, logistics link, billing, onboarding and control-room dashboard.</Text>
         </View>
         <View style={freeTestingAccess ? styles.freeBadge : styles.badge}><Text style={freeTestingAccess ? styles.freeBadgeText : styles.badgeText}>{freeTestingAccess ? 'Test access open' : 'Control room'}</Text></View>
       </View>
@@ -85,6 +85,13 @@ export default function DashboardScreen() {
           <View style={styles.cardTextWrap}>
             <Text style={styles.programmeTitle}>Trade Programmes</Text>
             <Text style={styles.programmeText}>Drag fixes, issue trades and add recovery notes</Text>
+          </View>
+        </Pressable>
+        <Pressable style={styles.programmeCard} onPress={() => router.push('/forklift')}>
+          <Ionicons name="cube-outline" size={24} color="#f97316" />
+          <View style={styles.cardTextWrap}>
+            <Text style={styles.programmeTitle}>Forklift Buddy</Text>
+            <Text style={styles.programmeText}>Linked site logistics queue for trades, driver and SM control</Text>
           </View>
         </Pressable>
         <Pressable style={styles.programmeCard} onPress={() => router.push('/(tabs)/inspections')}>
@@ -144,7 +151,7 @@ export default function DashboardScreen() {
         </View>
       </SectionCard>
 
-      <SectionCard title="Current build logic" subtitle="The workflow now links onboarding → programme → inspection → plot story → dashboard → exports → billing.">
+      <SectionCard title="Current build logic" subtitle="The workflow now links onboarding → programme → inspection → plot story → logistics → dashboard → exports → billing.">
         <View style={styles.ruleRow}>
           <Text style={styles.ruleNumber}>1</Text>
           <Text style={styles.ruleText}>Closed testing access is open for now, so testers are not stopped by payment while the workflow is being proven.</Text>
@@ -159,7 +166,7 @@ export default function DashboardScreen() {
         </View>
         <View style={styles.ruleRow}>
           <Text style={styles.ruleNumber}>4</Text>
-          <Text style={styles.ruleText}>Live subscriptions, cloud storage and account controls are tracked but will be enforced later by the backend.</Text>
+          <Text style={styles.ruleText}>Forklift Buddy is linked as a local logistics queue now; live trade passes and driver notifications need the backend later.</Text>
         </View>
       </SectionCard>
     </AppScreen>
