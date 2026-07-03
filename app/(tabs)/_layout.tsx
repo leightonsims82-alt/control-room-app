@@ -1,5 +1,5 @@
-import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Tabs } from 'expo-router';
 
 export default function TabLayout() {
   return (
@@ -14,6 +14,10 @@ export default function TabLayout() {
           paddingBottom: 8,
           paddingTop: 8,
         },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '800',
+        },
       }}
     >
       <Tabs.Screen
@@ -24,10 +28,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="plots"
+        name="two-week"
         options={{
-          title: 'Plots',
-          tabBarIcon: ({ color, size }) => <Ionicons name="business-outline" color={color} size={size} />,
+          title: '2-Week',
+          tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
@@ -38,13 +42,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="two-week"
-        options={{
-          title: '2-Week',
-          tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
         name="trades"
         options={{
           title: 'Trades',
@@ -52,12 +49,21 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="more"
+        name="qa"
         options={{
-          title: 'More',
-          tabBarIcon: ({ color, size }) => <Ionicons name="ellipsis-horizontal" color={color} size={size} />,
+          title: 'QA',
+          tabBarIcon: ({ color, size }) => <Ionicons name="shield-checkmark-outline" color={color} size={size} />,
         }}
       />
+      <Tabs.Screen
+        name="exports"
+        options={{
+          title: 'Exports',
+          tabBarIcon: ({ color, size }) => <Ionicons name="download-outline" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen name="plots" options={{ href: null }} />
+      <Tabs.Screen name="more" options={{ href: null }} />
     </Tabs>
   );
 }
