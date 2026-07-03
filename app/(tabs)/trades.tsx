@@ -1,22 +1,47 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { TradeContact, useSitePlanner } from '../../data/sitePlannerStore';
 import { createManagerProgrammeText, createTradeProgrammeText, getSavedSupervisorEmails } from '../../utils/programmeIssue';
+import { getActivitiesForTemplateDay, getActivityMoveDeltaToTarget } from '../../utils/templateProgramme';
+
+const TRADE_DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MOBILE_SHIFT_OPTIONS = [-7, -1, 1, 7];
+
+type DragPayload = {
+  plotId: string;
+  activityCode: string;
+};
 
 export default function TradesScreen() {
   const {
     sitePlots,
     activityDelays,
+    activityMoves,
     tradeContacts,
     plotTemplates,
     issueSettings,
     issueLogs,
+    programmeNotes,
     upsertTradeContact,
     setIssueSettings,
+    setProgrammeNote,
+    setActivityMove,
+    resetActivityMovesForPlot,
     recordIssue,
   } = useSitePlanner();
+  const { width, height } = useWindowDimensions();
+  const isLandscapePhone = width > height && width < 1000;
+  const viewportWidth = Math.min(width - 40, 1100);
+  const plotWidth = isLandscapePhone ? 56 : 90;
+  const tradeWidth = isLandscapePhone ? 76 : 150;
+  const fixWidth = isLandscapePhone ? 92 : 150;
+  const outputWidth = isLandscapePhone ? 230 : 300;
+  const resetWidth = isLandscapePhone ? 64 : 88;
+  const dayWidth = isLandscapePhone ? Math.max(78, Math.floor((viewportWidth - plotWidth - tradeWidth - fixWidth - 12) / 7)) : 150;
+  const weekWidth = dayWidth * 7;
+  const compactText = isLandscapePhone;
   const [selectedTradeId, setSelectedTradeId] = useState(tradeContacts[0]?.id ?? '');
   const activeContact = tradeContacts.find((contact) => contact.id === selectedTradeId) ?? tradeContacts[0];
   const [draftContact, setDraftContact] = useState<TradeContact | undefined>(activeContact);
@@ -40,15 +65,21 @@ export default function TradesScreen() {
   const activeIssueWeek = Math.max(1, Math.min(51, Number(issueStartWeek) || 1));
   const savedSupervisorEmails = getSavedSupervisorEmails(tradeContacts);
   const recipientCount = savedSupervisorEmails.length + (managerEmail.trim() ? 1 : 0);
+  const selectedTrade = activeContact?.trade ?? tradeContacts[0]?.trade ?? 'Groundworks';
+
+  const visiblePlots = useMemo(
+    () => sitePlots.filter((plot) => hasTradeWork(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates, activityMoves)),
+    [sitePlots, selectedTrade, activeIssueWeek, activityDelays, plotTemplates, activityMoves],
+  );
 
   const managerPreview = useMemo(
-    () => createManagerProgrammeText({ plots: sitePlots, activityDelays, startWeek: activeIssueWeek, tradeContacts, plotTemplates }),
-    [sitePlots, activityDelays, activeIssueWeek, tradeContacts, plotTemplates],
+    () => createManagerProgrammeText({ plots: sitePlots, activityDelays, startWeek: activeIssueWeek, tradeContacts, plotTemplates, programmeNotes, activityMoves }),
+    [sitePlots, activityDelays, activeIssueWeek, tradeContacts, plotTemplates, programmeNotes, activityMoves],
   );
 
   const tradePreview = useMemo(
-    () => activeContact ? createTradeProgrammeText({ trade: activeContact.trade, plots: sitePlots, activityDelays, startWeek: activeIssueWeek, plotTemplates }) : '',
-    [activeContact, sitePlots, activityDelays, activeIssueWeek, plotTemplates],
+    () => activeContact ? createTradeProgrammeText({ trade: activeContact.trade, plots: sitePlots, activityDelays, startWeek: activeIssueWeek, plotTemplates, programmeNotes, activityMoves }) : '',
+    [activeContact, sitePlots, activityDelays, activeIssueWeek, plotTemplates, programmeNotes, activityMoves],
   );
 
   const saveTradeContact = async () => {
@@ -64,18 +95,31 @@ export default function TradesScreen() {
     await recordIssue({
       startWeek: activeIssueWeek,
       recipientCount,
-      note: `Programme prepared for manager and saved trade contacts for WK${String(activeIssueWeek).padStart(2, '0')} + WK${String(activeIssueWeek + 1).padStart(2, '0')}`,
+      note: `${selectedTrade} 2-week programme prepared for WK${String(activeIssueWeek).padStart(2, '0')} + WK${String(activeIssueWeek + 1).padStart(2, '0')}`,
     });
+  };
+
+  const dropActivity = async (plotId: string, targetWeek: number, targetDay: number, payload: DragPayload) => {
+    if (payload.plotId !== plotId) return;
+    const plot = sitePlots.find((item) => item.id === plotId);
+    if (!plot) return;
+    const deltaDays = getActivityMoveDeltaToTarget(plot, payload.activityCode, targetWeek, targetDay, activityDelays, plotTemplates, activityMoves);
+    await setActivityMove({ plotId, activityCode: payload.activityCode, deltaDays });
+  };
+
+  const shiftActivityByDays = async (plotId: string, activityCode: string, days: number) => {
+    const existingMove = activityMoves.find((move) => move.plotId === plotId && move.activityCode === activityCode)?.deltaDays ?? 0;
+    await setActivityMove({ plotId, activityCode, deltaDays: existingMove + days });
   };
 
   return (
     <AppScreen>
       <View style={styles.header}>
-        <Text style={styles.title}>Trade Setup & Issue</Text>
-        <Text style={styles.subtitle}>Save contractors, trade supervisors and issue settings for the automatic 2-week trade programme.</Text>
+        <Text style={styles.title}>Trade 2-Week Programmes</Text>
+        <Text style={styles.subtitle}>On mobile, use the -7, -1, +1 and +7 buttons on each activity to pull or push work. Web drag/drop is still available for desktop testing.</Text>
       </View>
 
-      <SectionCard title="Trade setup" subtitle="Each trade can have its contractor, supervisor, email and phone saved against it.">
+      <SectionCard title="Select trade and issue week" subtitle="Choose the trade and the live two-week block to issue or review.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View style={styles.tradeChips}>
             {tradeContacts.map((contact) => {
@@ -89,6 +133,126 @@ export default function TradesScreen() {
           </View>
         </ScrollView>
 
+        <View style={styles.issueHeaderRow}>
+          <View style={styles.inputWrapSmall}>
+            <Text style={styles.label}>Start week</Text>
+            <TextInput value={issueStartWeek} onChangeText={setIssueStartWeek} style={styles.input} keyboardType="number-pad" />
+          </View>
+          <View style={styles.issueSummary}>
+            <Text style={styles.issueTitle}>{selectedTrade} | WK{String(activeIssueWeek).padStart(2, '0')} + WK{String(activeIssueWeek + 1).padStart(2, '0')}</Text>
+            <Text style={styles.issueMeta}>{visiblePlots.length} plot{visiblePlots.length === 1 ? '' : 's'} with work in this window</Text>
+          </View>
+          <Pressable style={styles.saveButton} onPress={markIssued}>
+            <Text style={styles.saveButtonText}>Mark Issued</Text>
+          </Pressable>
+        </View>
+      </SectionCard>
+
+      <SectionCard title={`2 WEEK ${selectedTrade.toUpperCase()} PROGRAMME`} subtitle="Use +/- day buttons on phone. Weekend columns stay blank unless work is pushed or pulled into them.">
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View>
+            <View style={styles.topHeaderRow}>
+              <Text style={[styles.weekHeaderBlank, { width: plotWidth }]} />
+              <Text style={[styles.weekHeaderBlank, { width: tradeWidth }]} />
+              <Text style={[styles.weekHeaderBlank, { width: fixWidth }]} />
+              <Text style={[styles.weekGroup, { width: weekWidth }]}>WEEK 1</Text>
+              <Text style={[styles.weekGroup, { width: weekWidth }]}>WEEK 2</Text>
+              <Text style={[styles.weekHeaderBlank, { width: outputWidth }]} />
+              <Text style={[styles.weekHeaderBlank, { width: resetWidth }]} />
+            </View>
+            <View style={styles.tableRow}>
+              <Text style={[styles.headerCell, { width: plotWidth }]}>Plot</Text>
+              <Text style={[styles.headerCell, { width: tradeWidth }]}>Trade</Text>
+              <Text style={[styles.headerCell, { width: fixWidth }]}>Fix</Text>
+              {[activeIssueWeek, activeIssueWeek + 1].flatMap((week) =>
+                TRADE_DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={[styles.dayHeader, { width: dayWidth }, compactText ? styles.compactDayHeader : null]}>WK{String(week).padStart(2, '0')} {day}</Text>),
+              )}
+              <Text style={[styles.headerCell, { width: outputWidth }]}>Output / Recovery Notes</Text>
+              <Text style={[styles.headerCell, { width: resetWidth }]}>Reset</Text>
+            </View>
+
+            {visiblePlots.length === 0 ? (
+              <View style={styles.tableRow}>
+                <Text style={[styles.emptyCell, { width: plotWidth }]}>-</Text>
+                <Text style={[styles.emptyCell, { width: tradeWidth }]}>{selectedTrade}</Text>
+                <Text style={[styles.emptyCell, { width: fixWidth }]}>No activity</Text>
+                {Array.from({ length: 14 }).map((_, index) => <View key={index} style={[styles.emptyDayCell, { width: dayWidth }]} />)}
+                <Text style={[styles.emptyCell, { width: outputWidth }]}>No trade activity in selected window.</Text>
+                <Text style={[styles.emptyCell, { width: resetWidth }]}>-</Text>
+              </View>
+            ) : null}
+
+            {visiblePlots.map((plot, rowIndex) => {
+              const fixText = getFixText(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates, activityMoves);
+              const output = getOutputText(plot.id, selectedTrade, activeIssueWeek, sitePlots, activityDelays, plotTemplates, activityMoves);
+              const savedNote = programmeNotes.find((note) => note.plotId === plot.id && note.trade === selectedTrade && note.startWeek === activeIssueWeek)?.note ?? '';
+              const plotHasMoves = activityMoves.some((move) => move.plotId === plot.id);
+              return (
+                <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
+                  <Text style={[styles.bodyCell, { width: plotWidth }]}>{plot.plotNo}</Text>
+                  <Text style={[styles.bodyCell, { width: tradeWidth }, compactText ? styles.compactCellText : null]}>{selectedTrade}</Text>
+                  <Text style={[styles.bodyCell, { width: fixWidth }, compactText ? styles.compactCellText : null]}>{fixText || 'Activity'}</Text>
+                  {[activeIssueWeek, activeIssueWeek + 1].flatMap((week) =>
+                    TRADE_DAY_NAMES.map((_, dayIndex) => {
+                      const day = dayIndex + 1;
+                      const activities = getActivitiesForTemplateDay(plot, week, day, activityDelays, plotTemplates, activityMoves).filter((activity) => activity.trade === selectedTrade);
+                      return (
+                        <View
+                          key={`${plot.id}-${selectedTrade}-${week}-${dayIndex}`}
+                          style={[styles.dayDropCell, { width: dayWidth }, day > 5 ? styles.weekendCell : null, activities.length ? styles.activeDayCell : null]}
+                          {...({
+                            onDragOver: (event: any) => event.preventDefault(),
+                            onDrop: (event: any) => {
+                              event.preventDefault();
+                              const raw = event.dataTransfer?.getData('application/json');
+                              if (!raw) return;
+                              dropActivity(plot.id, week, day, JSON.parse(raw));
+                            },
+                          } as any)}
+                        >
+                          {activities.map((activity) => (
+                            <View
+                              key={activity.code}
+                              style={styles.activityPill}
+                              {...({
+                                draggable: true,
+                                onDragStart: (event: any) => {
+                                  event.dataTransfer?.setData('application/json', JSON.stringify({ plotId: plot.id, activityCode: activity.code }));
+                                },
+                              } as any)}
+                            >
+                              <Text style={[styles.activityPillText, compactText ? styles.compactPillText : null]}>{activity.displayText}</Text>
+                              <View style={styles.shiftRow}>
+                                {MOBILE_SHIFT_OPTIONS.map((days) => (
+                                  <Pressable key={`${activity.code}-${days}`} style={styles.shiftButton} onPress={() => shiftActivityByDays(plot.id, activity.code, days)}>
+                                    <Text style={styles.shiftButtonText}>{days > 0 ? `+${days}` : days}</Text>
+                                  </Pressable>
+                                ))}
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      );
+                    }),
+                  )}
+                  <TextInput
+                    value={savedNote}
+                    onChangeText={(note) => setProgrammeNote({ plotId: plot.id, trade: selectedTrade, startWeek: activeIssueWeek, note })}
+                    placeholder={output ? `${output} — add missed target / recovery note` : 'Add missed target / recovery note'}
+                    multiline
+                    style={[styles.outputInput, { width: outputWidth }]}
+                  />
+                  <Pressable style={[styles.resetButton, { width: resetWidth }, !plotHasMoves ? styles.resetButtonDisabled : null]} onPress={() => resetActivityMovesForPlot(plot.id)}>
+                    <Text style={styles.resetButtonText}>{plotHasMoves ? 'Reset' : '-'}</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </SectionCard>
+
+      <SectionCard title="Trade contact" subtitle="Saved against the selected trade for issue records and future email sending.">
         {draftContact ? (
           <View style={styles.formGrid}>
             <View style={styles.inputWrap}>
@@ -118,7 +282,7 @@ export default function TradesScreen() {
         ) : null}
       </SectionCard>
 
-      <SectionCard title="Automatic issue settings" subtitle="Stores the schedule and recipient source for the 2-week trade programme. A backend email job will be needed for true background auto-send.">
+      <SectionCard title="Issue settings" subtitle="Stores the future issue schedule. Email sending still needs a backend connection.">
         <View style={styles.formGrid}>
           <View style={styles.inputWrap}>
             <Text style={styles.label}>Manager email</Text>
@@ -139,31 +303,17 @@ export default function TradesScreen() {
             <Text style={styles.saveButtonText}>Save Issue Settings</Text>
           </Pressable>
         </View>
-        <Text style={styles.helperText}>Recipients currently saved: {recipientCount}. Manager receives the full programme. Supervisors receive their trade programme once server-side email sending is connected.</Text>
+        <Text style={styles.helperText}>Recipients saved: {recipientCount}. Manager gets the full programme; trade supervisors get their trade programme when email sending is connected.</Text>
       </SectionCard>
 
-      <SectionCard title="Issue 2-week programme" subtitle="Prepare the manager copy and individual trade copy from the live programme.">
-        <View style={styles.issueHeaderRow}>
-          <View style={styles.inputWrapSmall}>
-            <Text style={styles.label}>Start week</Text>
-            <TextInput value={issueStartWeek} onChangeText={setIssueStartWeek} style={styles.input} keyboardType="number-pad" />
-          </View>
-          <View style={styles.issueSummary}>
-            <Text style={styles.issueTitle}>WK{String(activeIssueWeek).padStart(2, '0')} + WK{String(activeIssueWeek + 1).padStart(2, '0')}</Text>
-            <Text style={styles.issueMeta}>{savedSupervisorEmails.length} supervisor email{savedSupervisorEmails.length === 1 ? '' : 's'} saved</Text>
-          </View>
-          <Pressable style={styles.saveButton} onPress={markIssued}>
-            <Text style={styles.saveButtonText}>Mark Issued</Text>
-          </Pressable>
-        </View>
-
+      <SectionCard title="Text preview" subtitle="Kept for copy/paste until Excel/PDF/email export is connected.">
         <View style={styles.previewGrid}>
           <View style={styles.previewPanel}>
             <Text style={styles.previewTitle}>Manager full programme preview</Text>
             <TextInput value={managerPreview} editable={false} multiline style={styles.previewBox} />
           </View>
           <View style={styles.previewPanel}>
-            <Text style={styles.previewTitle}>{activeContact?.trade ?? 'Trade'} supervisor preview</Text>
+            <Text style={styles.previewTitle}>{selectedTrade} supervisor preview</Text>
             <TextInput value={tradePreview} editable={false} multiline style={styles.previewBox} />
           </View>
         </View>
@@ -185,6 +335,73 @@ export default function TradesScreen() {
   );
 }
 
+function getPlotById(plotId: string, plots: ReturnType<typeof useSitePlanner>['sitePlots']) {
+  return plots.find((plot) => plot.id === plotId);
+}
+
+function getTradeActivities(
+  plotId: string,
+  trade: string,
+  startWeek: number,
+  plots: ReturnType<typeof useSitePlanner>['sitePlots'],
+  delays: ReturnType<typeof useSitePlanner>['activityDelays'],
+  templates: ReturnType<typeof useSitePlanner>['plotTemplates'],
+  moves: ReturnType<typeof useSitePlanner>['activityMoves'],
+) {
+  const plot = getPlotById(plotId, plots);
+  if (!plot) return [];
+  const activities = [];
+  for (let week = startWeek; week <= startWeek + 1; week += 1) {
+    for (let day = 1; day <= 7; day += 1) {
+      activities.push(...getActivitiesForTemplateDay(plot, week, day, delays, templates, moves).filter((activity) => activity.trade === trade));
+    }
+  }
+  return Array.from(new Map(activities.map((activity) => [activity.code, activity])).values());
+}
+
+function hasTradeWork(
+  plotId: string,
+  trade: string,
+  startWeek: number,
+  plots: ReturnType<typeof useSitePlanner>['sitePlots'],
+  delays: ReturnType<typeof useSitePlanner>['activityDelays'],
+  templates: ReturnType<typeof useSitePlanner>['plotTemplates'],
+  moves: ReturnType<typeof useSitePlanner>['activityMoves'],
+) {
+  return getTradeActivities(plotId, trade, startWeek, plots, delays, templates, moves).length > 0;
+}
+
+function getFixText(
+  plotId: string,
+  trade: string,
+  startWeek: number,
+  plots: ReturnType<typeof useSitePlanner>['sitePlots'],
+  delays: ReturnType<typeof useSitePlanner>['activityDelays'],
+  templates: ReturnType<typeof useSitePlanner>['plotTemplates'],
+  moves: ReturnType<typeof useSitePlanner>['activityMoves'],
+) {
+  return getTradeActivities(plotId, trade, startWeek, plots, delays, templates, moves)
+    .map((activity) => activity.displayText)
+    .filter(Boolean)
+    .filter((text, index, array) => array.indexOf(text) === index)
+    .join(' / ');
+}
+
+function getOutputText(
+  plotId: string,
+  trade: string,
+  startWeek: number,
+  plots: ReturnType<typeof useSitePlanner>['sitePlots'],
+  delays: ReturnType<typeof useSitePlanner>['activityDelays'],
+  templates: ReturnType<typeof useSitePlanner>['plotTemplates'],
+  moves: ReturnType<typeof useSitePlanner>['activityMoves'],
+) {
+  return getTradeActivities(plotId, trade, startWeek, plots, delays, templates, moves)
+    .map((activity) => activity.code)
+    .filter(Boolean)
+    .join(', ');
+}
+
 const styles = StyleSheet.create({
   header: { gap: 4 },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
@@ -194,6 +411,31 @@ const styles = StyleSheet.create({
   tradeChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   tradeChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
   tradeChipTextActive: { color: '#ffffff' },
+  topHeaderRow: { flexDirection: 'row' },
+  tableRow: { flexDirection: 'row', alignItems: 'stretch' },
+  altRow: { backgroundColor: '#f8fbff' },
+  weekHeaderBlank: { backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce', minHeight: 28 },
+  weekGroup: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  dayHeader: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  compactDayHeader: { fontSize: 10, paddingHorizontal: 3 },
+  bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
+  compactCellText: { fontSize: 10, paddingHorizontal: 3 },
+  dayDropCell: { minHeight: 86, padding: 4, gap: 3, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff', alignItems: 'stretch', justifyContent: 'center' },
+  weekendCell: { backgroundColor: '#f8fafc' },
+  activeDayCell: { backgroundColor: '#dff0ff' },
+  activityPill: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#2563eb', borderRadius: 8, paddingHorizontal: 5, paddingVertical: 4, gap: 4 },
+  activityPillText: { color: '#0f172a', fontSize: 11, fontWeight: '900', textAlign: 'center' },
+  compactPillText: { fontSize: 9 },
+  shiftRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 3, justifyContent: 'center' },
+  shiftButton: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 3 },
+  shiftButtonText: { color: '#1d4ed8', fontSize: 9, fontWeight: '900' },
+  emptyCell: { color: '#64748b', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
+  emptyDayCell: { minHeight: 42, borderWidth: 1, borderColor: '#c8d7e6' },
+  outputInput: { minHeight: 64, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fffdf2', fontSize: 12, fontWeight: '700', textAlignVertical: 'top' },
+  resetButton: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fff7ed' },
+  resetButtonDisabled: { backgroundColor: '#f8fafc' },
+  resetButtonText: { color: '#0f172a', fontWeight: '900', fontSize: 12 },
   formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
   inputWrap: { gap: 6, minWidth: 190, flex: 1 },
   inputWrapSmall: { gap: 6, width: 120 },
@@ -214,7 +456,7 @@ const styles = StyleSheet.create({
   previewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   previewPanel: { flex: 1, minWidth: 300, gap: 8 },
   previewTitle: { color: '#0f172a', fontWeight: '900' },
-  previewBox: { minHeight: 260, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
+  previewBox: { minHeight: 180, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
   empty: { color: '#64748b' },
   logRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
   logMain: { flex: 1 },
