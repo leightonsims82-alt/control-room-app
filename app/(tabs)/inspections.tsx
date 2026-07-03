@@ -20,6 +20,7 @@ import {
   PlotInspectionStoryRecord,
 } from '../../utils/inspectionRecords';
 import { savePhotoToBuddyFolder } from '../../utils/photoStorage';
+import { updateSiteBuddyReadinessFromQa } from '../../utils/siteBuddyReadiness';
 import { getConstructionMethod, getConstructionMethodLabel, getHouseTypeLabel, getSortedSitePlots, getTemplateForPlot } from '../../utils/templateProgramme';
 
 type InspectionResult = {
@@ -164,6 +165,13 @@ export default function InspectionsScreen() {
     const nextStory = [nextRecord, ...storyRecords];
     setStoryRecords(nextStory);
     await AsyncStorage.setItem(INSPECTION_STORY_KEY, JSON.stringify(nextStory));
+    await updateSiteBuddyReadinessFromQa({
+      plotId: selectedPlot.id,
+      activityCode: selectedActivityCode,
+      inspectionStatus,
+      failCount,
+      checklistTitle: selectedChecklist.title,
+    });
   };
 
   const addCustomItem = async () => {
