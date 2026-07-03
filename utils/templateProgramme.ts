@@ -86,12 +86,7 @@ export const DEFAULT_PLOT_TEMPLATES: PlotTemplate[] = [
   makeTemplate('fiveBed', '5 Bedroom', 'Largest house template with longer finish and handover durations', 28),
 ];
 
-export const DEFAULT_TEMPLATE_PLOTS: TemplateSitePlot[] = [
-  { id: 'plot-101', plotNo: '101', stage9CompleteWeek: 23, templateId: 'threeBed' },
-  { id: 'plot-102', plotNo: '102', stage9CompleteWeek: 36, templateId: 'fourBed' },
-  { id: 'plot-103', plotNo: '103', stage9CompleteWeek: 24, templateId: 'twoBed' },
-  { id: 'plot-104', plotNo: '104', stage9CompleteWeek: 25, templateId: 'fiveBed' },
-];
+export const DEFAULT_TEMPLATE_PLOTS: TemplateSitePlot[] = [];
 
 export function getTemplateForPlot(plot: TemplateSitePlot, templates: PlotTemplate[]) {
   return templates.find((template) => template.id === plot.templateId) ?? templates.find((template) => template.id === 'threeBed') ?? templates[0];
