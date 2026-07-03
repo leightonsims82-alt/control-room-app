@@ -12,7 +12,7 @@ export default function MoreScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Setup</Text>
-        <Text style={styles.subtitle}>Programme Buddy settings, templates, launch plan and rebuild status.</Text>
+        <Text style={styles.subtitle}>Programme Buddy settings, templates, linked modules, launch plan and rebuild status.</Text>
       </View>
 
       <SectionCard title="Programme source of truth" subtitle="These settings drive the master, plot breakdown and trade issue views.">
@@ -27,6 +27,17 @@ export default function MoreScreen() {
             <Text style={styles.primaryButtonText}>Open Build Sequence Setup</Text>
           </Pressable>
         </Link>
+      </SectionCard>
+
+      <SectionCard title="Linked modules" subtitle="Connected products using this site as the source of truth.">
+        <Text style={styles.item}>Forklift Buddy is linked as a local pilot module with a site logistics request queue.</Text>
+        <View style={styles.buttonRow}>
+          <Link href="/forklift" asChild>
+            <Pressable style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>Open Forklift Buddy</Text>
+            </Pressable>
+          </Link>
+        </View>
       </SectionCard>
 
       <SectionCard title="Closed testing and launch" subtitle="Access is open for testing while live commercial items are tracked separately.">
@@ -75,14 +86,15 @@ export default function MoreScreen() {
         <Text style={styles.item}>Master Programme: one row per plot, week columns, stage numbers only.</Text>
         <Text style={styles.item}>Rolling 2-Week: selected two-week block with real programme dates and QA triggers.</Text>
         <Text style={styles.item}>Plot Breakdown: daily activity codes behind each plot.</Text>
-        <Text style={styles.item}>Trades: Excel-style trade sheet with Plot No, Trade, Fix, daily cells and Output / Recovery Notes.</Text>
+        <Text style={styles.item}>Trades: Excel-style trade sheet with Plot No, House Type, daily cells and Output / Recovery Notes.</Text>
+        <Text style={styles.item}>Forklift Buddy: linked logistics request queue with future trade pass model.</Text>
       </SectionCard>
 
       <SectionCard title="Next build modules" subtitle="Still to be connected after layout sign-off">
-        <Text style={styles.item}>Excel / PDF export for issued programmes.</Text>
+        <Text style={styles.item}>Backend account link between Programme Buddy and Forklift Buddy.</Text>
+        <Text style={styles.item}>Push notifications for driver and trades.</Text>
+        <Text style={styles.item}>Live trade site pass payment flow.</Text>
         <Text style={styles.item}>Email issue to manager and trade supervisors.</Text>
-        <Text style={styles.item}>Delay notes and recovery comments against missed targets.</Text>
-        <Text style={styles.item}>Editable stage names and new activity rows from the app UI.</Text>
       </SectionCard>
     </AppScreen>
   );
