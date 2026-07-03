@@ -7,6 +7,7 @@ import { createManagerProgrammeText, createTradeProgrammeText, getSavedSuperviso
 import { getActivitiesForTemplateDay, getActivityMoveDeltaToTarget } from '../../utils/templateProgramme';
 
 const TRADE_DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MOBILE_SHIFT_OPTIONS = [-7, -1, 1, 7];
 
 type DragPayload = {
   plotId: string;
@@ -38,7 +39,7 @@ export default function TradesScreen() {
   const fixWidth = isLandscapePhone ? 92 : 150;
   const outputWidth = isLandscapePhone ? 230 : 300;
   const resetWidth = isLandscapePhone ? 64 : 88;
-  const dayWidth = isLandscapePhone ? Math.max(68, Math.floor((viewportWidth - plotWidth - tradeWidth - fixWidth - 12) / 7)) : 140;
+  const dayWidth = isLandscapePhone ? Math.max(78, Math.floor((viewportWidth - plotWidth - tradeWidth - fixWidth - 12) / 7)) : 150;
   const weekWidth = dayWidth * 7;
   const compactText = isLandscapePhone;
   const [selectedTradeId, setSelectedTradeId] = useState(tradeContacts[0]?.id ?? '');
@@ -106,11 +107,16 @@ export default function TradesScreen() {
     await setActivityMove({ plotId, activityCode: payload.activityCode, deltaDays });
   };
 
+  const shiftActivityByDays = async (plotId: string, activityCode: string, days: number) => {
+    const existingMove = activityMoves.find((move) => move.plotId === plotId && move.activityCode === activityCode)?.deltaDays ?? 0;
+    await setActivityMove({ plotId, activityCode, deltaDays: existingMove + days });
+  };
+
   return (
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Trade 2-Week Programmes</Text>
-        <Text style={styles.subtitle}>Drag a fix into another day cell to pull it back or push it out. In phone landscape, one full 7-day week is sized to fit on screen.</Text>
+        <Text style={styles.subtitle}>On mobile, use the -7, -1, +1 and +7 buttons on each activity to pull or push work. Web drag/drop is still available for desktop testing.</Text>
       </View>
 
       <SectionCard title="Select trade and issue week" subtitle="Choose the trade and the live two-week block to issue or review.">
@@ -142,7 +148,7 @@ export default function TradesScreen() {
         </View>
       </SectionCard>
 
-      <SectionCard title={`2 WEEK ${selectedTrade.toUpperCase()} PROGRAMME`} subtitle="Drag any fix pill into a new day box. Weekend columns stay blank unless you manually drop work into them.">
+      <SectionCard title={`2 WEEK ${selectedTrade.toUpperCase()} PROGRAMME`} subtitle="Use +/- day buttons on phone. Weekend columns stay blank unless work is pushed or pulled into them.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.topHeaderRow}>
@@ -216,6 +222,13 @@ export default function TradesScreen() {
                               } as any)}
                             >
                               <Text style={[styles.activityPillText, compactText ? styles.compactPillText : null]}>{activity.displayText}</Text>
+                              <View style={styles.shiftRow}>
+                                {MOBILE_SHIFT_OPTIONS.map((days) => (
+                                  <Pressable key={`${activity.code}-${days}`} style={styles.shiftButton} onPress={() => shiftActivityByDays(plot.id, activity.code, days)}>
+                                    <Text style={styles.shiftButtonText}>{days > 0 ? `+${days}` : days}</Text>
+                                  </Pressable>
+                                ))}
+                              </View>
                             </View>
                           ))}
                         </View>
@@ -408,12 +421,15 @@ const styles = StyleSheet.create({
   compactDayHeader: { fontSize: 10, paddingHorizontal: 3 },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
   compactCellText: { fontSize: 10, paddingHorizontal: 3 },
-  dayDropCell: { minHeight: 64, padding: 4, gap: 3, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff', alignItems: 'stretch', justifyContent: 'center' },
+  dayDropCell: { minHeight: 86, padding: 4, gap: 3, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff', alignItems: 'stretch', justifyContent: 'center' },
   weekendCell: { backgroundColor: '#f8fafc' },
   activeDayCell: { backgroundColor: '#dff0ff' },
-  activityPill: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#2563eb', borderRadius: 8, paddingHorizontal: 5, paddingVertical: 4, cursor: 'grab' as any },
+  activityPill: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#2563eb', borderRadius: 8, paddingHorizontal: 5, paddingVertical: 4, gap: 4 },
   activityPillText: { color: '#0f172a', fontSize: 11, fontWeight: '900', textAlign: 'center' },
   compactPillText: { fontSize: 9 },
+  shiftRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 3, justifyContent: 'center' },
+  shiftButton: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 3 },
+  shiftButtonText: { color: '#1d4ed8', fontSize: 9, fontWeight: '900' },
   emptyCell: { color: '#64748b', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
   emptyDayCell: { minHeight: 42, borderWidth: 1, borderColor: '#c8d7e6' },
   outputInput: { minHeight: 64, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fffdf2', fontSize: 12, fontWeight: '700', textAlignVertical: 'top' },
