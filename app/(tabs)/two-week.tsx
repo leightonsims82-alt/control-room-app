@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
@@ -62,7 +63,7 @@ export default function TwoWeekProgrammeScreen() {
   const [startWeek, setStartWeek] = useState(getCurrentProgrammeWeek());
   const [selectedTrade, setSelectedTrade] = useState(ALL_TRADES);
   const activeTrades = useMemo(() => getActiveTemplateTrades(sitePlots, startWeek, activityDelays, plotTemplates), [sitePlots, startWeek, activityDelays, plotTemplates]);
-  const tradesToShow = activeTrades.length ? activeTrades : TRADE_ORDER;
+  const tradesToShow = sitePlots.length === 0 ? [] : activeTrades.length ? activeTrades : TRADE_ORDER;
   const filteredTradesToShow = selectedTrade === ALL_TRADES ? tradesToShow : tradesToShow.filter((trade) => trade === selectedTrade);
   const twoWeekDates = formatDateRange(startWeek);
   const filterTrades = [ALL_TRADES, ...tradesToShow];
@@ -104,76 +105,91 @@ export default function TwoWeekProgrammeScreen() {
           </Pressable>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.filterRow}>
-            {filterTrades.map((trade) => {
-              const isActive = selectedTrade === trade;
-              return (
-                <Pressable key={trade} style={[styles.filterPill, isActive && styles.filterPillActive]} onPress={() => setSelectedTrade(trade)}>
-                  <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>{trade}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </ScrollView>
+        {sitePlots.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.filterRow}>
+              {filterTrades.map((trade) => {
+                const isActive = selectedTrade === trade;
+                return (
+                  <Pressable key={trade} style={[styles.filterPill, isActive && styles.filterPillActive]} onPress={() => setSelectedTrade(trade)}>
+                    <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>{trade}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </ScrollView>
+        ) : null}
 
         <View style={styles.summaryStrip}>
-          <MiniStat label="Active plots" value={sitePlots.length || 26} />
+          <MiniStat label="Active plots" value={sitePlots.length} />
           <MiniStat label="Trades shown" value={filteredTradesToShow.length} />
           <MiniStat label="Filter" value={selectedTrade === ALL_TRADES ? 'All' : selectedTrade} />
           <MiniStat label="Window" value="10 days" />
         </View>
       </View>
 
-      <View style={styles.legendRow}>
-        <View style={styles.legendPill}><View style={styles.legendDot} /><Text style={styles.legendText}>Blue cells = planned work</Text></View>
-        <View style={styles.legendPill}><Text style={styles.legendCode}>FND</Text><Text style={styles.legendText}>Short site activity codes</Text></View>
-      </View>
+      {sitePlots.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Ionicons name="add-circle-outline" size={34} color="#2563eb" />
+          <Text style={styles.emptyTitle}>No plots added yet</Text>
+          <Text style={styles.emptyText}>Add your own plot numbers, plot types and handover weeks, then come back here to test the 2-week lookahead.</Text>
+          <Link href="/plots" asChild>
+            <Pressable style={styles.emptyButton}><Text style={styles.emptyButtonText}>Go to Plot Breakdown</Text></Pressable>
+          </Link>
+        </View>
+      ) : (
+        <>
+          <View style={styles.legendRow}>
+            <View style={styles.legendPill}><View style={styles.legendDot} /><Text style={styles.legendText}>Blue cells = planned work</Text></View>
+            <View style={styles.legendPill}><Text style={styles.legendCode}>FND</Text><Text style={styles.legendText}>Short site activity codes</Text></View>
+          </View>
 
-      {filteredTradesToShow.map((trade) => {
-        const visiblePlots = sitePlots.filter((plot) => plotHasTradeWorkForTemplate(plot, trade, startWeek, activityDelays, plotTemplates));
-        const hasWork = visiblePlots.length > 0;
-        return (
-          <SectionCard key={trade} title={trade} subtitle={hasWork ? `${visiblePlots.length} plot${visiblePlots.length === 1 ? '' : 's'} active between ${twoWeekDates}` : 'No activity in this 2-week window'}>
-            <ScrollView horizontal showsHorizontalScrollIndicator>
-              <View style={styles.tableWrap}>
-                <View style={styles.weekHeaderRow}>
-                  <Text style={[styles.weekHeaderBlank, styles.plotCell]} />
-                  {[startWeek, startWeek + 1].map((week) => <Text key={week} style={styles.weekGroup}>{formatWeekLabel(week)}</Text>)}
-                </View>
-                <View style={styles.dateHeaderRow}>
-                  <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
-                  {[startWeek, startWeek + 1].flatMap((week) => SHORT_DAY_NAMES.map((day, dayIndex) => (
-                    <View key={`${week}-${day}`} style={styles.dayHeader}>
-                      <Text style={styles.dayHeaderName}>{day}</Text>
-                      <Text style={styles.dayHeaderDate}>{formatShortDate(getProgrammeDate(week, dayIndex))}</Text>
+          {filteredTradesToShow.map((trade) => {
+            const visiblePlots = sitePlots.filter((plot) => plotHasTradeWorkForTemplate(plot, trade, startWeek, activityDelays, plotTemplates));
+            const hasWork = visiblePlots.length > 0;
+            return (
+              <SectionCard key={trade} title={trade} subtitle={hasWork ? `${visiblePlots.length} plot${visiblePlots.length === 1 ? '' : 's'} active between ${twoWeekDates}` : 'No activity in this 2-week window'}>
+                <ScrollView horizontal showsHorizontalScrollIndicator>
+                  <View style={styles.tableWrap}>
+                    <View style={styles.weekHeaderRow}>
+                      <Text style={[styles.weekHeaderBlank, styles.plotCell]} />
+                      {[startWeek, startWeek + 1].map((week) => <Text key={week} style={styles.weekGroup}>{formatWeekLabel(week)}</Text>)}
                     </View>
-                  )))}
-                </View>
-                {!hasWork ? (
-                  <View style={styles.emptyStateRow}>
-                    <Text style={[styles.emptyCell, styles.plotCell]}>-</Text>
-                    <View style={styles.emptyMessageCell}>
-                      <Ionicons name="checkmark-circle-outline" size={18} color="#64748b" />
-                      <Text style={styles.emptyMessageText}>No planned activity for this trade in the selected 2-week window.</Text>
+                    <View style={styles.dateHeaderRow}>
+                      <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
+                      {[startWeek, startWeek + 1].flatMap((week) => SHORT_DAY_NAMES.map((day, dayIndex) => (
+                        <View key={`${week}-${day}`} style={styles.dayHeader}>
+                          <Text style={styles.dayHeaderName}>{day}</Text>
+                          <Text style={styles.dayHeaderDate}>{formatShortDate(getProgrammeDate(week, dayIndex))}</Text>
+                        </View>
+                      )))}
                     </View>
+                    {!hasWork ? (
+                      <View style={styles.emptyStateRow}>
+                        <Text style={[styles.emptyCell, styles.plotCell]}>-</Text>
+                        <View style={styles.emptyMessageCell}>
+                          <Ionicons name="checkmark-circle-outline" size={18} color="#64748b" />
+                          <Text style={styles.emptyMessageText}>No planned activity for this trade in the selected 2-week window.</Text>
+                        </View>
+                      </View>
+                    ) : null}
+                    {visiblePlots.map((plot, rowIndex) => (
+                      <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
+                        <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
+                        {[startWeek, startWeek + 1].flatMap((week) => DAY_NAMES.map((_, dayIndex) => {
+                          const rawText = getTradeTemplateText(plot, trade, week, dayIndex + 1, activityDelays, plotTemplates);
+                          const text = simplifyActivity(rawText);
+                          return <Text key={`${plot.id}-${trade}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
+                        }))}
+                      </View>
+                    ))}
                   </View>
-                ) : null}
-                {visiblePlots.map((plot, rowIndex) => (
-                  <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
-                    <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
-                    {[startWeek, startWeek + 1].flatMap((week) => DAY_NAMES.map((_, dayIndex) => {
-                      const rawText = getTradeTemplateText(plot, trade, week, dayIndex + 1, activityDelays, plotTemplates);
-                      const text = simplifyActivity(rawText);
-                      return <Text key={`${plot.id}-${trade}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
-                    }))}
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-          </SectionCard>
-        );
-      })}
+                </ScrollView>
+              </SectionCard>
+            );
+          })}
+        </>
+      )}
     </AppScreen>
   );
 }
@@ -214,6 +230,11 @@ const styles = StyleSheet.create({
   miniStat: { flex: 1, minWidth: 120, backgroundColor: '#f8fafc', borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', padding: 12 },
   miniStatValue: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
   miniStatLabel: { color: '#64748b', fontSize: 12, fontWeight: '800', marginTop: 2 },
+  emptyCard: { backgroundColor: '#ffffff', borderRadius: 20, borderWidth: 1, borderColor: '#e2e8f0', padding: 22, gap: 10, alignItems: 'flex-start' },
+  emptyTitle: { color: '#0f172a', fontSize: 20, fontWeight: '900' },
+  emptyText: { color: '#64748b', fontSize: 14, lineHeight: 21, maxWidth: 650 },
+  emptyButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginTop: 4 },
+  emptyButtonText: { color: '#fff', fontWeight: '900' },
   legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   legendPill: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ffffff', borderRadius: 999, borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 12, paddingVertical: 8 },
   legendDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#dbeafe', borderWidth: 1, borderColor: '#93c5fd' },
