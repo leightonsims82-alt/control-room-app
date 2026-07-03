@@ -10,8 +10,8 @@ import {
   TemplateSitePlot,
 } from '../utils/templateProgramme';
 
-const SITE_PLOTS_KEY = 'siteprog:week-based-plots:v2';
-const SITE_DELAYS_KEY = 'siteprog:week-based-delays:v1';
+const SITE_PLOTS_KEY = 'siteprog:week-based-plots:v3';
+const SITE_DELAYS_KEY = 'siteprog:week-based-delays:v2';
 const TRADE_CONTACTS_KEY = 'siteprog:trade-contacts:v1';
 const ISSUE_SETTINGS_KEY = 'siteprog:issue-settings:v1';
 const ISSUE_LOGS_KEY = 'siteprog:issue-logs:v1';
@@ -69,6 +69,7 @@ type SitePlannerStore = {
   isSitePlannerLoaded: boolean;
   upsertSitePlot: (input: { plotNo: string; stage9CompleteWeek: number; templateId: string }) => Promise<void>;
   removeSitePlot: (plotId: string) => Promise<void>;
+  resetPlotData: () => Promise<void>;
   setActivityDelay: (input: ActivityDelay) => Promise<void>;
   upsertTradeContact: (input: TradeContact) => Promise<void>;
   setIssueSettings: (input: IssueSettings) => Promise<void>;
@@ -183,6 +184,15 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
     ]);
   };
 
+  const resetPlotData = async () => {
+    setSitePlots([]);
+    setActivityDelays([]);
+    await Promise.all([
+      AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify([])),
+      AsyncStorage.setItem(SITE_DELAYS_KEY, JSON.stringify([])),
+    ]);
+  };
+
   const setActivityDelay = async (input: ActivityDelay) => {
     const nextDelays = [
       ...activityDelays.filter((delay) => !(delay.plotId === input.plotId && delay.activityCode === input.activityCode)),
@@ -254,6 +264,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       isSitePlannerLoaded,
       upsertSitePlot,
       removeSitePlot,
+      resetPlotData,
       setActivityDelay,
       upsertTradeContact,
       setIssueSettings,
