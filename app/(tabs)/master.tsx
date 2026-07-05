@@ -23,14 +23,16 @@ function getShortWeekDate(week: number) {
 
 export default function MasterProgrammeScreen() {
   const { sitePlots, plotTemplates, upsertSitePlot, removeSitePlot } = useSitePlanner();
-  const [plotNo, setPlotNo] = useState('105');
-  const [stage9Week, setStage9Week] = useState('26');
+  const [plotNo, setPlotNo] = useState('');
+  const [stage9Week, setStage9Week] = useState('');
   const [templateId, setTemplateId] = useState(plotTemplates[2]?.id ?? 'threeBed');
 
   const savePlot = async () => {
     const parsedWeek = Number(stage9Week);
     if (!plotNo.trim() || !Number.isFinite(parsedWeek)) return;
     await upsertSitePlot({ plotNo, stage9CompleteWeek: parsedWeek, templateId });
+    setPlotNo('');
+    setStage9Week('');
   };
 
   return (
@@ -44,11 +46,11 @@ export default function MasterProgrammeScreen() {
         <View style={styles.formRow}>
           <View style={styles.inputWrap}>
             <Text style={styles.label}>Plot No</Text>
-            <TextInput value={plotNo} onChangeText={setPlotNo} style={styles.input} placeholder="101" />
+            <TextInput value={plotNo} onChangeText={setPlotNo} style={styles.input} placeholder="Enter plot no" />
           </View>
           <View style={styles.inputWrap}>
             <Text style={styles.label}>Stage 9 Complete Week</Text>
-            <TextInput value={stage9Week} onChangeText={setStage9Week} style={styles.input} keyboardType="number-pad" placeholder="23" />
+            <TextInput value={stage9Week} onChangeText={setStage9Week} style={styles.input} keyboardType="number-pad" placeholder="Enter week no" />
           </View>
           <View style={styles.inputWrapWide}>
             <Text style={styles.label}>Plot template</Text>
