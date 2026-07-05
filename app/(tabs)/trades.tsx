@@ -4,6 +4,34 @@ import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { TradeContact, useSitePlanner } from '../../data/sitePlannerStore';
 import { createManagerProgrammeText, createTradeProgrammeText, getSavedSupervisorEmails } from '../../utils/programmeIssue';
+import { DAY_NAMES } from '../../utils/siteProgrammeEngine';
+import { getTradeTemplateText } from '../../utils/templateProgramme';
+
+function getShortWeekDate(week: number, dayIndex: number) {
+  const year = new Date().getFullYear();
+  const firstThursday = new Date(year, 0, 4);
+  const firstMonday = new Date(firstThursday);
+  const day = firstThursday.getDay() || 7;
+  firstMonday.setDate(firstThursday.getDate() - day + 1);
+  const target = new Date(firstMonday);
+  target.setDate(firstMonday.getDate() + (week - 1) * 7 + dayIndex);
+  const date = String(target.getDate()).padStart(2, '0');
+  const month = String(target.getMonth() + 1).padStart(2, '0');
+  return `${date}/${month}`;
+}
+
+function twoWeekDays(startWeek: number) {
+  return [startWeek, startWeek + 1].flatMap((week) =>
+    DAY_NAMES.map((dayName, dayIndex) => ({
+      key: `${week}-${dayIndex + 1}`,
+      week,
+      day: dayIndex + 1,
+      dayName: dayName.slice(0, 3),
+      date: getShortWeekDate(week, dayIndex),
+      weekLabel: `WK${String(week).padStart(2, '0')}`,
+    })),
+  );
+}
 
 export default function TradesScreen() {
   const {
@@ -38,6 +66,7 @@ export default function TradesScreen() {
   }, [issueSettings]);
 
   const activeIssueWeek = Math.max(1, Math.min(51, Number(issueStartWeek) || 1));
+  const tableDays = useMemo(() => twoWeekDays(activeIssueWeek), [activeIssueWeek]);
   const savedSupervisorEmails = getSavedSupervisorEmails(tradeContacts);
   const recipientCount = savedSupervisorEmails.length + (managerEmail.trim() ? 1 : 0);
 
@@ -50,6 +79,16 @@ export default function TradesScreen() {
     () => activeContact ? createTradeProgrammeText({ trade: activeContact.trade, plots: sitePlots, activityDelays, startWeek: activeIssueWeek, plotTemplates }) : '',
     [activeContact, sitePlots, activityDelays, activeIssueWeek, plotTemplates],
   );
+
+  const programmeRows = useMemo(() => {
+    if (!activeContact) return [];
+    return sitePlots
+      .map((plot) => {
+        const cells = tableDays.map((item) => getTradeTemplateText(plot, activeContact.trade, item.week, item.day, activityDelays, plotTemplates));
+        return { plot, cells };
+      })
+      .filter((row) => row.cells.some(Boolean));
+  }, [activeContact, sitePlots, tableDays, activityDelays, plotTemplates]);
 
   const saveTradeContact = async () => {
     if (!draftContact) return;
@@ -71,19 +110,19 @@ export default function TradesScreen() {
   return (
     <AppScreen>
       <View style={styles.header}>
-        <Text style={styles.title}>Trade Setup & 2-Week Programme</Text>
-        <Text style={styles.subtitle}>View the 2-week trade programme first, then manage contacts and issue settings below.</Text>
+        <Text style={styles.title}>2-Week Trade Programme</Text>
+        <Text style={styles.subtitle}>Site manager table view first. Select the week and trade to see plot-by-plot daily activity.</Text>
       </View>
 
-      <SectionCard title="View 2-week trade programme" subtitle="Choose a start week and trade to view the generated programme without needing to scroll to the issue settings.">
+      <SectionCard title="2-week trade programme" subtitle="One row per plot. Dates run across the top and cells show the selected trade activity only.">
         <View style={styles.viewerHeaderRow}>
           <View style={styles.inputWrapSmall}>
             <Text style={styles.label}>Start week</Text>
             <TextInput value={issueStartWeek} onChangeText={setIssueStartWeek} style={styles.input} keyboardType="number-pad" />
           </View>
           <View style={styles.issueSummary}>
-            <Text style={styles.issueTitle}>WK{String(activeIssueWeek).padStart(2, '0')} + WK{String(activeIssueWeek + 1).padStart(2, '0')}</Text>
-            <Text style={styles.issueMeta}>{activeContact?.trade ?? 'Trade'} programme preview</Text>
+            <Text style={styles.issueTitle}>{activeContact?.trade ?? 'Trade'} Programme</Text>
+            <Text style={styles.issueMeta}>WK{String(activeIssueWeek).padStart(2, '0')} + WK{String(activeIssueWeek + 1).padStart(2, '0')}</Text>
           </View>
           <Pressable style={styles.saveButton} onPress={markIssued}>
             <Text style={styles.saveButtonText}>Mark Issued</Text>
@@ -103,10 +142,39 @@ export default function TradesScreen() {
           </View>
         </ScrollView>
 
-        <View style={styles.previewPanelFull}>
-          <Text style={styles.previewTitle}>{activeContact?.trade ?? 'Trade'} 2-week programme</Text>
-          <TextInput value={tradePreview} editable={false} multiline style={styles.previewBoxLarge} />
-        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View>
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableHeader, styles.plotNoCell]}>Plot No</Text>
+              <Text style={[styles.tableHeader, styles.tradeCell]}>Trade</Text>
+              <Text style={[styles.tableHeader, styles.fixCell]}>Fix / Stage</Text>
+              {tableDays.map((item) => (
+                <View key={item.key} style={styles.dayHeaderCell}>
+                  <Text style={styles.headerDay}>{item.dayName}</Text>
+                  <Text style={styles.headerDate}>{item.date}</Text>
+                  <Text style={styles.headerWeek}>{item.weekLabel}</Text>
+                </View>
+              ))}
+            </View>
+
+            {programmeRows.length === 0 ? (
+              <View style={styles.tableRow}>
+                <Text style={[styles.bodyCell, styles.emptyProgrammeCell]}>No planned {activeContact?.trade ?? 'trade'} activity in this 2-week window.</Text>
+              </View>
+            ) : null}
+
+            {programmeRows.map((row, rowIndex) => (
+              <View key={row.plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
+                <Text style={[styles.bodyCell, styles.plotNoCell]}>{row.plot.plotNo}</Text>
+                <Text style={[styles.bodyCell, styles.tradeCell]}>{activeContact?.trade ?? ''}</Text>
+                <Text style={[styles.bodyCell, styles.fixCell]}>{row.cells.find(Boolean) || '-'}</Text>
+                {row.cells.map((cell, index) => (
+                  <Text key={tableDays[index].key} style={[styles.dayBodyCell, cell ? styles.activeDayCell : null]}>{cell}</Text>
+                ))}
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       </SectionCard>
 
       <SectionCard title="Trade setup" subtitle="Each trade can have its contractor, supervisor, email and phone saved against it.">
@@ -176,8 +244,17 @@ export default function TradesScreen() {
         <Text style={styles.helperText}>Recipients currently saved: {recipientCount}. Manager receives the full programme. Supervisors receive their trade programme once server-side email sending is connected.</Text>
       </SectionCard>
 
-      <SectionCard title="Manager full programme preview" subtitle="Full manager copy including all trades for the selected two-week window.">
-        <TextInput value={managerPreview} editable={false} multiline style={styles.previewBox} />
+      <SectionCard title="Issue message preview" subtitle="Plain text copy kept for email issue. The table above is the working programme view.">
+        <View style={styles.previewGrid}>
+          <View style={styles.previewPanel}>
+            <Text style={styles.previewTitle}>Manager full programme preview</Text>
+            <TextInput value={managerPreview} editable={false} multiline style={styles.previewBox} />
+          </View>
+          <View style={styles.previewPanel}>
+            <Text style={styles.previewTitle}>{activeContact?.trade ?? 'Trade'} supervisor preview</Text>
+            <TextInput value={tradePreview} editable={false} multiline style={styles.previewBox} />
+          </View>
+        </View>
       </SectionCard>
 
       <SectionCard title="Issue history" subtitle="Local audit trail for programme issue actions during the pilot.">
@@ -223,10 +300,24 @@ const styles = StyleSheet.create({
   issueSummary: { flex: 1, minWidth: 220, backgroundColor: '#eff6ff', borderRadius: 12, padding: 12 },
   issueTitle: { color: '#0f172a', fontWeight: '900', fontSize: 18 },
   issueMeta: { color: '#64748b', fontSize: 12, marginTop: 3 },
-  previewPanelFull: { gap: 8 },
+  tableRow: { flexDirection: 'row', alignItems: 'stretch' },
+  altRow: { backgroundColor: '#eef6ff' },
+  tableHeader: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 11, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  plotNoCell: { width: 74 },
+  tradeCell: { width: 110 },
+  fixCell: { width: 118 },
+  dayHeaderCell: { width: 72, backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce', alignItems: 'center', justifyContent: 'center', paddingVertical: 3 },
+  headerDay: { color: '#ffffff', fontWeight: '900', fontSize: 10, lineHeight: 11 },
+  headerDate: { color: '#c7d2fe', fontWeight: '900', fontSize: 9, lineHeight: 10 },
+  headerWeek: { color: '#ffffff', fontWeight: '900', fontSize: 9, lineHeight: 10 },
+  bodyCell: { color: '#0f172a', padding: 7, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800', fontSize: 11 },
+  dayBodyCell: { width: 72, minHeight: 38, color: '#0f172a', padding: 5, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800', fontSize: 10, lineHeight: 12 },
+  activeDayCell: { backgroundColor: '#fff4cc' },
+  emptyProgrammeCell: { width: 1022, textAlign: 'left', color: '#64748b' },
+  previewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  previewPanel: { flex: 1, minWidth: 300, gap: 8 },
   previewTitle: { color: '#0f172a', fontWeight: '900' },
-  previewBoxLarge: { minHeight: 340, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
-  previewBox: { minHeight: 280, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
+  previewBox: { minHeight: 260, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
   empty: { color: '#64748b' },
   logRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
   logMain: { flex: 1 },
