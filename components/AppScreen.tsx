@@ -1,11 +1,13 @@
 import { ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export function AppScreen({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 150 + insets.bottom }]}>
         <View style={styles.maxWidth}>{children}</View>
       </ScrollView>
     </SafeAreaView>
@@ -19,7 +21,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 18,
-    paddingBottom: 96,
   },
   maxWidth: {
     width: '100%',
