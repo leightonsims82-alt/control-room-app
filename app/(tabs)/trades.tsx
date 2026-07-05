@@ -71,9 +71,43 @@ export default function TradesScreen() {
   return (
     <AppScreen>
       <View style={styles.header}>
-        <Text style={styles.title}>Trade Setup & Issue</Text>
-        <Text style={styles.subtitle}>Save contractors, trade supervisors and issue settings for the automatic 2-week trade programme.</Text>
+        <Text style={styles.title}>Trade Setup & 2-Week Programme</Text>
+        <Text style={styles.subtitle}>View the 2-week trade programme first, then manage contacts and issue settings below.</Text>
       </View>
+
+      <SectionCard title="View 2-week trade programme" subtitle="Choose a start week and trade to view the generated programme without needing to scroll to the issue settings.">
+        <View style={styles.viewerHeaderRow}>
+          <View style={styles.inputWrapSmall}>
+            <Text style={styles.label}>Start week</Text>
+            <TextInput value={issueStartWeek} onChangeText={setIssueStartWeek} style={styles.input} keyboardType="number-pad" />
+          </View>
+          <View style={styles.issueSummary}>
+            <Text style={styles.issueTitle}>WK{String(activeIssueWeek).padStart(2, '0')} + WK{String(activeIssueWeek + 1).padStart(2, '0')}</Text>
+            <Text style={styles.issueMeta}>{activeContact?.trade ?? 'Trade'} programme preview</Text>
+          </View>
+          <Pressable style={styles.saveButton} onPress={markIssued}>
+            <Text style={styles.saveButtonText}>Mark Issued</Text>
+          </Pressable>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View style={styles.tradeChipsWide}>
+            {tradeContacts.map((contact) => {
+              const active = contact.id === activeContact?.id;
+              return (
+                <Pressable key={contact.id} style={[styles.tradeChip, active ? styles.tradeChipActive : null]} onPress={() => setSelectedTradeId(contact.id)}>
+                  <Text style={[styles.tradeChipText, active ? styles.tradeChipTextActive : null]}>{contact.trade}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
+
+        <View style={styles.previewPanelFull}>
+          <Text style={styles.previewTitle}>{activeContact?.trade ?? 'Trade'} 2-week programme</Text>
+          <TextInput value={tradePreview} editable={false} multiline style={styles.previewBoxLarge} />
+        </View>
+      </SectionCard>
 
       <SectionCard title="Trade setup" subtitle="Each trade can have its contractor, supervisor, email and phone saved against it.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
@@ -142,31 +176,8 @@ export default function TradesScreen() {
         <Text style={styles.helperText}>Recipients currently saved: {recipientCount}. Manager receives the full programme. Supervisors receive their trade programme once server-side email sending is connected.</Text>
       </SectionCard>
 
-      <SectionCard title="Issue 2-week programme" subtitle="Prepare the manager copy and individual trade copy from the live programme.">
-        <View style={styles.issueHeaderRow}>
-          <View style={styles.inputWrapSmall}>
-            <Text style={styles.label}>Start week</Text>
-            <TextInput value={issueStartWeek} onChangeText={setIssueStartWeek} style={styles.input} keyboardType="number-pad" />
-          </View>
-          <View style={styles.issueSummary}>
-            <Text style={styles.issueTitle}>WK{String(activeIssueWeek).padStart(2, '0')} + WK{String(activeIssueWeek + 1).padStart(2, '0')}</Text>
-            <Text style={styles.issueMeta}>{savedSupervisorEmails.length} supervisor email{savedSupervisorEmails.length === 1 ? '' : 's'} saved</Text>
-          </View>
-          <Pressable style={styles.saveButton} onPress={markIssued}>
-            <Text style={styles.saveButtonText}>Mark Issued</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.previewGrid}>
-          <View style={styles.previewPanel}>
-            <Text style={styles.previewTitle}>Manager full programme preview</Text>
-            <TextInput value={managerPreview} editable={false} multiline style={styles.previewBox} />
-          </View>
-          <View style={styles.previewPanel}>
-            <Text style={styles.previewTitle}>{activeContact?.trade ?? 'Trade'} supervisor preview</Text>
-            <TextInput value={tradePreview} editable={false} multiline style={styles.previewBox} />
-          </View>
-        </View>
+      <SectionCard title="Manager full programme preview" subtitle="Full manager copy including all trades for the selected two-week window.">
+        <TextInput value={managerPreview} editable={false} multiline style={styles.previewBox} />
       </SectionCard>
 
       <SectionCard title="Issue history" subtitle="Local audit trail for programme issue actions during the pilot.">
@@ -190,6 +201,7 @@ const styles = StyleSheet.create({
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
   subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
   tradeChips: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
+  tradeChipsWide: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
   tradeChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
   tradeChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   tradeChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
@@ -207,14 +219,14 @@ const styles = StyleSheet.create({
   toggleText: { color: '#475569', fontWeight: '900' },
   toggleTextActive: { color: '#166534' },
   helperText: { color: '#64748b', fontSize: 12, lineHeight: 18 },
-  issueHeaderRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
+  viewerHeaderRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
   issueSummary: { flex: 1, minWidth: 220, backgroundColor: '#eff6ff', borderRadius: 12, padding: 12 },
   issueTitle: { color: '#0f172a', fontWeight: '900', fontSize: 18 },
   issueMeta: { color: '#64748b', fontSize: 12, marginTop: 3 },
-  previewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  previewPanel: { flex: 1, minWidth: 300, gap: 8 },
+  previewPanelFull: { gap: 8 },
   previewTitle: { color: '#0f172a', fontWeight: '900' },
-  previewBox: { minHeight: 260, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
+  previewBoxLarge: { minHeight: 340, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
+  previewBox: { minHeight: 280, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
   empty: { color: '#64748b' },
   logRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
   logMain: { flex: 1 },
