@@ -12,7 +12,6 @@ const WORKING_DAY_COUNT = 5;
 const DAY_WIDTH = 88;
 const PLOT_WIDTH = 82;
 const TYPE_WIDTH = 110;
-const STAGE_WIDTH = 118;
 const WEEK_WIDTH = DAY_WIDTH * 7;
 
 function formatWeekLabel(week: number) {
@@ -86,10 +85,8 @@ export default function TwoWeekProgrammeScreen() {
           return getActivitiesForTemplateDay(plot, week, dayIndex + 1, activityDelays, plotTemplates);
         }),
       );
-      const firstActivity = dailyActivities.flat()[0];
       return {
         plot,
-        stage: firstActivity ? `Stage ${firstActivity.stage}` : '-',
         cells: dailyActivities.map(buildCellText),
       };
     });
@@ -165,13 +162,11 @@ export default function TwoWeekProgrammeScreen() {
                 <View style={styles.weekHeaderRow}>
                   <Text style={[styles.weekHeaderBlank, styles.plotCell]} />
                   <Text style={[styles.weekHeaderBlank, styles.typeCell]} />
-                  <Text style={[styles.weekHeaderBlank, styles.stageCell]} />
                   {visibleWeeks.map((week) => <Text key={week} style={styles.weekGroup}>{formatWeekLabel(week)}</Text>)}
                 </View>
                 <View style={styles.dateHeaderRow}>
                   <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
                   <Text style={[styles.headerCell, styles.typeCell]}>Type</Text>
-                  <Text style={[styles.headerCell, styles.stageCell]}>Fix / Stage</Text>
                   {visibleWeeks.flatMap((week) => PROGRAMME_DAYS.map((day, dayIndex) => (
                     <View key={`${week}-${day}`} style={[styles.dayHeader, isWeekend(dayIndex) ? styles.weekendHeader : null]}>
                       <Text style={styles.dayHeaderName}>{day}</Text>
@@ -183,7 +178,6 @@ export default function TwoWeekProgrammeScreen() {
                   <View key={row.plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                     <Text style={[styles.bodyCell, styles.plotCell]}>{row.plot.plotNo}</Text>
                     <Text style={[styles.bodyCell, styles.typeCell]}>{plotTemplates.find((template) => template.id === row.plot.templateId)?.name ?? '3 Bedroom'}</Text>
-                    <Text style={[styles.bodyCell, styles.stageCell]}>{row.stage}</Text>
                     {row.cells.map((text, index) => {
                       const dayIndex = index % PROGRAMME_DAYS.length;
                       return <Text key={`${row.plot.id}-${index}`} style={[styles.dayCell, isWeekend(dayIndex) ? styles.weekendCell : null, text ? styles.activeDayCell : null]}>{text}</Text>;
@@ -199,7 +193,7 @@ export default function TwoWeekProgrammeScreen() {
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string | number }) {
+function MiniStat({ label, value }: { label: string | number; value: string | number }) {
   return (
     <View style={styles.miniStat}>
       <Text style={styles.miniStatValue}>{value}</Text>
@@ -244,7 +238,7 @@ const styles = StyleSheet.create({
   programmeHeader: { gap: 3 },
   programmeTitle: { color: '#0f172a', fontWeight: '900', fontSize: 20 },
   programmeSubtitle: { color: '#64748b', fontSize: 13 },
-  tableWrap: { minWidth: PLOT_WIDTH + TYPE_WIDTH + STAGE_WIDTH + DAY_WIDTH * 14 },
+  tableWrap: { minWidth: PLOT_WIDTH + TYPE_WIDTH + DAY_WIDTH * 14 },
   weekHeaderRow: { flexDirection: 'row', alignItems: 'stretch' },
   weekHeaderBlank: { backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce' },
   weekGroup: { width: WEEK_WIDTH, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 8, fontWeight: '900' },
@@ -252,7 +246,6 @@ const styles = StyleSheet.create({
   headerCell: { backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 9, fontWeight: '900' },
   plotCell: { width: PLOT_WIDTH },
   typeCell: { width: TYPE_WIDTH },
-  stageCell: { width: STAGE_WIDTH },
   dayHeader: { width: DAY_WIDTH, backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce', alignItems: 'center', justifyContent: 'center', paddingVertical: 6 },
   weekendHeader: { backgroundColor: '#214c75' },
   dayHeaderName: { color: '#ffffff', fontWeight: '900', fontSize: 12 },
