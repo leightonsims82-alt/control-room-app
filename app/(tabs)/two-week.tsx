@@ -4,16 +4,16 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
-import { DAY_NAMES } from '../../utils/siteProgrammeEngine';
 import { getActivitiesForTemplateDay, normaliseProgrammeWeek } from '../../utils/templateProgramme';
 
 const PROGRAMME_START_DATE = new Date(2026, 6, 6);
-const SHORT_DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-const DAY_WIDTH = 96;
+const PROGRAMME_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+const WORKING_DAY_COUNT = 5;
+const DAY_WIDTH = 88;
 const PLOT_WIDTH = 82;
 const TYPE_WIDTH = 110;
 const STAGE_WIDTH = 118;
-const WEEK_WIDTH = DAY_WIDTH * 5;
+const WEEK_WIDTH = DAY_WIDTH * 7;
 
 function formatWeekLabel(week: number) {
   return `WK${String(normaliseProgrammeWeek(week)).padStart(2, '0')}`;
@@ -36,7 +36,7 @@ function formatShortDate(date: Date) {
 }
 
 function formatDateRange(startWeek: number) {
-  return `${formatShortDate(getProgrammeDate(startWeek, 0))} - ${formatShortDate(getProgrammeDate(startWeek + 1, 4))}`;
+  return `${formatShortDate(getProgrammeDate(startWeek, 0))} - ${formatShortDate(getProgrammeDate(startWeek + 1, 6))}`;
 }
 
 function simplifyActivity(text: string) {
@@ -68,6 +68,10 @@ function buildCellText(activities: ReturnType<typeof getActivitiesForTemplateDay
     .join('\n');
 }
 
+function isWeekend(dayIndex: number) {
+  return dayIndex >= WORKING_DAY_COUNT;
+}
+
 export default function TwoWeekProgrammeScreen() {
   const { sitePlots, activityDelays, plotTemplates } = useSitePlanner();
   const [startWeek, setStartWeek] = useState(getCurrentProgrammeWeek());
@@ -77,7 +81,10 @@ export default function TwoWeekProgrammeScreen() {
   const programmeRows = useMemo(() => {
     return sitePlots.map((plot) => {
       const dailyActivities = visibleWeeks.flatMap((week) =>
-        DAY_NAMES.map((_, dayIndex) => getActivitiesForTemplateDay(plot, week, dayIndex + 1, activityDelays, plotTemplates)),
+        PROGRAMME_DAYS.map((_, dayIndex) => {
+          if (isWeekend(dayIndex)) return [];
+          return getActivitiesForTemplateDay(plot, week, dayIndex + 1, activityDelays, plotTemplates);
+        }),
       );
       const firstActivity = dailyActivities.flat()[0];
       return {
@@ -128,7 +135,7 @@ export default function TwoWeekProgrammeScreen() {
         <View style={styles.summaryStrip}>
           <MiniStat label="Active plots" value={sitePlots.length} />
           <MiniStat label="View" value="All trades" />
-          <MiniStat label="Window" value="10 days" />
+          <MiniStat label="Window" value="14 days" />
         </View>
       </View>
 
@@ -145,7 +152,7 @@ export default function TwoWeekProgrammeScreen() {
         <>
           <View style={styles.legendRow}>
             <View style={styles.legendPill}><View style={styles.legendDot} /><Text style={styles.legendText}>Blue cells = planned work</Text></View>
-            <View style={styles.legendPill}><Text style={styles.legendCode}>FND</Text><Text style={styles.legendText}>Short site activity codes</Text></View>
+            <View style={styles.legendPill}><Text style={styles.legendCode}>Sat/Sun</Text><Text style={styles.legendText}>Shown but blank unless weekend work is specifically added</Text></View>
           </View>
 
           <View style={styles.programmeCard}>
@@ -165,8 +172,8 @@ export default function TwoWeekProgrammeScreen() {
                   <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
                   <Text style={[styles.headerCell, styles.typeCell]}>Type</Text>
                   <Text style={[styles.headerCell, styles.stageCell]}>Fix / Stage</Text>
-                  {visibleWeeks.flatMap((week) => SHORT_DAY_NAMES.map((day, dayIndex) => (
-                    <View key={`${week}-${day}`} style={styles.dayHeader}>
+                  {visibleWeeks.flatMap((week) => PROGRAMME_DAYS.map((day, dayIndex) => (
+                    <View key={`${week}-${day}`} style={[styles.dayHeader, isWeekend(dayIndex) ? styles.weekendHeader : null]}>
                       <Text style={styles.dayHeaderName}>{day}</Text>
                       <Text style={styles.dayHeaderDate}>{formatShortDate(getProgrammeDate(week, dayIndex))}</Text>
                     </View>
@@ -177,9 +184,10 @@ export default function TwoWeekProgrammeScreen() {
                     <Text style={[styles.bodyCell, styles.plotCell]}>{row.plot.plotNo}</Text>
                     <Text style={[styles.bodyCell, styles.typeCell]}>{plotTemplates.find((template) => template.id === row.plot.templateId)?.name ?? '3 Bedroom'}</Text>
                     <Text style={[styles.bodyCell, styles.stageCell]}>{row.stage}</Text>
-                    {row.cells.map((text, index) => (
-                      <Text key={`${row.plot.id}-${index}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>
-                    ))}
+                    {row.cells.map((text, index) => {
+                      const dayIndex = index % PROGRAMME_DAYS.length;
+                      return <Text key={`${row.plot.id}-${index}`} style={[styles.dayCell, isWeekend(dayIndex) ? styles.weekendCell : null, text ? styles.activeDayCell : null]}>{text}</Text>;
+                    })}
                   </View>
                 ))}
               </View>
@@ -236,7 +244,7 @@ const styles = StyleSheet.create({
   programmeHeader: { gap: 3 },
   programmeTitle: { color: '#0f172a', fontWeight: '900', fontSize: 20 },
   programmeSubtitle: { color: '#64748b', fontSize: 13 },
-  tableWrap: { minWidth: PLOT_WIDTH + TYPE_WIDTH + STAGE_WIDTH + DAY_WIDTH * 10 },
+  tableWrap: { minWidth: PLOT_WIDTH + TYPE_WIDTH + STAGE_WIDTH + DAY_WIDTH * 14 },
   weekHeaderRow: { flexDirection: 'row', alignItems: 'stretch' },
   weekHeaderBlank: { backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce' },
   weekGroup: { width: WEEK_WIDTH, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 8, fontWeight: '900' },
@@ -246,11 +254,13 @@ const styles = StyleSheet.create({
   typeCell: { width: TYPE_WIDTH },
   stageCell: { width: STAGE_WIDTH },
   dayHeader: { width: DAY_WIDTH, backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce', alignItems: 'center', justifyContent: 'center', paddingVertical: 6 },
+  weekendHeader: { backgroundColor: '#214c75' },
   dayHeaderName: { color: '#ffffff', fontWeight: '900', fontSize: 12 },
   dayHeaderDate: { color: '#dbeafe', fontWeight: '900', fontSize: 11, marginTop: 1 },
   tableRow: { flexDirection: 'row', alignItems: 'stretch', minHeight: 42 },
   altRow: { backgroundColor: '#eef6ff' },
   bodyCell: { color: '#0f172a', borderWidth: 1, borderColor: '#c8d7e6', paddingHorizontal: 7, paddingVertical: 8, textAlign: 'center', fontWeight: '900', fontSize: 11 },
   dayCell: { width: DAY_WIDTH, color: '#0f172a', borderWidth: 1, borderColor: '#c8d7e6', paddingHorizontal: 4, paddingVertical: 6, textAlign: 'center', fontWeight: '900', fontSize: 10, lineHeight: 12 },
+  weekendCell: { backgroundColor: '#f8fafc', color: '#94a3b8' },
   activeDayCell: { backgroundColor: '#dbeafe' },
 });
