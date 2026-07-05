@@ -6,6 +6,21 @@ import { useSitePlanner } from '../../data/sitePlannerStore';
 import { WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
 import { getMilestoneForPlotWeek, getStage1StartWeekForPlot, getTemplateForPlot } from '../../utils/templateProgramme';
 
+function getShortWeekDate(week: number) {
+  const year = new Date().getFullYear();
+  const firstThursday = new Date(year, 0, 4);
+  const firstMonday = new Date(firstThursday);
+  const day = firstThursday.getDay() || 7;
+  firstMonday.setDate(firstThursday.getDate() - day + 1);
+
+  const weekStart = new Date(firstMonday);
+  weekStart.setDate(firstMonday.getDate() + (week - 1) * 7);
+
+  const date = String(weekStart.getDate()).padStart(2, '0');
+  const month = String(weekStart.getMonth() + 1).padStart(2, '0');
+  return `${date}/${month}`;
+}
+
 export default function MasterProgrammeScreen() {
   const { sitePlots, plotTemplates, upsertSitePlot, removeSitePlot } = useSitePlanner();
   const [plotNo, setPlotNo] = useState('105');
@@ -65,7 +80,10 @@ export default function MasterProgrammeScreen() {
               <Text style={[styles.headerCell, styles.weekInputCell]}>Stage 9 Complete Week</Text>
               <Text style={[styles.headerCell, styles.weekInputCell]}>Stage 1 Start Week</Text>
               {WEEK_NUMBERS.map((week) => (
-                <Text key={week} style={styles.weekHeader}>WK{String(week).padStart(2, '0')}</Text>
+                <View key={week} style={styles.weekHeader}>
+                  <Text style={styles.weekHeaderDate}>{getShortWeekDate(week)}</Text>
+                  <Text style={styles.weekHeaderLabel}>WK{String(week).padStart(2, '0')}</Text>
+                </View>
               ))}
               <Text style={[styles.headerCell, styles.actionCell]}>Action</Text>
             </View>
@@ -117,7 +135,9 @@ const styles = StyleSheet.create({
   templateCell: { width: 120 },
   weekInputCell: { width: 150 },
   actionCell: { width: 86 },
-  weekHeader: { width: 58, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  weekHeader: { width: 58, backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2, paddingVertical: 3 },
+  weekHeaderDate: { color: '#c7d2fe', fontWeight: '900', fontSize: 8.5, lineHeight: 10 },
+  weekHeaderLabel: { color: '#ffffff', fontWeight: '900', fontSize: 11, lineHeight: 13 },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
   weekInputBody: { backgroundColor: '#fff4cc', color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
   stageStartBody: { backgroundColor: '#e3f3d8', color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
