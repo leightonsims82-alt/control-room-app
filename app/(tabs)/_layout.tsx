@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const bottomPadding = Math.max(insets.bottom + 18, 34);
+  const floatingBottom = Math.max(insets.bottom + 28, 42);
 
   return (
     <Tabs
@@ -13,10 +13,21 @@ export default function TabLayout() {
         tabBarActiveTintColor: '#2563eb',
         tabBarInactiveTintColor: '#94a3b8',
         tabBarStyle: {
-          borderTopColor: '#e2e8f0',
-          height: 76 + bottomPadding,
-          paddingBottom: bottomPadding,
-          paddingTop: 10,
+          position: 'absolute',
+          left: 14,
+          right: 14,
+          bottom: floatingBottom,
+          height: 68,
+          paddingBottom: 8,
+          paddingTop: 8,
+          borderTopWidth: 0,
+          borderRadius: 22,
+          backgroundColor: '#ffffff',
+          shadowColor: '#0f172a',
+          shadowOpacity: 0.14,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 16,
         },
         tabBarItemStyle: {
           paddingVertical: 4,
@@ -24,7 +35,7 @@ export default function TabLayout() {
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '800',
-          marginBottom: 4,
+          marginBottom: 0,
         },
       }}
     >
