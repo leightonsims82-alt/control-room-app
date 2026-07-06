@@ -55,8 +55,8 @@ export default function MasterProgrammeScreen() {
     }
 
     const scopeLabel = moveScope === 'all' ? 'Whole programme' : `Plot ${selectedPlot?.plotNo}`;
-    const direction = change > 0 ? 'later' : 'earlier';
-    setMoveMessage(`${scopeLabel} moved 1 week ${direction}`);
+    const direction = change > 0 ? 'forward' : 'back';
+    setMoveMessage(`${scopeLabel} moved ${direction} 1 week`);
   };
 
   return (
@@ -65,6 +65,38 @@ export default function MasterProgrammeScreen() {
         <Text style={styles.title}>Master 23 Week Build</Text>
         <Text style={styles.subtitle}>Milestone completion view. Add a plot, choose its house type template, and enter the Stage 9 complete week.</Text>
       </View>
+
+      <SectionCard title="MOVE PROGRAMME FORWARD / BACK" subtitle="Use this to manually move the whole site programme or one selected plot. This changes the Stage 9 week and recalculates the programme.">
+        <View style={styles.movePanel}>
+          <View style={styles.inputWrapWide}>
+            <Text style={styles.label}>What do you want to move?</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.templateChips}>
+                <Pressable style={[styles.templateChip, moveScope === 'all' ? styles.templateChipActive : null]} onPress={() => { setMoveScope('all'); setMoveMessage(''); }}>
+                  <Text style={[styles.templateChipText, moveScope === 'all' ? styles.templateChipTextActive : null]}>Whole programme</Text>
+                </Pressable>
+                {sitePlots.map((plot) => {
+                  const active = plot.id === moveScope;
+                  return (
+                    <Pressable key={plot.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => { setMoveScope(plot.id); setMoveMessage(''); }}>
+                      <Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>Plot {plot.plotNo}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+          <View style={styles.moveButtons}>
+            <Pressable style={styles.moveBackButton} onPress={() => moveProgrammeByWeek(-1)}>
+              <Text style={styles.moveButtonText}>Move Back 1 Week</Text>
+            </Pressable>
+            <Pressable style={styles.moveForwardButton} onPress={() => moveProgrammeByWeek(1)}>
+              <Text style={styles.moveButtonText}>Move Forward 1 Week</Text>
+            </Pressable>
+          </View>
+          {moveMessage ? <Text style={styles.moveMessage}>{moveMessage}</Text> : null}
+        </View>
+      </SectionCard>
 
       <SectionCard title="Add / update plot" subtitle="Plot template controls the build duration and task durations used by the plot breakdown.">
         <View style={styles.formRow}>
@@ -94,38 +126,6 @@ export default function MasterProgrammeScreen() {
           <Pressable style={styles.saveButton} onPress={savePlot}>
             <Text style={styles.saveButtonText}>Save Plot</Text>
           </Pressable>
-        </View>
-      </SectionCard>
-
-      <SectionCard title="Move programme manually" subtitle="Move the whole programme or one plot earlier or later by one week.">
-        <View style={styles.movePanel}>
-          <View style={styles.inputWrapWide}>
-            <Text style={styles.label}>Move scope</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.templateChips}>
-                <Pressable style={[styles.templateChip, moveScope === 'all' ? styles.templateChipActive : null]} onPress={() => { setMoveScope('all'); setMoveMessage(''); }}>
-                  <Text style={[styles.templateChipText, moveScope === 'all' ? styles.templateChipTextActive : null]}>Whole programme</Text>
-                </Pressable>
-                {sitePlots.map((plot) => {
-                  const active = plot.id === moveScope;
-                  return (
-                    <Pressable key={plot.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => { setMoveScope(plot.id); setMoveMessage(''); }}>
-                      <Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>Plot {plot.plotNo}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </ScrollView>
-          </View>
-          <View style={styles.moveButtons}>
-            <Pressable style={styles.earlierButton} onPress={() => moveProgrammeByWeek(-1)}>
-              <Text style={styles.moveButtonText}>Earlier 1 week</Text>
-            </Pressable>
-            <Pressable style={styles.laterButton} onPress={() => moveProgrammeByWeek(1)}>
-              <Text style={styles.moveButtonText}>Later 1 week</Text>
-            </Pressable>
-          </View>
-          {moveMessage ? <Text style={styles.moveMessage}>{moveMessage}</Text> : null}
         </View>
       </SectionCard>
 
@@ -186,10 +186,10 @@ const styles = StyleSheet.create({
   templateChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   templateChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
   templateChipTextActive: { color: '#ffffff' },
-  movePanel: { gap: 12 },
+  movePanel: { gap: 12, backgroundColor: '#fff7ed', borderColor: '#fed7aa', borderWidth: 1, borderRadius: 14, padding: 12 },
   moveButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  earlierButton: { backgroundColor: '#7f1d1d', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
-  laterButton: { backgroundColor: '#166534', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  moveBackButton: { backgroundColor: '#7f1d1d', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  moveForwardButton: { backgroundColor: '#166534', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
   moveButtonText: { color: '#ffffff', fontWeight: '900' },
   moveMessage: { alignSelf: 'flex-start', backgroundColor: '#dcfce7', color: '#166534', borderColor: '#86efac', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, fontWeight: '900' },
   tableRow: { flexDirection: 'row', minHeight: 34, alignItems: 'stretch' },
