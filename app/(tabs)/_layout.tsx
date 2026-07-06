@@ -78,6 +78,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="issue"
+        options={{
+          title: 'Issue',
+          tabBarIcon: ({ color }) => <Ionicons name="send-outline" color={color} size={22} />,
+        }}
+      />
+      <Tabs.Screen
         name="qa"
         options={{
           title: 'QA',
