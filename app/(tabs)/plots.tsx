@@ -20,9 +20,9 @@ export default function PlotsScreen() {
     <AppScreen>
       <View style={styles.header}>
         <View>
-          <Text style={styles.kicker}>Full programme</Text>
-          <Text style={styles.title}>Plot Breakdown</Text>
-          <Text style={styles.subtitle}>One row per plot with daily activity codes across the full programme.</Text>
+          <Text style={styles.kicker}>2 week programme</Text>
+          <Text style={styles.title}>2 Week Programme</Text>
+          <Text style={styles.subtitle}>One row per plot with daily activity codes across the programme.</Text>
         </View>
         <View style={styles.badge}><Text style={styles.badgeText}>{filteredPlots.length} plot{filteredPlots.length === 1 ? '' : 's'}</Text></View>
       </View>
@@ -44,11 +44,11 @@ export default function PlotsScreen() {
         </ScrollView>
       </View>
 
-      <SectionCard title="Daily Plot Breakdown" subtitle="Cells show short activity codes such as FND, DNG, SLAB and 1ST BWK.">
+      <SectionCard title="2 Week Programme" subtitle="Cells show short activity codes such as FND, DNG, SLAB and 1ST BWK.">
         {sitePlots.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No plots added yet</Text>
-            <Text style={styles.emptyText}>Add your own plot numbers in the plot setup area. Once plots are added, this screen will generate the full daily breakdown automatically.</Text>
+            <Text style={styles.emptyText}>Add your plot numbers first. Once plots are added, the 2 Week Programme will generate automatically.</Text>
           </View>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator>
