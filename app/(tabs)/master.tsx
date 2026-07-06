@@ -77,17 +77,17 @@ export default function MasterProgrammeScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.tableRow}>
-              <Text style={[styles.headerCell, styles.plotCell]}>Plot No</Text>
-              <Text style={[styles.headerCell, styles.templateCell]}>Template</Text>
-              <Text style={[styles.headerCell, styles.weekInputCell]}>Stage 9 Complete Week</Text>
-              <Text style={[styles.headerCell, styles.weekInputCell]}>Stage 1 Start Week</Text>
+              <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
+              <Text style={[styles.headerCell, styles.templateCell]}>Type</Text>
+              <Text style={[styles.headerCell, styles.weekInputCell]}>S9 Week</Text>
+              <Text style={[styles.headerCell, styles.weekInputCell]}>S1 Start</Text>
               {WEEK_NUMBERS.map((week) => (
                 <View key={week} style={styles.weekHeader}>
                   <Text style={styles.weekHeaderDate}>{getShortWeekDate(week)}</Text>
                   <Text style={styles.weekHeaderLabel}>WK{String(week).padStart(2, '0')}</Text>
                 </View>
               ))}
-              <Text style={[styles.headerCell, styles.actionCell]}>Action</Text>
+              <Text style={[styles.headerCell, styles.actionCell]}>Del</Text>
             </View>
 
             {sitePlots.map((plot, rowIndex) => {
@@ -95,14 +95,14 @@ export default function MasterProgrammeScreen() {
               return (
                 <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                   <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
-                  <Text style={[styles.bodyCell, styles.templateCell]}>{template.name}</Text>
+                  <Text style={[styles.bodyCell, styles.templateCell]} numberOfLines={1}>{template.name.replace(' Bedroom', ' Bed')}</Text>
                   <Text style={[styles.weekInputBody, styles.weekInputCell]}>{plot.stage9CompleteWeek}</Text>
                   <Text style={[styles.stageStartBody, styles.weekInputCell]}>{getStage1StartWeekForPlot(plot, plotTemplates)}</Text>
                   {WEEK_NUMBERS.map((week) => (
                     <Text key={week} style={styles.weekCell}>{getMilestoneForPlotWeek(plot, week, plotTemplates)}</Text>
                   ))}
                   <Pressable style={styles.removeButton} onPress={() => removeSitePlot(plot.id)}>
-                    <Text style={styles.removeButtonText}>Remove</Text>
+                    <Text style={styles.removeButtonText}>X</Text>
                   </Pressable>
                 </View>
               );
@@ -130,20 +130,20 @@ const styles = StyleSheet.create({
   templateChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   templateChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
   templateChipTextActive: { color: '#ffffff' },
-  tableRow: { flexDirection: 'row', minHeight: 36, alignItems: 'stretch' },
+  tableRow: { flexDirection: 'row', minHeight: 34, alignItems: 'stretch' },
   altRow: { backgroundColor: '#eaf2fb' },
-  headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 10, lineHeight: 12, paddingHorizontal: 4, paddingVertical: 6, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
-  plotCell: { width: 76 },
-  templateCell: { width: 88 },
-  weekInputCell: { width: 98 },
-  actionCell: { width: 72 },
-  weekHeader: { width: 58, backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2, paddingVertical: 3 },
-  weekHeaderDate: { color: '#c7d2fe', fontWeight: '900', fontSize: 8.5, lineHeight: 10 },
-  weekHeaderLabel: { color: '#ffffff', fontWeight: '900', fontSize: 11, lineHeight: 13 },
-  bodyCell: { color: '#0f172a', paddingHorizontal: 4, paddingVertical: 7, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800', fontSize: 11 },
-  weekInputBody: { backgroundColor: '#fff4cc', color: '#0f172a', paddingHorizontal: 4, paddingVertical: 7, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900', fontSize: 11 },
-  stageStartBody: { backgroundColor: '#e3f3d8', color: '#0f172a', paddingHorizontal: 4, paddingVertical: 7, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900', fontSize: 11 },
-  weekCell: { width: 58, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
-  removeButton: { width: 72, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#c8d7e6' },
+  headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 9, lineHeight: 10, paddingHorizontal: 2, paddingVertical: 5, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  plotCell: { width: 56 },
+  templateCell: { width: 68 },
+  weekInputCell: { width: 58 },
+  actionCell: { width: 38 },
+  weekHeader: { width: 52, backgroundColor: '#173b5f', borderWidth: 1, borderColor: '#9fb6ce', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 1, paddingVertical: 2 },
+  weekHeaderDate: { color: '#c7d2fe', fontWeight: '900', fontSize: 8, lineHeight: 9 },
+  weekHeaderLabel: { color: '#ffffff', fontWeight: '900', fontSize: 10, lineHeight: 11 },
+  bodyCell: { color: '#0f172a', paddingHorizontal: 2, paddingVertical: 6, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800', fontSize: 10 },
+  weekInputBody: { backgroundColor: '#fff4cc', color: '#0f172a', paddingHorizontal: 2, paddingVertical: 6, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900', fontSize: 10 },
+  stageStartBody: { backgroundColor: '#e3f3d8', color: '#0f172a', paddingHorizontal: 2, paddingVertical: 6, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900', fontSize: 10 },
+  weekCell: { width: 52, color: '#0f172a', paddingHorizontal: 2, paddingVertical: 6, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900', fontSize: 11 },
+  removeButton: { width: 38, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#c8d7e6' },
   removeButtonText: { color: '#dc2626', fontSize: 10, fontWeight: '900' },
 });
