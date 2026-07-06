@@ -68,6 +68,10 @@ function openTradeEmail(email: string, subject: string, body: string) {
   Linking.openURL(url);
 }
 
+function cleanCellText(value: string) {
+  return value.replace(/\n/g, ' / ').trim() || '-';
+}
+
 export default function TradesScreen() {
   const {
     sitePlots,
@@ -136,6 +140,18 @@ export default function TradesScreen() {
       .filter((row) => row.cells.some(Boolean));
   }, [activeContact, sitePlots, tableDays, activityDelays, plotTemplates]);
 
+  const buildEmailProgrammeText = () => {
+    const heading = `${activeContact?.trade ?? 'Trade'} 2-week programme`;
+    const weekText = `WK${String(weekGroups[0]).padStart(2, '0')} + WK${String(weekGroups[1]).padStart(2, '0')}`;
+    const dayHeader = ['Plot', 'Fix / Stage', ...tableDays.map((item) => `${item.dayName} ${item.date}`)].join(' | ');
+    const divider = dayHeader.replace(/[^|]/g, '-');
+    const rows = programmeRows.length
+      ? programmeRows.map((row) => [row.plot.plotNo, row.activeActivity?.displayText ?? '-', ...row.cells.map(cleanCellText)].join(' | ')).join('\n')
+      : `No planned ${activeContact?.trade ?? 'trade'} activity in this 2-week window.`;
+
+    return `${heading}\n${weekText}\n\n${dayHeader}\n${divider}\n${rows}`;
+  };
+
   const updateDraft = (changes: Partial<TradeContact>) => {
     if (!draftContact) return;
     setSaveMessage('');
@@ -156,11 +172,7 @@ export default function TradesScreen() {
   const moveFix = async (row: ProgrammeRow, change: number) => {
     if (!row.activeActivity) return;
     const nextDelay = row.delayDays + change;
-    await setActivityDelay({
-      plotId: row.plot.id,
-      activityCode: row.activeActivity.code,
-      delayDays: nextDelay,
-    });
+    await setActivityDelay({ plotId: row.plot.id, activityCode: row.activeActivity.code, delayDays: nextDelay });
     const direction = change > 0 ? 'extended / pushed forward' : 'reduced / pulled back';
     setSaveMessage(`Plot ${row.plot.plotNo} ${row.activeActivity.displayText} ${direction} by 1 working day`);
   };
@@ -211,17 +223,14 @@ export default function TradesScreen() {
       setSaveMessage(`Add supervisor email for ${activeContact.trade} first`);
       return;
     }
+    const programmeText = buildEmailProgrammeText();
     openTradeEmail(
       activeContact.supervisorEmail.trim(),
       `${activeContact.trade} 2-week programme - WK${String(activeIssueWeek).padStart(2, '0')}`,
-      `Please find your ${activeContact.trade} 2-week programme.\n\nThis issue contains your trade-specific programme only.\n\nStart week: WK${String(activeIssueWeek).padStart(2, '0')}\nProgramme window: WK${String(weekGroups[0]).padStart(2, '0')} + WK${String(weekGroups[1]).padStart(2, '0')}\n\nPlease confirm receipt.`,
+      `Please find your ${activeContact.trade} 2-week programme below.\n\nThis issue contains your trade-specific programme only.\n\n${programmeText}\n\nPlease confirm receipt.`,
     );
-    await recordIssue({
-      startWeek: activeIssueWeek,
-      recipientCount: 1,
-      note: `${activeContact.trade} programme issued to ${activeContact.supervisorEmail}`,
-    });
-    setSaveMessage(`${activeContact.trade} issue email opened`);
+    await recordIssue({ startWeek: activeIssueWeek, recipientCount: 1, note: `${activeContact.trade} programme issued to ${activeContact.supervisorEmail}` });
+    setSaveMessage(`${activeContact.trade} issue email opened with programme included`);
   };
 
   return (
@@ -320,7 +329,7 @@ export default function TradesScreen() {
         <View style={styles.issueTradePanel}>
           <View style={styles.issueTradeTextWrap}>
             <Text style={styles.issueTradeTitle}>Ready to issue this trade programme?</Text>
-            <Text style={styles.issueTradeText}>{activeContact?.supervisorEmail ? `Will open an email to ${activeContact.supervisorEmail}` : `Add a supervisor email for ${activeContact?.trade ?? 'this trade'} before issuing.`}</Text>
+            <Text style={styles.issueTradeText}>{activeContact?.supervisorEmail ? `Will open an email to ${activeContact.supervisorEmail} with the programme included in the email body.` : `Add a supervisor email for ${activeContact?.trade ?? 'this trade'} before issuing.`}</Text>
           </View>
           <Pressable style={styles.issueTradeButton} onPress={issueToCurrentTrade}>
             <Text style={styles.issueTradeButtonText}>Issue to {activeContact?.trade ?? 'Trade'}</Text>
