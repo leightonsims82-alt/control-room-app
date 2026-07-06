@@ -8,6 +8,7 @@ import { ChecklistAnswer } from '../../types/models';
 import { getActiveStage } from '../../utils/programmeLogic';
 
 const WALK_KEY = 'siteprog:8am-walk:v1';
+const WALK_NOTES_KEY = 'siteprog:8am-walk-notes:v1';
 const answers: ChecklistAnswer[] = ['Yes', 'No', 'N/A'];
 
 type WalkItem = {
@@ -25,6 +26,8 @@ type WalkItem = {
   complete: boolean;
   updatedAt: string;
 };
+
+type WalkNote = { walkDate: string; notes: string; updatedAt: string };
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -52,12 +55,15 @@ function blankItem(plotId: string, stageId?: string): WalkItem {
 export default function WalkScreen() {
   const { plotProgrammes, plotStages } = useProgrammeData();
   const [items, setItems] = useState<WalkItem[]>([]);
+  const [walkNotes, setWalkNotes] = useState<WalkNote[]>([]);
   const walkDate = today();
+  const noteText = walkNotes.find((note) => note.walkDate === walkDate)?.notes ?? '';
 
   useEffect(() => {
     async function load() {
-      const stored = await AsyncStorage.getItem(WALK_KEY);
-      setItems(stored ? (JSON.parse(stored) as WalkItem[]) : []);
+      const [storedItems, storedNotes] = await Promise.all([AsyncStorage.getItem(WALK_KEY), AsyncStorage.getItem(WALK_NOTES_KEY)]);
+      setItems(storedItems ? (JSON.parse(storedItems) as WalkItem[]) : []);
+      setWalkNotes(storedNotes ? (JSON.parse(storedNotes) as WalkNote[]) : []);
     }
     load();
   }, []);
@@ -70,12 +76,22 @@ export default function WalkScreen() {
     await AsyncStorage.setItem(WALK_KEY, JSON.stringify(nextItems));
   }
 
+  async function saveWalkNotes(notes: string) {
+    const existing = walkNotes.find((note) => note.walkDate === walkDate);
+    const updated = { walkDate, notes, updatedAt: new Date().toISOString() };
+    const nextNotes = existing ? walkNotes.map((note) => (note.walkDate === walkDate ? updated : note)) : [updated, ...walkNotes];
+    setWalkNotes(nextNotes);
+    await AsyncStorage.setItem(WALK_NOTES_KEY, JSON.stringify(nextNotes));
+  }
+
   const rows = useMemo(() => {
-    return plotProgrammes.map((plot) => {
-      const stage = getActiveStage(plot.id, plotStages) ?? plotStages.find((item) => item.plotProgrammeId === plot.id && item.status !== 'Complete');
-      const saved = items.find((item) => item.plotProgrammeId === plot.id && item.walkDate === walkDate);
-      return { plot, stage, saved };
-    });
+    return plotProgrammes
+      .map((plot) => {
+        const stage = getActiveStage(plot.id, plotStages) ?? plotStages.find((item) => item.plotProgrammeId === plot.id && item.status === 'In progress');
+        const saved = items.find((item) => item.plotProgrammeId === plot.id && item.walkDate === walkDate);
+        return { plot, stage, saved };
+      })
+      .filter((row) => row.stage?.status === 'In progress');
   }, [items, plotProgrammes, plotStages, walkDate]);
 
   const completeCount = rows.filter((row) => row.saved?.complete).length;
@@ -86,17 +102,26 @@ export default function WalkScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>8am Walk</Text>
         <Text style={styles.title}>Morning Site Walk</Text>
-        <Text style={styles.subtitle}>Check live plots against the programme. Record missing trades, blockers and issues.</Text>
+        <Text style={styles.subtitle}>Only plots currently in build are shown. Use the note box for general site observations.</Text>
       </View>
 
       <View style={styles.summaryRow}>
-        <Summary label="Plots" value={String(rows.length)} />
+        <Summary label="Plots in build" value={String(rows.length)} />
         <Summary label="Checked" value={`${completeCount}/${rows.length}`} />
         <Summary label="Issues" value={String(issuesCount)} danger={issuesCount > 0} />
       </View>
 
-      <SectionCard title="Today's walk" subtitle={`Walk date: ${walkDate}`}>
-        {rows.map(({ plot, stage, saved }) => {
+      <SectionCard title="Site Notes" subtitle={`Walk date: ${walkDate}`}>
+        <TextInput style={[styles.input, styles.siteNotes]} defaultValue={noteText} placeholder="General site notes and actions" multiline onBlur={(event) => saveWalkNotes(event.nativeEvent.text)} />
+      </SectionCard>
+
+      <SectionCard title="Plots in build" subtitle={`Walk date: ${walkDate}`}>
+        {rows.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>No plots currently in build</Text>
+            <Text style={styles.emptyText}>Plots appear here when they have a stage marked as In progress.</Text>
+          </View>
+        ) : rows.map(({ plot, stage, saved }) => {
           const item = saved ?? blankItem(plot.id, stage?.id);
           return (
             <View key={plot.id} style={styles.card}>
@@ -123,7 +148,7 @@ export default function WalkScreen() {
                 </Pressable>
               </View>
 
-              <TextInput style={[styles.input, styles.notes]} defaultValue={item.issueNotes} placeholder="Issue, blocker or action required" multiline onBlur={(event) => saveItem(plot.id, stage?.id, { issueNotes: event.nativeEvent.text, plotStageId: stage?.id })} />
+              <TextInput style={[styles.input, styles.notes]} defaultValue={item.issueNotes} placeholder="Plot-specific issue or action" multiline onBlur={(event) => saveItem(plot.id, stage?.id, { issueNotes: event.nativeEvent.text, plotStageId: stage?.id })} />
               <TextInput style={styles.input} defaultValue={item.actionOwner} placeholder="Action owner or trade" onBlur={(event) => saveItem(plot.id, stage?.id, { actionOwner: event.nativeEvent.text, plotStageId: stage?.id })} />
             </View>
           );
@@ -140,11 +165,7 @@ function AnswerRow({ label, value, onChange }: { label: string; value: Checklist
       <View style={styles.actionRow}>
         {answers.map((answer) => {
           const active = value === answer;
-          return (
-            <Pressable key={answer} style={[styles.answerChip, active ? styles.blueChip : null]} onPress={() => onChange(answer)}>
-              <Text style={[styles.chipText, active ? styles.lightText : null]}>{answer}</Text>
-            </Pressable>
-          );
+          return <Pressable key={answer} style={[styles.answerChip, active ? styles.blueChip : null]} onPress={() => onChange(answer)}><Text style={[styles.chipText, active ? styles.lightText : null]}>{answer}</Text></Pressable>;
         })}
       </View>
     </View>
@@ -152,12 +173,7 @@ function AnswerRow({ label, value, onChange }: { label: string; value: Checklist
 }
 
 function Summary({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
-  return (
-    <View style={[styles.summary, danger ? styles.summaryDanger : null]}>
-      <Text style={[styles.summaryValue, danger ? styles.summaryValueDanger : null]}>{value}</Text>
-      <Text style={styles.summaryLabel}>{label}</Text>
-    </View>
-  );
+  return <View style={[styles.summary, danger ? styles.summaryDanger : null]}><Text style={[styles.summaryValue, danger ? styles.summaryValueDanger : null]}>{value}</Text><Text style={styles.summaryLabel}>{label}</Text></View>;
 }
 
 const styles = StyleSheet.create({
@@ -171,6 +187,9 @@ const styles = StyleSheet.create({
   summaryValue: { color: '#0f172a', fontSize: 22, fontWeight: '900' },
   summaryValueDanger: { color: '#dc2626' },
   summaryLabel: { color: '#64748b', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
+  emptyCard: { backgroundColor: '#f8fafc', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', padding: 18 },
+  emptyTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
+  emptyText: { color: '#64748b', fontSize: 14, lineHeight: 21, marginTop: 6 },
   card: { borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 14, gap: 10 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' },
   cardTitleWrap: { flex: 1, minWidth: 210 },
@@ -190,4 +209,5 @@ const styles = StyleSheet.create({
   doneText: { color: '#166534' },
   input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', backgroundColor: '#ffffff' },
   notes: { minHeight: 62, textAlignVertical: 'top' },
+  siteNotes: { minHeight: 110, textAlignVertical: 'top' },
 });
