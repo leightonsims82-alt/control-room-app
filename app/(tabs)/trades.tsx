@@ -8,6 +8,8 @@ import { getTradeTemplateText } from '../../utils/templateProgramme';
 
 const PROGRAMME_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const WORKING_DAY_COUNT = 5;
+const DAY_WIDTH = 72;
+const WEEK_WIDTH = DAY_WIDTH * 7;
 
 function getShortWeekDate(week: number, dayIndex: number) {
   const year = new Date().getFullYear();
@@ -30,19 +32,23 @@ function isWeekend(dayIndex: number) {
   return dayIndex >= WORKING_DAY_COUNT;
 }
 
-function twoWeekDays(startWeek: number) {
-  return [startWeek, normaliseWeek(startWeek + 1)].flatMap((week) =>
-    PROGRAMME_DAYS.map((dayName, dayIndex) => ({
-      key: `${week}-${dayIndex + 1}`,
+function buildTwoWeekDays(startWeek: number, dayOffset: number) {
+  const baseIndex = (normaliseWeek(startWeek) - 1) * 7 + dayOffset;
+  return Array.from({ length: 14 }, (_, columnIndex) => {
+    const absoluteDayIndex = baseIndex + columnIndex;
+    const week = normaliseWeek(Math.floor(absoluteDayIndex / 7) + 1);
+    const dayIndex = ((absoluteDayIndex % 7) + 7) % 7;
+    return {
+      key: `${absoluteDayIndex}-${columnIndex}`,
       week,
       day: dayIndex + 1,
       dayIndex,
-      dayName,
+      dayName: PROGRAMME_DAYS[dayIndex],
       date: getShortWeekDate(week, dayIndex),
-      weekLabel: `WK${String(normaliseWeek(week)).padStart(2, '0')}`,
+      weekLabel: `WK${String(week).padStart(2, '0')}`,
       weekend: isWeekend(dayIndex),
-    })),
-  );
+    };
+  });
 }
 
 function makeTradeId(trade: string) {
@@ -61,6 +67,7 @@ export default function TradesScreen() {
     setIssueSettings,
     recordIssue,
   } = useSitePlanner();
+
   const [selectedTradeId, setSelectedTradeId] = useState(tradeContacts[0]?.id ?? '');
   const activeContact = tradeContacts.find((contact) => contact.id === selectedTradeId) ?? tradeContacts[0];
   const [draftContact, setDraftContact] = useState<TradeContact | undefined>(activeContact);
@@ -69,6 +76,7 @@ export default function TradesScreen() {
   const [issueTime, setIssueTime] = useState(issueSettings.issueTime);
   const [autoIssueEnabled, setAutoIssueEnabled] = useState(issueSettings.autoIssueEnabled);
   const [issueStartWeek, setIssueStartWeek] = useState('1');
+  const [dayOffset, setDayOffset] = useState(0);
   const [newTradeName, setNewTradeName] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
 
@@ -84,7 +92,8 @@ export default function TradesScreen() {
   }, [issueSettings]);
 
   const activeIssueWeek = normaliseWeek(Number(issueStartWeek) || 1);
-  const tableDays = useMemo(() => twoWeekDays(activeIssueWeek), [activeIssueWeek]);
+  const tableDays = useMemo(() => buildTwoWeekDays(activeIssueWeek, dayOffset), [activeIssueWeek, dayOffset]);
+  const weekGroups = [tableDays[0]?.week ?? activeIssueWeek, tableDays[7]?.week ?? normaliseWeek(activeIssueWeek + 1)];
   const savedSupervisorEmails = getSavedSupervisorEmails(tradeContacts);
   const recipientCount = savedSupervisorEmails.length + (managerEmail.trim() ? 1 : 0);
   const tradeSaved = Boolean(draftContact && saveMessage === `${draftContact.trade} saved`);
@@ -165,22 +174,31 @@ export default function TradesScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>2-Week Trade Programme</Text>
-        <Text style={styles.subtitle}>Site manager table view first. Select the week and trade to see plot-by-plot daily activity.</Text>
+        <Text style={styles.subtitle}>Select the week and trade, then move the issue window by days if needed.</Text>
       </View>
 
       <SectionCard title="2-week trade programme" subtitle="One row per plot. Dates sit on their own row, with weekends shown blank unless specifically planned.">
         <View style={styles.viewerHeaderRow}>
           <View style={styles.inputWrapSmall}>
             <Text style={styles.label}>Start week</Text>
-            <TextInput value={issueStartWeek} onChangeText={setIssueStartWeek} style={styles.input} keyboardType="number-pad" />
+            <TextInput value={issueStartWeek} onChangeText={(text) => { setDayOffset(0); setIssueStartWeek(text); }} style={styles.input} keyboardType="number-pad" />
           </View>
           <View style={styles.issueSummary}>
             <Text style={styles.issueTitle}>{activeContact?.trade ?? 'Trade'} Programme</Text>
-            <Text style={styles.issueMeta}>WK{String(activeIssueWeek).padStart(2, '0')} + WK{String(normaliseWeek(activeIssueWeek + 1)).padStart(2, '0')}</Text>
+            <Text style={styles.issueMeta}>WK{String(weekGroups[0]).padStart(2, '0')} + WK{String(weekGroups[1]).padStart(2, '0')} | Offset {dayOffset > 0 ? '+' : ''}{dayOffset} day{Math.abs(dayOffset) === 1 ? '' : 's'}</Text>
           </View>
           <Pressable style={[styles.saveButton, programmeIssued ? styles.savedButton : null]} onPress={markIssued}>
             <Text style={styles.saveButtonText}>{programmeIssued ? 'Issued ✓' : 'Mark Issued'}</Text>
           </Pressable>
+        </View>
+
+        <View style={styles.dayMovePanel}>
+          <Text style={styles.dayMoveTitle}>Move trade programme by days</Text>
+          <View style={styles.dayMoveRow}>
+            <Pressable style={styles.dayMoveBack} onPress={() => setDayOffset((value) => value - 1)}><Text style={styles.dayMoveButtonText}>- 1 Day</Text></Pressable>
+            <Pressable style={styles.resetButton} onPress={() => setDayOffset(0)}><Text style={styles.resetButtonText}>Reset</Text></Pressable>
+            <Pressable style={styles.dayMoveForward} onPress={() => setDayOffset((value) => value + 1)}><Text style={styles.dayMoveButtonText}>+ 1 Day</Text></Pressable>
+          </View>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator>
@@ -202,8 +220,8 @@ export default function TradesScreen() {
               <Text style={[styles.tableHeader, styles.plotNoCell]} />
               <Text style={[styles.tableHeader, styles.tradeCell]} />
               <Text style={[styles.tableHeader, styles.fixCell]} />
-              {[activeIssueWeek, normaliseWeek(activeIssueWeek + 1)].map((week) => (
-                <Text key={week} style={styles.weekGroupHeader}>WK{String(week).padStart(2, '0')}</Text>
+              {weekGroups.map((week, index) => (
+                <Text key={`${week}-${index}`} style={styles.weekGroupHeader}>WK{String(week).padStart(2, '0')}</Text>
               ))}
             </View>
             <View style={styles.tableRow}>
@@ -269,53 +287,23 @@ export default function TradesScreen() {
 
         {draftContact ? (
           <View style={styles.formGrid}>
-            <View style={styles.inputWrap}>
-              <Text style={styles.label}>Trade</Text>
-              <TextInput value={draftContact.trade} editable={false} style={[styles.input, styles.lockedInput]} />
-            </View>
-            <View style={styles.inputWrap}>
-              <Text style={styles.label}>Contractor</Text>
-              <TextInput value={draftContact.contractor} onChangeText={(contractor) => updateDraft({ contractor })} style={styles.input} placeholder="Contractor name" />
-            </View>
-            <View style={styles.inputWrap}>
-              <Text style={styles.label}>Supervisor</Text>
-              <TextInput value={draftContact.supervisorName} onChangeText={(supervisorName) => updateDraft({ supervisorName })} style={styles.input} placeholder="Supervisor name" />
-            </View>
-            <View style={styles.inputWrap}>
-              <Text style={styles.label}>Supervisor email</Text>
-              <TextInput value={draftContact.supervisorEmail} onChangeText={(supervisorEmail) => updateDraft({ supervisorEmail })} style={styles.input} placeholder="name@example.com" keyboardType="email-address" autoCapitalize="none" />
-            </View>
-            <View style={styles.inputWrap}>
-              <Text style={styles.label}>Supervisor phone</Text>
-              <TextInput value={draftContact.supervisorPhone} onChangeText={(supervisorPhone) => updateDraft({ supervisorPhone })} style={styles.input} placeholder="07..." keyboardType="phone-pad" />
-            </View>
-            <Pressable style={[styles.saveButton, tradeSaved ? styles.savedButton : null]} onPress={saveTradeContact}>
-              <Text style={styles.saveButtonText}>{tradeSaved ? 'Saved ✓' : 'Save Trade'}</Text>
-            </Pressable>
+            <View style={styles.inputWrap}><Text style={styles.label}>Trade</Text><TextInput value={draftContact.trade} editable={false} style={[styles.input, styles.lockedInput]} /></View>
+            <View style={styles.inputWrap}><Text style={styles.label}>Contractor</Text><TextInput value={draftContact.contractor} onChangeText={(contractor) => updateDraft({ contractor })} style={styles.input} placeholder="Contractor name" /></View>
+            <View style={styles.inputWrap}><Text style={styles.label}>Supervisor</Text><TextInput value={draftContact.supervisorName} onChangeText={(supervisorName) => updateDraft({ supervisorName })} style={styles.input} placeholder="Supervisor name" /></View>
+            <View style={styles.inputWrap}><Text style={styles.label}>Supervisor email</Text><TextInput value={draftContact.supervisorEmail} onChangeText={(supervisorEmail) => updateDraft({ supervisorEmail })} style={styles.input} placeholder="name@example.com" keyboardType="email-address" autoCapitalize="none" /></View>
+            <View style={styles.inputWrap}><Text style={styles.label}>Supervisor phone</Text><TextInput value={draftContact.supervisorPhone} onChangeText={(supervisorPhone) => updateDraft({ supervisorPhone })} style={styles.input} placeholder="07..." keyboardType="phone-pad" /></View>
+            <Pressable style={[styles.saveButton, tradeSaved ? styles.savedButton : null]} onPress={saveTradeContact}><Text style={styles.saveButtonText}>{tradeSaved ? 'Saved ✓' : 'Save Trade'}</Text></Pressable>
           </View>
         ) : null}
       </SectionCard>
 
       <SectionCard title="Automatic issue settings" subtitle="Stores the schedule and recipient source for the 2-week trade programme. A backend email job will be needed for true background auto-send.">
         <View style={styles.formGrid}>
-          <View style={styles.inputWrap}>
-            <Text style={styles.label}>Manager email</Text>
-            <TextInput value={managerEmail} onChangeText={(text) => { setSaveMessage(''); setManagerEmail(text); }} style={styles.input} placeholder="manager@example.com" keyboardType="email-address" autoCapitalize="none" />
-          </View>
-          <View style={styles.inputWrap}>
-            <Text style={styles.label}>Issue day</Text>
-            <TextInput value={issueDay} onChangeText={(text) => { setSaveMessage(''); setIssueDay(text); }} style={styles.input} placeholder="Friday" />
-          </View>
-          <View style={styles.inputWrap}>
-            <Text style={styles.label}>Issue time</Text>
-            <TextInput value={issueTime} onChangeText={(text) => { setSaveMessage(''); setIssueTime(text); }} style={styles.input} placeholder="15:00" />
-          </View>
-          <Pressable style={[styles.toggleButton, autoIssueEnabled ? styles.toggleActive : null]} onPress={() => { setSaveMessage(''); setAutoIssueEnabled((value) => !value); }}>
-            <Text style={[styles.toggleText, autoIssueEnabled ? styles.toggleTextActive : null]}>{autoIssueEnabled ? 'Auto issue on' : 'Auto issue off'}</Text>
-          </Pressable>
-          <Pressable style={[styles.saveButton, issueSettingsSaved ? styles.savedButton : null]} onPress={saveIssueSettings}>
-            <Text style={styles.saveButtonText}>{issueSettingsSaved ? 'Saved ✓' : 'Save Issue Settings'}</Text>
-          </Pressable>
+          <View style={styles.inputWrap}><Text style={styles.label}>Manager email</Text><TextInput value={managerEmail} onChangeText={(text) => { setSaveMessage(''); setManagerEmail(text); }} style={styles.input} placeholder="manager@example.com" keyboardType="email-address" autoCapitalize="none" /></View>
+          <View style={styles.inputWrap}><Text style={styles.label}>Issue day</Text><TextInput value={issueDay} onChangeText={(text) => { setSaveMessage(''); setIssueDay(text); }} style={styles.input} placeholder="Friday" /></View>
+          <View style={styles.inputWrap}><Text style={styles.label}>Issue time</Text><TextInput value={issueTime} onChangeText={(text) => { setSaveMessage(''); setIssueTime(text); }} style={styles.input} placeholder="15:00" /></View>
+          <Pressable style={[styles.toggleButton, autoIssueEnabled ? styles.toggleActive : null]} onPress={() => { setSaveMessage(''); setAutoIssueEnabled((value) => !value); }}><Text style={[styles.toggleText, autoIssueEnabled ? styles.toggleTextActive : null]}>{autoIssueEnabled ? 'Auto issue on' : 'Auto issue off'}</Text></Pressable>
+          <Pressable style={[styles.saveButton, issueSettingsSaved ? styles.savedButton : null]} onPress={saveIssueSettings}><Text style={styles.saveButtonText}>{issueSettingsSaved ? 'Saved ✓' : 'Save Issue Settings'}</Text></Pressable>
         </View>
         <Text style={styles.helperText}>Recipients currently saved: {recipientCount}. Manager receives the full programme. Supervisors receive their trade programme once server-side email sending is connected.</Text>
       </SectionCard>
@@ -367,23 +355,31 @@ const styles = StyleSheet.create({
   issueSummary: { flex: 1, minWidth: 220, backgroundColor: '#eff6ff', borderRadius: 12, padding: 12 },
   issueTitle: { color: '#0f172a', fontWeight: '900', fontSize: 18 },
   issueMeta: { color: '#64748b', fontSize: 12, marginTop: 3 },
+  dayMovePanel: { backgroundColor: '#fff7ed', borderColor: '#fed7aa', borderWidth: 1, borderRadius: 14, padding: 12, gap: 10 },
+  dayMoveTitle: { color: '#9a3412', fontWeight: '900', textAlign: 'center' },
+  dayMoveRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 10 },
+  dayMoveBack: { backgroundColor: '#7f1d1d', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
+  dayMoveForward: { backgroundColor: '#166534', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
+  dayMoveButtonText: { color: '#ffffff', fontWeight: '900' },
+  resetButton: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe', borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
+  resetButtonText: { color: '#1d4ed8', fontWeight: '900' },
   tableRow: { flexDirection: 'row', alignItems: 'stretch' },
   altRow: { backgroundColor: '#eef6ff' },
   tableHeader: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 11, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   plotNoCell: { width: 74 },
   tradeCell: { width: 110 },
   fixCell: { width: 118 },
-  weekGroupHeader: { width: 1008, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 11, fontWeight: '900' },
-  dayHeaderCell: { width: 72, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 10, fontWeight: '900' },
+  weekGroupHeader: { width: WEEK_WIDTH, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 11, fontWeight: '900' },
+  dayHeaderCell: { width: DAY_WIDTH, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 10, fontWeight: '900' },
   weekendHeader: { backgroundColor: '#214c75' },
   dateBlankCell: { backgroundColor: '#214c75', borderWidth: 1, borderColor: '#9fb6ce' },
-  dateHeaderCell: { width: 72, backgroundColor: '#214c75', color: '#dbeafe', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 4, fontSize: 9, fontWeight: '900' },
+  dateHeaderCell: { width: DAY_WIDTH, backgroundColor: '#214c75', color: '#dbeafe', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 4, fontSize: 9, fontWeight: '900' },
   weekendDateCell: { backgroundColor: '#2b587f' },
   bodyCell: { color: '#0f172a', padding: 7, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800', fontSize: 11 },
-  dayBodyCell: { width: 72, minHeight: 38, color: '#0f172a', padding: 5, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800', fontSize: 10, lineHeight: 12 },
+  dayBodyCell: { width: DAY_WIDTH, minHeight: 38, color: '#0f172a', padding: 5, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800', fontSize: 10, lineHeight: 12 },
   weekendCell: { backgroundColor: '#f8fafc', color: '#94a3b8' },
   activeDayCell: { backgroundColor: '#fff4cc' },
-  emptyProgrammeCell: { width: 1138, textAlign: 'left', color: '#64748b' },
+  emptyProgrammeCell: { width: 74 + 110 + 118 + WEEK_WIDTH * 2, textAlign: 'left', color: '#64748b' },
   empty: { color: '#64748b' },
   logRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
   logMain: { flex: 1 },
