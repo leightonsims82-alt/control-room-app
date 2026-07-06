@@ -1,1 +1,1 @@
-export { default } from './trades-simple';
+export { default } from './trades-nofix'
