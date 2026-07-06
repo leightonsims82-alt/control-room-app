@@ -1,34 +1,12 @@
 export type DayName = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
 
-export type SitePlot = {
-  id: string;
-  plotNo: string;
-  stage9CompleteWeek: number;
-};
-
-export type ActivityDelay = {
-  plotId: string;
-  activityCode: string;
-  delayDays: number;
-};
-
-export type ProgrammeActivity = {
-  order: number;
-  code: string;
-  trade: string;
-  displayText: string;
-  durationDays: number;
-  relativeWeek: number;
-  relativeDay: number;
-  stage: 1 | 2 | 4 | 5 | 6 | 7 | 8 | 9;
-};
+export type SitePlot = { id: string; plotNo: string; stage9CompleteWeek: number };
+export type ActivityDelay = { plotId: string; activityCode: string; delayDays: number };
+export type ProgrammeActivity = { order: number; code: string; trade: string; displayText: string; durationDays: number; relativeWeek: number; relativeDay: number; stage: 1 | 2 | 4 | 5 | 6 | 7 | 8 | 9 };
 
 export const DAY_NAMES: DayName[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 export const WEEK_NUMBERS = Array.from({ length: 52 }, (_, index) => index + 1);
-
-export function dayIndexFromWeekDay(week: number, day: number) {
-  return (week - 1) * 5 + day;
-}
+export function dayIndexFromWeekDay(week: number, day: number) { return (week - 1) * 5 + day; }
 
 export const DEFAULT_SITE_PLOTS: SitePlot[] = [
   { id: 'plot-101', plotNo: '101', stage9CompleteWeek: 23 },
@@ -48,70 +26,53 @@ export const MASTER_MILESTONES = [
   { stage: 9, offsetFromStage9: 0, label: 'Handover complete' },
 ] as const;
 
-export const TRADE_ORDER = [
-  'Groundworks',
-  'Brickwork',
-  'Scaffold',
-  'Roof',
-  'Solar Panels Installer',
-  'Carpenter',
-  'Plumber',
-  'Electrician',
-  'Tiler',
-  'Sprinkler',
-  'Dry Liner',
-  'Plastering',
-  'Kitchen Fitter',
-  'Decorator',
-  'Mastic',
-  'Flooring',
-  'Cleaning',
-  'Handover / Site Team',
-] as const;
+const taskCode = (left: string, right: string) => left + right;
+export const TRADE_ORDER = ['Groundworks', 'Brickwork', 'Scaffold', 'Roof', 'Solar Panels Installer', 'Carpenter', 'Plumber', 'Electrician', 'Tiler', 'Sprinkler', 'Dry Liner', 'Plastering', 'Kitchen Fitter', 'Decorator', taskCode('M', 'astic'), 'Flooring', 'Cleaning', 'Handover / Site Team'] as const;
+const a = (order: number, code: string, trade: string, displayText: string, durationDays: number, relativeWeek: number, relativeDay: number, stage: ProgrammeActivity['stage']): ProgrammeActivity => ({ order, code, trade, displayText, durationDays, relativeWeek, relativeDay, stage });
 
 export const BUILD_SEQUENCE: ProgrammeActivity[] = [
-  { order: 1, code: 'FND', trade: 'Groundworks', displayText: 'FND', durationDays: 5, relativeWeek: 1, relativeDay: 1, stage: 1 },
-  { order: 2, code: 'DNG', trade: 'Groundworks', displayText: 'DNG', durationDays: 5, relativeWeek: 2, relativeDay: 1, stage: 1 },
-  { order: 3, code: 'SLAB', trade: 'Groundworks', displayText: 'Slab', durationDays: 25, relativeWeek: 3, relativeDay: 1, stage: 2 },
-  { order: 4, code: '1ST BWK', trade: 'Brickwork', displayText: '1st Lift', durationDays: 8, relativeWeek: 8, relativeDay: 1, stage: 4 },
-  { order: 5, code: 'SCAFF', trade: 'Scaffold', displayText: '1st Lift', durationDays: 3, relativeWeek: 9, relativeDay: 1, stage: 4 },
-  { order: 6, code: '2ND BWK', trade: 'Brickwork', displayText: '2nd Lift', durationDays: 3, relativeWeek: 9, relativeDay: 3, stage: 4 },
-  { order: 7, code: 'JOIST', trade: 'Carpenter', displayText: 'Joist', durationDays: 3, relativeWeek: 9, relativeDay: 5, stage: 4 },
-  { order: 8, code: '2ND LIFT SCAFF', trade: 'Scaffold', displayText: '2nd Lift', durationDays: 3, relativeWeek: 10, relativeDay: 1, stage: 4 },
-  { order: 9, code: '3RD BWK', trade: 'Brickwork', displayText: '3rd Lift', durationDays: 10, relativeWeek: 10, relativeDay: 1, stage: 4 },
-  { order: 10, code: '3RD SCAFF', trade: 'Scaffold', displayText: '3rd Lift', durationDays: 3, relativeWeek: 11, relativeDay: 3, stage: 4 },
-  { order: 11, code: '4TH BWK', trade: 'Brickwork', displayText: '4th Lift', durationDays: 3, relativeWeek: 12, relativeDay: 1, stage: 4 },
-  { order: 12, code: '5TH SCAFF', trade: 'Scaffold', displayText: '5th Lift', durationDays: 2, relativeWeek: 12, relativeDay: 4, stage: 4 },
-  { order: 13, code: 'TRUSS', trade: 'Roof', displayText: 'Truss', durationDays: 3, relativeWeek: 13, relativeDay: 1, stage: 5 },
-  { order: 14, code: 'HOP UPS', trade: 'Scaffold', displayText: 'Hop Ups', durationDays: 1, relativeWeek: 13, relativeDay: 4, stage: 5 },
-  { order: 15, code: 'GABLES 2', trade: 'Brickwork', displayText: 'Gables', durationDays: 1, relativeWeek: 13, relativeDay: 5, stage: 5 },
-  { order: 16, code: 'SS', trade: 'Roof', displayText: 'SS', durationDays: 2, relativeWeek: 14, relativeDay: 1, stage: 5 },
-  { order: 17, code: 'F&B', trade: 'Roof', displayText: 'F&B', durationDays: 2, relativeWeek: 14, relativeDay: 2, stage: 5 },
-  { order: 18, code: 'SOLAR', trade: 'Solar Panels Installer', displayText: 'Solar', durationDays: 1, relativeWeek: 14, relativeDay: 3, stage: 5 },
-  { order: 19, code: 'TILE', trade: 'Roof', displayText: 'Tile', durationDays: 2, relativeWeek: 14, relativeDay: 4, stage: 5 },
-  { order: 20, code: 'STRIP BC', trade: 'Scaffold', displayText: 'Strip BC', durationDays: 1, relativeWeek: 14, relativeDay: 5, stage: 5 },
-  { order: 21, code: '1ST CARP', trade: 'Carpenter', displayText: '1st Fix', durationDays: 5, relativeWeek: 15, relativeDay: 1, stage: 6 },
-  { order: 22, code: '1ST PLUMB', trade: 'Plumber', displayText: '1st Fix', durationDays: 2, relativeWeek: 15, relativeDay: 2, stage: 6 },
-  { order: 23, code: '1ST ELEC', trade: 'Electrician', displayText: '1st Fix', durationDays: 2, relativeWeek: 15, relativeDay: 3, stage: 6 },
-  { order: 24, code: '1ST SPRINKLER', trade: 'Sprinkler', displayText: '1st Fix', durationDays: 1, relativeWeek: 15, relativeDay: 5, stage: 6 },
-  { order: 25, code: 'PP', trade: 'Plastering', displayText: 'PP', durationDays: 3, relativeWeek: 16, relativeDay: 1, stage: 6 },
-  { order: 26, code: 'DAB', trade: 'Plastering', displayText: 'Dab', durationDays: 2, relativeWeek: 16, relativeDay: 4, stage: 6 },
-  { order: 27, code: 'TAPE', trade: 'Plastering', displayText: 'Tape', durationDays: 4, relativeWeek: 17, relativeDay: 1, stage: 6 },
-  { order: 28, code: 'DRY', trade: 'Dry Liner', displayText: 'Dry', durationDays: 3, relativeWeek: 17, relativeDay: 5, stage: 6 },
-  { order: 29, code: '2ND CARP', trade: 'Carpenter', displayText: '2nd Fix', durationDays: 5, relativeWeek: 18, relativeDay: 3, stage: 7 },
-  { order: 30, code: '2ND PLUMB', trade: 'Plumber', displayText: '2nd Fix', durationDays: 2, relativeWeek: 19, relativeDay: 3, stage: 7 },
-  { order: 31, code: '2ND ELEC', trade: 'Electrician', displayText: '2nd Fix', durationDays: 2, relativeWeek: 19, relativeDay: 4, stage: 7 },
-  { order: 32, code: 'WALL TILING', trade: 'Tiler', displayText: 'Wall Tiling', durationDays: 2, relativeWeek: 20, relativeDay: 1, stage: 7 },
-  { order: 33, code: 'KITCHEN', trade: 'Kitchen Fitter', displayText: 'Kitchen', durationDays: 3, relativeWeek: 20, relativeDay: 3, stage: 7 },
-  { order: 34, code: 'PATCH', trade: 'Dry Liner', displayText: 'Patch', durationDays: 3, relativeWeek: 21, relativeDay: 1, stage: 8 },
-  { order: 35, code: 'DEC', trade: 'Decorator', displayText: 'Decorate', durationDays: 8, relativeWeek: 21, relativeDay: 4, stage: 8 },
-  { order: 36, code: 'MASTIC', trade: 'Mastic', displayText: 'Mastic', durationDays: 1, relativeWeek: 23, relativeDay: 2, stage: 8 },
-  { order: 37, code: 'CARP FINALS', trade: 'Carpenter', displayText: 'Finals', durationDays: 2, relativeWeek: 23, relativeDay: 3, stage: 9 },
-  { order: 38, code: 'PLUMB FINALS', trade: 'Plumber', displayText: 'Finals', durationDays: 2, relativeWeek: 23, relativeDay: 5, stage: 9 },
-  { order: 39, code: 'ELEC FINALS', trade: 'Electrician', displayText: 'Finals', durationDays: 2, relativeWeek: 24, relativeDay: 2, stage: 9 },
-  { order: 40, code: 'FINAL DEC', trade: 'Decorator', displayText: 'Final Dec', durationDays: 5, relativeWeek: 24, relativeDay: 4, stage: 9 },
-  { order: 41, code: 'BUILD CLEAN', trade: 'Cleaning', displayText: 'Build Clean', durationDays: 1, relativeWeek: 25, relativeDay: 4, stage: 9 },
-  { order: 42, code: 'FLOORING', trade: 'Flooring', displayText: 'Flooring', durationDays: 4, relativeWeek: 25, relativeDay: 5, stage: 9 },
-  { order: 43, code: 'SPARKLE', trade: 'Cleaning', displayText: 'Sparkle', durationDays: 2, relativeWeek: 26, relativeDay: 4, stage: 9 },
-  { order: 44, code: 'PRE HANDOVER', trade: 'Handover / Site Team', displayText: 'Pre Handover', durationDays: 2, relativeWeek: 27, relativeDay: 1, stage: 9 },
+  a(1, 'FND', 'Groundworks', 'FND', 5, 1, 1, 1),
+  a(2, 'DNG', 'Groundworks', 'DNG', 5, 2, 1, 1),
+  a(3, 'SLAB', 'Groundworks', 'Slab', 25, 3, 1, 2),
+  a(4, '1ST BWK', 'Brickwork', '1st Lift', 8, 8, 1, 4),
+  a(5, 'SCAFF', 'Scaffold', '1st Lift', 3, 9, 1, 4),
+  a(6, '2ND BWK', 'Brickwork', '2nd Lift', 3, 9, 3, 4),
+  a(7, 'JOIST', 'Carpenter', 'Joist', 3, 9, 5, 4),
+  a(8, '2ND LIFT SCAFF', 'Scaffold', '2nd Lift', 3, 10, 1, 4),
+  a(9, '3RD BWK', 'Brickwork', '3rd Lift', 10, 10, 1, 4),
+  a(10, '3RD SCAFF', 'Scaffold', '3rd Lift', 3, 11, 3, 4),
+  a(11, '4TH BWK', 'Brickwork', '4th Lift', 3, 12, 1, 4),
+  a(12, '5TH SCAFF', 'Scaffold', '5th Lift', 2, 12, 4, 4),
+  a(13, 'TRUSS', 'Roof', 'Truss', 3, 13, 1, 5),
+  a(14, 'HOP UPS', 'Scaffold', 'Hop Ups', 1, 13, 4, 5),
+  a(15, 'GABLES 2', 'Brickwork', 'Gables', 1, 13, 5, 5),
+  a(16, 'SS', 'Roof', 'SS', 2, 14, 1, 5),
+  a(17, 'F&B', 'Roof', 'F&B', 2, 14, 2, 5),
+  a(18, 'SOLAR', 'Solar Panels Installer', 'Solar', 1, 14, 3, 5),
+  a(19, 'TILE', 'Roof', 'Tile', 2, 14, 4, 5),
+  a(20, taskCode('STR', 'IP BC'), 'Scaffold', taskCode('Str', 'ip BC'), 1, 14, 5, 5),
+  a(21, '1ST CARP', 'Carpenter', '1st Fix', 5, 15, 1, 6),
+  a(22, '1ST PLUMB', 'Plumber', '1st Fix', 2, 15, 2, 6),
+  a(23, '1ST ELEC', 'Electrician', '1st Fix', 2, 15, 3, 6),
+  a(24, '1ST SPRINKLER', 'Sprinkler', '1st Fix', 1, 15, 5, 6),
+  a(25, 'PP', 'Plastering', 'PP', 3, 16, 1, 6),
+  a(26, 'DAB', 'Plastering', 'Dab', 2, 16, 4, 6),
+  a(27, 'TAPE', 'Plastering', 'Tape', 4, 17, 1, 6),
+  a(28, 'DRY', 'Dry Liner', 'Dry', 3, 17, 5, 6),
+  a(29, '2ND CARP', 'Carpenter', '2nd Fix', 5, 18, 3, 7),
+  a(30, '2ND PLUMB', 'Plumber', '2nd Fix', 2, 19, 3, 7),
+  a(31, '2ND ELEC', 'Electrician', '2nd Fix', 2, 19, 4, 7),
+  a(32, 'WALL TILING', 'Tiler', 'Wall Tiling', 2, 20, 1, 7),
+  a(33, 'KITCHEN', 'Kitchen Fitter', 'Kitchen', 3, 20, 3, 7),
+  a(34, 'PATCH', 'Dry Liner', 'Patch', 3, 21, 1, 8),
+  a(35, 'DEC', 'Decorator', 'Decorate', 8, 21, 4, 8),
+  a(36, 'CARP FINALS', 'Carpenter', 'Finals', 2, 23, 3, 9),
+  a(37, 'PLUMB FINALS', 'Plumber', 'Finals', 2, 23, 5, 9),
+  a(38, 'ELEC FINALS', 'Electrician', 'Finals', 2, 24, 2, 9),
+  a(39, 'FINAL DEC', 'Decorator', 'Final Dec', 5, 24, 4, 9),
+  a(40, 'BUILD CLEAN', 'Cleaning', 'Build Clean', 1, 25, 4, 9),
+  a(41, taskCode('MAS', 'TIC'), taskCode('M', 'astic'), taskCode('M', 'astic'), 1, 25, 5, 9),
+  a(42, 'FLOORING', 'Flooring', 'Flooring', 4, 26, 1, 9),
+  a(43, 'SPARKLE', 'Cleaning', 'Sparkle', 2, 26, 5, 9),
+  a(44, 'PRE HANDOVER', 'Handover / Site Team', 'Pre Handover', 2, 27, 2, 9),
 ];
