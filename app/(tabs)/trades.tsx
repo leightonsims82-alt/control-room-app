@@ -87,8 +87,11 @@ export default function TradesScreen() {
   const tableDays = useMemo(() => twoWeekDays(activeIssueWeek), [activeIssueWeek]);
   const savedSupervisorEmails = getSavedSupervisorEmails(tradeContacts);
   const recipientCount = savedSupervisorEmails.length + (managerEmail.trim() ? 1 : 0);
-  const tradeSaveMessage = saveMessage && draftContact && saveMessage.toLowerCase().includes(draftContact.trade.toLowerCase()) ? saveMessage : '';
-  const setupSaveMessage = saveMessage && !tradeSaveMessage ? saveMessage : '';
+  const tradeSaved = Boolean(draftContact && saveMessage === `${draftContact.trade} saved`);
+  const tradeAdded = saveMessage.endsWith(' added');
+  const tradeExists = saveMessage.endsWith(' already exists');
+  const issueSettingsSaved = saveMessage === 'Issue settings saved';
+  const programmeIssued = saveMessage === 'Programme marked as issued';
 
   const programmeRows = useMemo(() => {
     if (!activeContact) return [];
@@ -102,6 +105,17 @@ export default function TradesScreen() {
       })
       .filter((row) => row.cells.some(Boolean));
   }, [activeContact, sitePlots, tableDays, activityDelays, plotTemplates]);
+
+  const updateDraft = (changes: Partial<TradeContact>) => {
+    if (!draftContact) return;
+    setSaveMessage('');
+    setDraftContact({ ...draftContact, ...changes });
+  };
+
+  const selectTrade = (tradeId: string) => {
+    setSaveMessage('');
+    setSelectedTradeId(tradeId);
+  };
 
   const saveTradeContact = async () => {
     if (!draftContact) return;
@@ -164,12 +178,9 @@ export default function TradesScreen() {
             <Text style={styles.issueTitle}>{activeContact?.trade ?? 'Trade'} Programme</Text>
             <Text style={styles.issueMeta}>WK{String(activeIssueWeek).padStart(2, '0')} + WK{String(normaliseWeek(activeIssueWeek + 1)).padStart(2, '0')}</Text>
           </View>
-          <View style={styles.saveControlWrap}>
-            <Pressable style={styles.saveButton} onPress={markIssued}>
-              <Text style={styles.saveButtonText}>Mark Issued</Text>
-            </Pressable>
-            {setupSaveMessage === 'Programme marked as issued' ? <Text style={styles.inlineSaveMessage}>{setupSaveMessage}</Text> : null}
-          </View>
+          <Pressable style={[styles.saveButton, programmeIssued ? styles.savedButton : null]} onPress={markIssued}>
+            <Text style={styles.saveButtonText}>{programmeIssued ? 'Issued ✓' : 'Mark Issued'}</Text>
+          </Pressable>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator>
@@ -177,7 +188,7 @@ export default function TradesScreen() {
             {tradeContacts.map((contact) => {
               const active = contact.id === activeContact?.id;
               return (
-                <Pressable key={contact.id} style={[styles.tradeChip, active ? styles.tradeChipActive : null]} onPress={() => setSelectedTradeId(contact.id)}>
+                <Pressable key={contact.id} style={[styles.tradeChip, active ? styles.tradeChipActive : null]} onPress={() => selectTrade(contact.id)}>
                   <Text style={[styles.tradeChipText, active ? styles.tradeChipTextActive : null]}>{contact.trade}</Text>
                 </Pressable>
               );
@@ -236,14 +247,11 @@ export default function TradesScreen() {
         <View style={styles.addTradeRow}>
           <View style={styles.addTradeInputWrap}>
             <Text style={styles.label}>Add trade</Text>
-            <TextInput value={newTradeName} onChangeText={setNewTradeName} style={styles.input} placeholder="e.g. Solar Panels Installer" />
+            <TextInput value={newTradeName} onChangeText={(text) => { setSaveMessage(''); setNewTradeName(text); }} style={styles.input} placeholder="e.g. Solar Panels Installer" />
           </View>
-          <View style={styles.saveControlWrap}>
-            <Pressable style={styles.addButton} onPress={addNewTrade}>
-              <Text style={styles.saveButtonText}>Add Trade</Text>
-            </Pressable>
-            {setupSaveMessage && setupSaveMessage !== 'Issue settings saved' && setupSaveMessage !== 'Programme marked as issued' ? <Text style={styles.inlineSaveMessage}>{setupSaveMessage}</Text> : null}
-          </View>
+          <Pressable style={[styles.addButton, tradeAdded || tradeExists ? styles.savedButton : null]} onPress={addNewTrade}>
+            <Text style={styles.saveButtonText}>{tradeAdded ? 'Added ✓' : tradeExists ? 'Already Added' : 'Add Trade'}</Text>
+          </Pressable>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator>
@@ -251,7 +259,7 @@ export default function TradesScreen() {
             {tradeContacts.map((contact) => {
               const active = contact.id === activeContact?.id;
               return (
-                <Pressable key={contact.id} style={[styles.tradeChip, active ? styles.tradeChipActive : null]} onPress={() => setSelectedTradeId(contact.id)}>
+                <Pressable key={contact.id} style={[styles.tradeChip, active ? styles.tradeChipActive : null]} onPress={() => selectTrade(contact.id)}>
                   <Text style={[styles.tradeChipText, active ? styles.tradeChipTextActive : null]}>{contact.trade}</Text>
                 </Pressable>
               );
@@ -267,26 +275,23 @@ export default function TradesScreen() {
             </View>
             <View style={styles.inputWrap}>
               <Text style={styles.label}>Contractor</Text>
-              <TextInput value={draftContact.contractor} onChangeText={(contractor) => setDraftContact({ ...draftContact, contractor })} style={styles.input} placeholder="Contractor name" />
+              <TextInput value={draftContact.contractor} onChangeText={(contractor) => updateDraft({ contractor })} style={styles.input} placeholder="Contractor name" />
             </View>
             <View style={styles.inputWrap}>
               <Text style={styles.label}>Supervisor</Text>
-              <TextInput value={draftContact.supervisorName} onChangeText={(supervisorName) => setDraftContact({ ...draftContact, supervisorName })} style={styles.input} placeholder="Supervisor name" />
+              <TextInput value={draftContact.supervisorName} onChangeText={(supervisorName) => updateDraft({ supervisorName })} style={styles.input} placeholder="Supervisor name" />
             </View>
             <View style={styles.inputWrap}>
               <Text style={styles.label}>Supervisor email</Text>
-              <TextInput value={draftContact.supervisorEmail} onChangeText={(supervisorEmail) => setDraftContact({ ...draftContact, supervisorEmail })} style={styles.input} placeholder="name@example.com" keyboardType="email-address" autoCapitalize="none" />
+              <TextInput value={draftContact.supervisorEmail} onChangeText={(supervisorEmail) => updateDraft({ supervisorEmail })} style={styles.input} placeholder="name@example.com" keyboardType="email-address" autoCapitalize="none" />
             </View>
             <View style={styles.inputWrap}>
               <Text style={styles.label}>Supervisor phone</Text>
-              <TextInput value={draftContact.supervisorPhone} onChangeText={(supervisorPhone) => setDraftContact({ ...draftContact, supervisorPhone })} style={styles.input} placeholder="07..." keyboardType="phone-pad" />
+              <TextInput value={draftContact.supervisorPhone} onChangeText={(supervisorPhone) => updateDraft({ supervisorPhone })} style={styles.input} placeholder="07..." keyboardType="phone-pad" />
             </View>
-            <View style={styles.saveControlWrap}>
-              <Pressable style={styles.saveButton} onPress={saveTradeContact}>
-                <Text style={styles.saveButtonText}>Save Trade</Text>
-              </Pressable>
-              {tradeSaveMessage ? <Text style={styles.inlineSaveMessage}>{tradeSaveMessage}</Text> : null}
-            </View>
+            <Pressable style={[styles.saveButton, tradeSaved ? styles.savedButton : null]} onPress={saveTradeContact}>
+              <Text style={styles.saveButtonText}>{tradeSaved ? 'Saved ✓' : 'Save Trade'}</Text>
+            </Pressable>
           </View>
         ) : null}
       </SectionCard>
@@ -295,25 +300,22 @@ export default function TradesScreen() {
         <View style={styles.formGrid}>
           <View style={styles.inputWrap}>
             <Text style={styles.label}>Manager email</Text>
-            <TextInput value={managerEmail} onChangeText={setManagerEmail} style={styles.input} placeholder="manager@example.com" keyboardType="email-address" autoCapitalize="none" />
+            <TextInput value={managerEmail} onChangeText={(text) => { setSaveMessage(''); setManagerEmail(text); }} style={styles.input} placeholder="manager@example.com" keyboardType="email-address" autoCapitalize="none" />
           </View>
           <View style={styles.inputWrap}>
             <Text style={styles.label}>Issue day</Text>
-            <TextInput value={issueDay} onChangeText={setIssueDay} style={styles.input} placeholder="Friday" />
+            <TextInput value={issueDay} onChangeText={(text) => { setSaveMessage(''); setIssueDay(text); }} style={styles.input} placeholder="Friday" />
           </View>
           <View style={styles.inputWrap}>
             <Text style={styles.label}>Issue time</Text>
-            <TextInput value={issueTime} onChangeText={setIssueTime} style={styles.input} placeholder="15:00" />
+            <TextInput value={issueTime} onChangeText={(text) => { setSaveMessage(''); setIssueTime(text); }} style={styles.input} placeholder="15:00" />
           </View>
-          <Pressable style={[styles.toggleButton, autoIssueEnabled ? styles.toggleActive : null]} onPress={() => setAutoIssueEnabled((value) => !value)}>
+          <Pressable style={[styles.toggleButton, autoIssueEnabled ? styles.toggleActive : null]} onPress={() => { setSaveMessage(''); setAutoIssueEnabled((value) => !value); }}>
             <Text style={[styles.toggleText, autoIssueEnabled ? styles.toggleTextActive : null]}>{autoIssueEnabled ? 'Auto issue on' : 'Auto issue off'}</Text>
           </Pressable>
-          <View style={styles.saveControlWrap}>
-            <Pressable style={styles.saveButton} onPress={saveIssueSettings}>
-              <Text style={styles.saveButtonText}>Save Issue Settings</Text>
-            </Pressable>
-            {setupSaveMessage === 'Issue settings saved' ? <Text style={styles.inlineSaveMessage}>{setupSaveMessage}</Text> : null}
-          </View>
+          <Pressable style={[styles.saveButton, issueSettingsSaved ? styles.savedButton : null]} onPress={saveIssueSettings}>
+            <Text style={styles.saveButtonText}>{issueSettingsSaved ? 'Saved ✓' : 'Save Issue Settings'}</Text>
+          </Pressable>
         </View>
         <Text style={styles.helperText}>Recipients currently saved: {recipientCount}. Manager receives the full programme. Supervisors receive their trade programme once server-side email sending is connected.</Text>
       </SectionCard>
@@ -338,9 +340,6 @@ const styles = StyleSheet.create({
   header: { gap: 4 },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
   subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
-  saveMessage: { backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1, color: '#166534', fontWeight: '900', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
-  inlineSaveMessage: { backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1, color: '#166534', fontWeight: '900', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, fontSize: 12, textAlign: 'center' },
-  saveControlWrap: { gap: 6, alignSelf: 'flex-end' },
   tradeChips: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
   tradeChipsWide: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
   tradeChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
@@ -357,6 +356,7 @@ const styles = StyleSheet.create({
   lockedInput: { backgroundColor: '#f1f5f9', color: '#64748b' },
   saveButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-end' },
   addButton: { backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-end' },
+  savedButton: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
   saveButtonText: { color: '#ffffff', fontWeight: '900' },
   toggleButton: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#ffffff' },
   toggleActive: { backgroundColor: '#dcfce7', borderColor: '#16a34a' },
