@@ -8,7 +8,7 @@ const SITE_DELAYS_KEY = 'siteprog:week-based-delays:v2';
 const TRADE_CONTACTS_KEY = 'siteprog:trade-contacts:v1';
 const ISSUE_SETTINGS_KEY = 'siteprog:issue-settings:v1';
 const ISSUE_LOGS_KEY = 'siteprog:issue-logs:v1';
-const PLOT_TEMPLATES_KEY = 'siteprog:plot-templates:v7';
+const PLOT_TEMPLATES_KEY = 'siteprog:plot-templates:v8';
 const SITE_PROGRAMME_SETUP_KEY = 'siteprog:programme-setup:v1';
 
 export type TradeContact = { id: string; trade: string; contractor: string; supervisorName: string; supervisorEmail: string; supervisorPhone: string };
@@ -58,7 +58,7 @@ function repairTemplate(defaultTemplate: PlotTemplate, storedTemplate?: PlotTemp
     description: defaultTemplate.description,
     programmeWeeks: storedTemplate?.programmeWeeks ?? defaultTemplate.programmeWeeks,
     stageCount: defaultTemplate.stageCount,
-    activities: defaultTemplate.activities.map((activity) => ({ ...activity, overlapAllowed: false })),
+    activities: defaultTemplate.activities.map((activity) => ({ ...activity, overlapAllowed: activity.overlapAllowed ?? false })),
   };
 }
 function mergeDefaultTemplates(stored: PlotTemplate[]) {
