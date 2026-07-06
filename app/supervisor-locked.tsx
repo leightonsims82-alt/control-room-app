@@ -7,9 +7,12 @@ import { getActivitiesForTemplateDay, normaliseProgrammeWeek } from '../utils/te
 
 const PROGRAMME_START_DATE = new Date(2026, 6, 6);
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-const DAY_WIDTH = 82;
-const WEEK_WIDTH = DAY_WIDTH * 7;
-const LEFT_WIDTH = 184;
+const SCREEN_DAY_WIDTH = 82;
+const PRINT_DAY_WIDTH = 56;
+const SCREEN_PLOT_WIDTH = 74;
+const SCREEN_TRADE_WIDTH = 110;
+const PRINT_PLOT_WIDTH = 46;
+const PRINT_TRADE_WIDTH = 76;
 
 function getCurrentProgrammeWeek() {
   const today = new Date();
@@ -74,11 +77,30 @@ export default function SupervisorLockedView() {
   const days = useMemo(() => buildTwoWeekWindow(startWeek), [startWeek]);
   const weekGroups = [days[0]?.week ?? startWeek, days[7]?.week ?? normaliseProgrammeWeek(startWeek + 1)];
   const latestIssue = issueLogs[0];
+  const dayWidth = printMode ? PRINT_DAY_WIDTH : SCREEN_DAY_WIDTH;
+  const plotWidth = printMode ? PRINT_PLOT_WIDTH : SCREEN_PLOT_WIDTH;
+  const tradeWidth = printMode ? PRINT_TRADE_WIDTH : SCREEN_TRADE_WIDTH;
+  const weekWidth = dayWidth * 7;
+  const tableWidth = plotWidth + tradeWidth + dayWidth * 14;
 
   useEffect(() => {
     if (printMode && Platform.OS === 'web' && typeof window !== 'undefined') {
-      const timer = window.setTimeout(() => window.print(), 650);
-      return () => window.clearTimeout(timer);
+      const style = window.document.createElement('style');
+      style.id = 'programme-buddy-print-style';
+      style.innerHTML = `
+        @page { size: A4 landscape; margin: 7mm; }
+        @media print {
+          html, body { width: 297mm; min-height: 210mm; background: #fff !important; overflow: visible !important; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          [data-testid="scroll-view"], div { overflow: visible !important; }
+        }
+      `;
+      window.document.head.appendChild(style);
+      const timer = window.setTimeout(() => window.print(), 850);
+      return () => {
+        window.clearTimeout(timer);
+        window.document.getElementById('programme-buddy-print-style')?.remove();
+      };
     }
   }, [printMode]);
 
@@ -97,10 +119,10 @@ export default function SupervisorLockedView() {
 
   return (
     <AppScreen>
-      <View style={styles.header}>
-        <Text style={styles.kicker}>{printMode ? 'PDF record' : 'Live supervisor app'}</Text>
-        <Text style={styles.title}>{lockedTrade} Programme</Text>
-        <Text style={styles.subtitle}>{printMode ? `WK${String(weekGroups[0]).padStart(2, '0')} + WK${String(weekGroups[1]).padStart(2, '0')} formal PDF record.` : 'Read-only live view for your allocated trade only.'}</Text>
+      <View style={[styles.header, printMode ? styles.printHeader : null]}>
+        <Text style={[styles.kicker, printMode ? styles.printKicker : null]}>{printMode ? 'PDF record' : 'Live supervisor app'}</Text>
+        <Text style={[styles.title, printMode ? styles.printTitle : null]}>{lockedTrade} Programme</Text>
+        <Text style={[styles.subtitle, printMode ? styles.printSubtitle : null]}>{printMode ? `WK${String(weekGroups[0]).padStart(2, '0')} + WK${String(weekGroups[1]).padStart(2, '0')} formal PDF record.` : 'Read-only live view for your allocated trade only.'}</Text>
       </View>
 
       {!printMode ? (
@@ -119,33 +141,33 @@ export default function SupervisorLockedView() {
         </View>
       ) : null}
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{lockedTrade} programme table</Text>
+      <View style={[styles.card, printMode ? styles.printCard : null]}>
+        <Text style={[styles.cardTitle, printMode ? styles.printCardTitle : null]}>{lockedTrade} programme table</Text>
         {rows.length === 0 ? <Text style={styles.emptyText}>No planned {lockedTrade} activity in the current 2-week window.</Text> : null}
-        <ScrollView horizontal showsHorizontalScrollIndicator>
-          <View style={styles.tableWrap}>
+        <ScrollView horizontal={!printMode} showsHorizontalScrollIndicator={!printMode}>
+          <View style={[styles.tableWrap, { width: tableWidth, minWidth: tableWidth }]}>
             <View style={styles.tableRow}>
-              <Text style={[styles.tableHeader, styles.plotNoCell]} />
-              <Text style={[styles.tableHeader, styles.tradeCell]} />
-              {weekGroups.map((week, index) => <Text key={`${week}-${index}`} style={styles.weekGroupHeader}>WK{String(week).padStart(2, '0')}</Text>)}
+              <Text style={[styles.tableHeader, { width: plotWidth }, printMode ? styles.printHeaderCell : null]} />
+              <Text style={[styles.tableHeader, { width: tradeWidth }, printMode ? styles.printHeaderCell : null]} />
+              {weekGroups.map((week, index) => <Text key={`${week}-${index}`} style={[styles.weekGroupHeader, { width: weekWidth }, printMode ? styles.printHeaderCell : null]}>WK{String(week).padStart(2, '0')}</Text>)}
             </View>
             <View style={styles.tableRow}>
-              <Text style={[styles.tableHeader, styles.plotNoCell]}>Plot No</Text>
-              <Text style={[styles.tableHeader, styles.tradeCell]}>Trade</Text>
-              {days.map((item) => <Text key={item.key} style={[styles.dayHeaderCell, item.weekend ? styles.weekendHeader : null]}>{item.dayName}</Text>)}
+              <Text style={[styles.tableHeader, { width: plotWidth }, printMode ? styles.printHeaderCell : null]}>Plot No</Text>
+              <Text style={[styles.tableHeader, { width: tradeWidth }, printMode ? styles.printHeaderCell : null]}>Trade</Text>
+              {days.map((item) => <Text key={item.key} style={[styles.dayHeaderCell, { width: dayWidth }, item.weekend ? styles.weekendHeader : null, printMode ? styles.printHeaderCell : null]}>{item.dayName}</Text>)}
             </View>
             <View style={styles.tableRow}>
-              <Text style={[styles.dateBlankCell, styles.plotNoCell]} />
-              <Text style={[styles.dateBlankCell, styles.tradeCell]} />
-              {days.map((item) => <Text key={`date-${item.key}`} style={[styles.dateHeaderCell, item.weekend ? styles.weekendDateCell : null]}>{formatShortDate(item.date)}</Text>)}
+              <Text style={[styles.dateBlankCell, { width: plotWidth }, printMode ? styles.printDateCell : null]} />
+              <Text style={[styles.dateBlankCell, { width: tradeWidth }, printMode ? styles.printDateCell : null]} />
+              {days.map((item) => <Text key={`date-${item.key}`} style={[styles.dateHeaderCell, { width: dayWidth }, item.weekend ? styles.weekendDateCell : null, printMode ? styles.printDateCell : null]}>{formatShortDate(item.date)}</Text>)}
             </View>
             {rows.map((row, rowIndex) => (
               <View key={row.key} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
-                <Text style={[styles.bodyCell, styles.plotNoCell]}>{row.plotNo}</Text>
-                <Text style={[styles.bodyCell, styles.tradeCell]}>{lockedTrade}</Text>
+                <Text style={[styles.bodyCell, { width: plotWidth }, printMode ? styles.printBodyCell : null]}>{row.plotNo}</Text>
+                <Text style={[styles.bodyCell, { width: tradeWidth }, printMode ? styles.printBodyCell : null]}>{lockedTrade}</Text>
                 {row.cells.map((cell, index) => (
-                  <View key={`${row.key}-${days[index].key}`} style={[styles.dayBodyCell, days[index].weekend ? styles.weekendCell : null, cell ? styles.activeDayCell : null]}>
-                    <Text style={styles.dayBodyText}>{cell}</Text>
+                  <View key={`${row.key}-${days[index].key}`} style={[styles.dayBodyCell, { width: dayWidth }, days[index].weekend ? styles.weekendCell : null, cell ? styles.activeDayCell : null, printMode ? styles.printDayBodyCell : null]}>
+                    <Text style={[styles.dayBodyText, printMode ? styles.printDayBodyText : null]}>{cell}</Text>
                   </View>
                 ))}
               </View>
@@ -168,9 +190,13 @@ function MiniStat({ label, value }: { label: string | number; value: string | nu
 
 const styles = StyleSheet.create({
   header: { gap: 4 },
+  printHeader: { marginBottom: 8 },
   kicker: { color: '#2563eb', fontSize: 13, fontWeight: '900', textTransform: 'uppercase' },
+  printKicker: { fontSize: 9 },
   title: { color: '#0f172a', fontSize: 32, fontWeight: '900', marginTop: 4 },
+  printTitle: { fontSize: 18, marginTop: 2 },
   subtitle: { color: '#64748b', fontSize: 15, lineHeight: 22, marginTop: 6, maxWidth: 760 },
+  printSubtitle: { fontSize: 10, lineHeight: 14, marginTop: 2 },
   issueCard: { backgroundColor: '#ffffff', borderRadius: 20, borderWidth: 1, borderColor: '#dbeafe', padding: 16, gap: 4 },
   issueTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
   issueText: { color: '#475569', fontWeight: '800', fontSize: 13, lineHeight: 20 },
@@ -180,23 +206,28 @@ const styles = StyleSheet.create({
   miniStatValue: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
   miniStatLabel: { color: '#64748b', fontSize: 12, fontWeight: '800', marginTop: 2 },
   card: { backgroundColor: '#ffffff', borderRadius: 20, borderWidth: 1, borderColor: '#e2e8f0', padding: 16, gap: 10 },
+  printCard: { borderRadius: 10, padding: 8, gap: 6 },
   cardTitle: { color: '#0f172a', fontWeight: '900', fontSize: 20 },
+  printCardTitle: { fontSize: 12 },
   emptyText: { color: '#64748b', fontWeight: '800', lineHeight: 20 },
-  tableWrap: { minWidth: LEFT_WIDTH + DAY_WIDTH * 14 },
+  tableWrap: {},
   tableRow: { flexDirection: 'row', alignItems: 'stretch' },
   altRow: { backgroundColor: '#eef6ff' },
   tableHeader: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 11, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
-  plotNoCell: { width: 74 },
-  tradeCell: { width: 110 },
-  weekGroupHeader: { width: WEEK_WIDTH, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 11, fontWeight: '900' },
-  dayHeaderCell: { width: DAY_WIDTH, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 10, fontWeight: '900' },
+  printHeaderCell: { fontSize: 7, padding: 3 },
+  weekGroupHeader: { backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 11, fontWeight: '900' },
+  dayHeaderCell: { backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 10, fontWeight: '900' },
   weekendHeader: { backgroundColor: '#214c75' },
   dateBlankCell: { backgroundColor: '#214c75', borderWidth: 1, borderColor: '#9fb6ce' },
-  dateHeaderCell: { width: DAY_WIDTH, backgroundColor: '#214c75', color: '#dbeafe', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 4, fontSize: 9, fontWeight: '900' },
+  dateHeaderCell: { backgroundColor: '#214c75', color: '#dbeafe', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 4, fontSize: 9, fontWeight: '900' },
+  printDateCell: { fontSize: 6.5, paddingVertical: 2 },
   weekendDateCell: { backgroundColor: '#2b587f' },
   bodyCell: { color: '#0f172a', padding: 7, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800', fontSize: 11 },
-  dayBodyCell: { width: DAY_WIDTH, minHeight: 48, borderWidth: 1, borderColor: '#c8d7e6', paddingHorizontal: 4, paddingVertical: 5, alignItems: 'center', justifyContent: 'center' },
+  printBodyCell: { fontSize: 7, padding: 3, minHeight: 30 },
+  dayBodyCell: { minHeight: 48, borderWidth: 1, borderColor: '#c8d7e6', paddingHorizontal: 4, paddingVertical: 5, alignItems: 'center', justifyContent: 'center' },
+  printDayBodyCell: { minHeight: 30, paddingHorizontal: 2, paddingVertical: 2 },
   dayBodyText: { color: '#0f172a', textAlign: 'center', fontWeight: '900', fontSize: 10, lineHeight: 12 },
+  printDayBodyText: { fontSize: 6.5, lineHeight: 8 },
   weekendCell: { backgroundColor: '#f8fafc' },
   activeDayCell: { backgroundColor: '#fff4cc' },
 });
