@@ -26,6 +26,10 @@ export type ProgrammeActivity = {
 export const DAY_NAMES: DayName[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 export const WEEK_NUMBERS = Array.from({ length: 52 }, (_, index) => index + 1);
 
+export function dayIndexFromWeekDay(week: number, day: number) {
+  return (week - 1) * 5 + day;
+}
+
 export const DEFAULT_SITE_PLOTS: SitePlot[] = [
   { id: 'plot-101', plotNo: '101', stage9CompleteWeek: 23 },
   { id: 'plot-102', plotNo: '102', stage9CompleteWeek: 36 },
