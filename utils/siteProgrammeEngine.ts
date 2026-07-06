@@ -48,7 +48,7 @@ export const BUILD_SEQUENCE: ProgrammeActivity[] = [
   a(15, 'GABLES 1', 'Brickwork', 'Gables', 1, 13, 4, 5),
   a(16, 'HOP UPS', 'Scaffold', 'Hop Ups', 1, 13, 5, 5),
   a(17, 'GABLES 2', 'Brickwork', 'Gables', 1, 14, 1, 5),
-  a(18, 'SS QA', 'Handover / Site Team', 'SS QA', 2, 14, 2, 5),
+  a(18, 'SUPERSTRUCTURE QA', 'Handover / Site Team', 'SS QA', 2, 14, 2, 5),
   a(19, 'F&B', 'Roof', 'F&B', 2, 14, 3, 5),
   a(20, 'SOLAR', 'Solar Panels Installer', 'Solar', 1, 14, 4, 5),
   a(21, 'TILE', 'Roof', 'Tile', 2, 14, 5, 5),
