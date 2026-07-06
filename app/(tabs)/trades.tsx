@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { TradeContact, useSitePlanner } from '../../data/sitePlannerStore';
-import { createManagerProgrammeText, createTradeProgrammeText, getSavedSupervisorEmails } from '../../utils/programmeIssue';
+import { getSavedSupervisorEmails } from '../../utils/programmeIssue';
 import { getTradeTemplateText } from '../../utils/templateProgramme';
 
 const PROGRAMME_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -81,16 +81,6 @@ export default function TradesScreen() {
   const tableDays = useMemo(() => twoWeekDays(activeIssueWeek), [activeIssueWeek]);
   const savedSupervisorEmails = getSavedSupervisorEmails(tradeContacts);
   const recipientCount = savedSupervisorEmails.length + (managerEmail.trim() ? 1 : 0);
-
-  const managerPreview = useMemo(
-    () => createManagerProgrammeText({ plots: sitePlots, activityDelays, startWeek: activeIssueWeek, tradeContacts, plotTemplates }),
-    [sitePlots, activityDelays, activeIssueWeek, tradeContacts, plotTemplates],
-  );
-
-  const tradePreview = useMemo(
-    () => activeContact ? createTradeProgrammeText({ trade: activeContact.trade, plots: sitePlots, activityDelays, startWeek: activeIssueWeek, plotTemplates }) : '',
-    [activeContact, sitePlots, activityDelays, activeIssueWeek, plotTemplates],
-  );
 
   const programmeRows = useMemo(() => {
     if (!activeContact) return [];
@@ -271,19 +261,6 @@ export default function TradesScreen() {
         <Text style={styles.helperText}>Recipients currently saved: {recipientCount}. Manager receives the full programme. Supervisors receive their trade programme once server-side email sending is connected.</Text>
       </SectionCard>
 
-      <SectionCard title="Issue message preview" subtitle="Plain text copy kept for email issue. The table above is the working programme view.">
-        <View style={styles.previewGrid}>
-          <View style={styles.previewPanel}>
-            <Text style={styles.previewTitle}>Manager full programme preview</Text>
-            <TextInput value={managerPreview} editable={false} multiline style={styles.previewBox} />
-          </View>
-          <View style={styles.previewPanel}>
-            <Text style={styles.previewTitle}>{activeContact?.trade ?? 'Trade'} supervisor preview</Text>
-            <TextInput value={tradePreview} editable={false} multiline style={styles.previewBox} />
-          </View>
-        </View>
-      </SectionCard>
-
       <SectionCard title="Issue history" subtitle="Local audit trail for programme issue actions during the pilot.">
         {issueLogs.length === 0 ? <Text style={styles.empty}>No programmes recorded as issued yet.</Text> : null}
         {issueLogs.map((log) => (
@@ -344,10 +321,6 @@ const styles = StyleSheet.create({
   weekendCell: { backgroundColor: '#f8fafc', color: '#94a3b8' },
   activeDayCell: { backgroundColor: '#fff4cc' },
   emptyProgrammeCell: { width: 1138, textAlign: 'left', color: '#64748b' },
-  previewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  previewPanel: { flex: 1, minWidth: 300, gap: 8 },
-  previewTitle: { color: '#0f172a', fontWeight: '900' },
-  previewBox: { minHeight: 260, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: 'monospace', fontSize: 12, textAlignVertical: 'top' },
   empty: { color: '#64748b' },
   logRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
   logMain: { flex: 1 },
