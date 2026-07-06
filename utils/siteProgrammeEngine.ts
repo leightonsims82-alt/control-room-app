@@ -58,7 +58,7 @@ export const BUILD_SEQUENCE: ProgrammeActivity[] = [
   a(25, '1ST PLUMB', 'Plumber', '1st Fix', 2, 16, 4, 6),
   a(26, '1ST ELEC', 'Electrician', '1st Fix', 2, 17, 1, 6),
   a(27, '1ST SPRINKLER', 'Sprinkler', '1st Fix', 1, 17, 3, 6),
-  a(28, 'PP', 'Plastering', 'PP', 3, 17, 4, 6),
+  a(28, 'PRE-PLASTER QA', 'Handover / Site Team', 'PP', 1, 17, 4, 6),
   a(29, 'DAB', 'Plastering', 'Dab', 2, 18, 2, 6),
   a(30, 'TAPE', 'Plastering', 'Tape', 4, 18, 4, 6),
   a(31, 'DRY', 'Dry Liner', 'Sand', 3, 19, 3, 6),
