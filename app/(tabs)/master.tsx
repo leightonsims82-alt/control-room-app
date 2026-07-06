@@ -12,10 +12,8 @@ function getShortWeekDate(week: number) {
   const firstMonday = new Date(firstThursday);
   const day = firstThursday.getDay() || 7;
   firstMonday.setDate(firstThursday.getDate() - day + 1);
-
   const weekStart = new Date(firstMonday);
   weekStart.setDate(firstMonday.getDate() + (week - 1) * 7);
-
   const date = String(weekStart.getDate()).padStart(2, '0');
   const month = String(weekStart.getMonth() + 1).padStart(2, '0');
   return `${date}/${month}`;
@@ -28,11 +26,15 @@ function workingWeekLabel(includeSaturday: boolean, includeSunday: boolean) {
   return 'Monday to Friday';
 }
 
+type BuildRoute = 'Traditional' | 'Timber Frame';
+
 export default function MasterProgrammeScreen() {
   const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, updateSiteSetup } = useSitePlanner();
+  const bedroomTemplates = plotTemplates.filter((template) => template.id !== 'timberFrame');
   const [plotNo, setPlotNo] = useState('');
   const [stage9Week, setStage9Week] = useState('');
-  const [templateId, setTemplateId] = useState(plotTemplates[2]?.id ?? 'threeBed');
+  const [buildRoute, setBuildRoute] = useState<BuildRoute>('Traditional');
+  const [templateId, setTemplateId] = useState(bedroomTemplates[2]?.id ?? bedroomTemplates[0]?.id ?? 'threeBed');
   const [moveScope, setMoveScope] = useState('all');
   const [moveMessage, setMoveMessage] = useState('');
   const includeSaturday = Boolean(siteSetup.includeSaturday);
@@ -41,7 +43,8 @@ export default function MasterProgrammeScreen() {
   const savePlot = async () => {
     const parsedWeek = Number(stage9Week);
     if (!plotNo.trim() || !Number.isFinite(parsedWeek)) return;
-    await upsertSitePlot({ plotNo, stage9CompleteWeek: parsedWeek, templateId });
+    const routeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : templateId;
+    await upsertSitePlot({ plotNo, stage9CompleteWeek: parsedWeek, templateId: routeTemplateId });
     setPlotNo('');
     setStage9Week('');
   };
@@ -49,31 +52,17 @@ export default function MasterProgrammeScreen() {
   const toggleWorkingDay = async (day: 'saturday' | 'sunday') => {
     const nextSaturday = day === 'saturday' ? !includeSaturday : includeSaturday;
     const nextSunday = day === 'sunday' ? !includeSunday : includeSunday;
-    await updateSiteSetup({
-      includeSaturday: nextSaturday,
-      includeSunday: nextSunday,
-      workingWeek: workingWeekLabel(nextSaturday, nextSunday),
-    });
+    await updateSiteSetup({ includeSaturday: nextSaturday, includeSunday: nextSunday, workingWeek: workingWeekLabel(nextSaturday, nextSunday) });
     setMoveMessage(`Working week set to ${workingWeekLabel(nextSaturday, nextSunday)}`);
   };
 
   const moveProgrammeByWeek = async (change: number) => {
     const selectedPlot = sitePlots.find((plot) => plot.id === moveScope);
     const plotsToMove = moveScope === 'all' ? sitePlots : selectedPlot ? [selectedPlot] : [];
-
-    if (!plotsToMove.length) {
-      setMoveMessage('Add a plot first');
-      return;
-    }
-
+    if (!plotsToMove.length) { setMoveMessage('Add a plot first'); return; }
     for (const plot of plotsToMove) {
-      await upsertSitePlot({
-        plotNo: plot.plotNo,
-        stage9CompleteWeek: normaliseProgrammeWeek(plot.stage9CompleteWeek + change),
-        templateId: plot.templateId || 'threeBed',
-      });
+      await upsertSitePlot({ plotNo: plot.plotNo, stage9CompleteWeek: normaliseProgrammeWeek(plot.stage9CompleteWeek + change), templateId: plot.templateId || 'threeBed' });
     }
-
     const scopeLabel = moveScope === 'all' ? 'Whole programme' : `Plot ${selectedPlot?.plotNo}`;
     const direction = change > 0 ? 'forward' : 'back';
     setMoveMessage(`${scopeLabel} moved ${direction} 1 week`);
@@ -83,7 +72,7 @@ export default function MasterProgrammeScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Master 23 Week Build</Text>
-        <Text style={styles.subtitle}>Milestone completion view. Add a plot, choose its house type template, and enter the Stage 9 complete week.</Text>
+        <Text style={styles.subtitle}>Milestone completion view. Add a plot, choose its build route and house type, then enter the Stage 9 complete week.</Text>
       </View>
 
       <SectionCard title="WORKING WEEK" subtitle="Choose whether Saturday and Sunday are included separately in the programme setup.">
@@ -94,12 +83,8 @@ export default function MasterProgrammeScreen() {
             <Text style={styles.workingWeekHelp}>Saturday and Sunday can be switched on independently.</Text>
           </View>
           <View style={styles.weekendButtons}>
-            <Pressable style={[styles.weekendChip, includeSaturday ? styles.weekendChipActive : null]} onPress={() => toggleWorkingDay('saturday')}>
-              <Text style={[styles.weekendChipText, includeSaturday ? styles.weekendChipTextActive : null]}>{includeSaturday ? 'Saturday included ✓' : 'Include Saturday'}</Text>
-            </Pressable>
-            <Pressable style={[styles.weekendChip, includeSunday ? styles.weekendChipActive : null]} onPress={() => toggleWorkingDay('sunday')}>
-              <Text style={[styles.weekendChipText, includeSunday ? styles.weekendChipTextActive : null]}>{includeSunday ? 'Sunday included ✓' : 'Include Sunday'}</Text>
-            </Pressable>
+            <Pressable style={[styles.weekendChip, includeSaturday ? styles.weekendChipActive : null]} onPress={() => toggleWorkingDay('saturday')}><Text style={[styles.weekendChipText, includeSaturday ? styles.weekendChipTextActive : null]}>{includeSaturday ? 'Saturday included ✓' : 'Include Saturday'}</Text></Pressable>
+            <Pressable style={[styles.weekendChip, includeSunday ? styles.weekendChipActive : null]} onPress={() => toggleWorkingDay('sunday')}><Text style={[styles.weekendChipText, includeSunday ? styles.weekendChipTextActive : null]}>{includeSunday ? 'Sunday included ✓' : 'Include Sunday'}</Text></Pressable>
           </View>
         </View>
       </SectionCard>
@@ -110,64 +95,46 @@ export default function MasterProgrammeScreen() {
             <Text style={styles.label}>What do you want to move?</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.templateChips}>
-                <Pressable style={[styles.templateChip, moveScope === 'all' ? styles.templateChipActive : null]} onPress={() => { setMoveScope('all'); setMoveMessage(''); }}>
-                  <Text style={[styles.templateChipText, moveScope === 'all' ? styles.templateChipTextActive : null]}>Whole programme</Text>
-                </Pressable>
+                <Pressable style={[styles.templateChip, moveScope === 'all' ? styles.templateChipActive : null]} onPress={() => { setMoveScope('all'); setMoveMessage(''); }}><Text style={[styles.templateChipText, moveScope === 'all' ? styles.templateChipTextActive : null]}>Whole programme</Text></Pressable>
                 {sitePlots.map((plot) => {
                   const active = plot.id === moveScope;
-                  return (
-                    <Pressable key={plot.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => { setMoveScope(plot.id); setMoveMessage(''); }}>
-                      <Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>Plot {plot.plotNo}</Text>
-                    </Pressable>
-                  );
+                  return <Pressable key={plot.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => { setMoveScope(plot.id); setMoveMessage(''); }}><Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>Plot {plot.plotNo}</Text></Pressable>;
                 })}
               </View>
             </ScrollView>
           </View>
           <View style={styles.moveButtons}>
-            <Pressable style={styles.moveBackButton} onPress={() => moveProgrammeByWeek(-1)}>
-              <Text style={styles.moveButtonText}>Move Back 1 Week</Text>
-            </Pressable>
-            <Pressable style={styles.moveForwardButton} onPress={() => moveProgrammeByWeek(1)}>
-              <Text style={styles.moveButtonText}>Move Forward 1 Week</Text>
-            </Pressable>
+            <Pressable style={styles.moveBackButton} onPress={() => moveProgrammeByWeek(-1)}><Text style={styles.moveButtonText}>Move Back 1 Week</Text></Pressable>
+            <Pressable style={styles.moveForwardButton} onPress={() => moveProgrammeByWeek(1)}><Text style={styles.moveButtonText}>Move Forward 1 Week</Text></Pressable>
           </View>
           {moveMessage ? <Text style={styles.moveMessage}>{moveMessage}</Text> : null}
         </View>
       </SectionCard>
 
-      <SectionCard title="Add / update plot" subtitle="Plot template controls the build duration and task durations used by the plot breakdown.">
+      <SectionCard title="Add / update plot" subtitle="Build route and bedroom size link back to the templates set up in Site Setup.">
         <View style={styles.formRow}>
-          <View style={styles.inputWrap}>
-            <Text style={styles.label}>Plot No</Text>
-            <TextInput value={plotNo} onChangeText={setPlotNo} style={styles.input} placeholder="Enter plot no" />
-          </View>
-          <View style={styles.inputWrap}>
-            <Text style={styles.label}>Stage 9 Complete Week</Text>
-            <TextInput value={stage9Week} onChangeText={setStage9Week} style={styles.input} keyboardType="number-pad" placeholder="Enter week no" />
+          <View style={styles.inputWrap}><Text style={styles.label}>Plot No</Text><TextInput value={plotNo} onChangeText={setPlotNo} style={styles.input} placeholder="Enter plot no" /></View>
+          <View style={styles.inputWrap}><Text style={styles.label}>Stage 9 Complete Week</Text><TextInput value={stage9Week} onChangeText={setStage9Week} style={styles.input} keyboardType="number-pad" placeholder="Enter week no" /></View>
+          <View style={styles.inputWrapWide}>
+            <Text style={styles.label}>Build route</Text>
+            <View style={styles.templateChips}>{(['Traditional', 'Timber Frame'] as BuildRoute[]).map((route) => { const active = route === buildRoute; return <Pressable key={route} style={[styles.routeChip, active ? styles.routeChipActive : null]} onPress={() => setBuildRoute(route)}><Text style={[styles.routeChipText, active ? styles.routeChipTextActive : null]}>{route}</Text></Pressable>; })}</View>
           </View>
           <View style={styles.inputWrapWide}>
             <Text style={styles.label}>House type</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.templateChips}>
-                {plotTemplates.map((template) => {
+                {bedroomTemplates.map((template) => {
                   const active = template.id === templateId;
-                  return (
-                    <Pressable key={template.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => setTemplateId(template.id)}>
-                      <Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>{template.name}</Text>
-                    </Pressable>
-                  );
+                  return <Pressable key={template.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => setTemplateId(template.id)}><Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>{template.name}</Text></Pressable>;
                 })}
               </View>
             </ScrollView>
           </View>
-          <Pressable style={styles.saveButton} onPress={savePlot}>
-            <Text style={styles.saveButtonText}>Save Plot</Text>
-          </Pressable>
+          <Pressable style={styles.saveButton} onPress={savePlot}><Text style={styles.saveButtonText}>Save Plot</Text></Pressable>
         </View>
       </SectionCard>
 
-      <SectionCard title="Master Build Programme" subtitle="Milestone numbers are generated from each house type, so a 2 bed, 5 bed or apartment can run to different programme lengths.">
+      <SectionCard title="Master Build Programme" subtitle="Milestone numbers are generated from each build route and house type, so plots can run to different programme lengths.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.tableRow}>
@@ -175,12 +142,7 @@ export default function MasterProgrammeScreen() {
               <Text style={[styles.headerCell, styles.templateCell]}>House</Text>
               <Text style={[styles.headerCell, styles.weekInputCell]}>S9 Week</Text>
               <Text style={[styles.headerCell, styles.weekInputCell]}>S1 Start</Text>
-              {WEEK_NUMBERS.map((week) => (
-                <View key={week} style={styles.weekHeader}>
-                  <Text style={styles.weekHeaderDate}>{getShortWeekDate(week)}</Text>
-                  <Text style={styles.weekHeaderLabel}>WK{String(week).padStart(2, '0')}</Text>
-                </View>
-              ))}
+              {WEEK_NUMBERS.map((week) => <View key={week} style={styles.weekHeader}><Text style={styles.weekHeaderDate}>{getShortWeekDate(week)}</Text><Text style={styles.weekHeaderLabel}>WK{String(week).padStart(2, '0')}</Text></View>)}
               <Text style={[styles.headerCell, styles.actionCell]}>Del</Text>
             </View>
 
@@ -192,12 +154,8 @@ export default function MasterProgrammeScreen() {
                   <Text style={[styles.bodyCell, styles.templateCell]} numberOfLines={1}>{template.name.replace(' Bedroom', ' Bed')}</Text>
                   <Text style={[styles.weekInputBody, styles.weekInputCell]}>{plot.stage9CompleteWeek}</Text>
                   <Text style={[styles.stageStartBody, styles.weekInputCell]}>{getStage1StartWeekForPlot(plot, plotTemplates)}</Text>
-                  {WEEK_NUMBERS.map((week) => (
-                    <Text key={week} style={styles.weekCell}>{getMilestoneForPlotWeek(plot, week, plotTemplates)}</Text>
-                  ))}
-                  <Pressable style={styles.removeButton} onPress={() => removeSitePlot(plot.id)}>
-                    <Text style={styles.removeButtonText}>X</Text>
-                  </Pressable>
+                  {WEEK_NUMBERS.map((week) => <Text key={week} style={styles.weekCell}>{getMilestoneForPlotWeek(plot, week, plotTemplates)}</Text>)}
+                  <Pressable style={styles.removeButton} onPress={() => removeSitePlot(plot.id)}><Text style={styles.removeButtonText}>X</Text></Pressable>
                 </View>
               );
             })}
@@ -219,11 +177,15 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', fontWeight: '800' },
   saveButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
   saveButtonText: { color: '#ffffff', fontWeight: '900' },
-  templateChips: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
+  templateChips: { flexDirection: 'row', gap: 8, paddingVertical: 2, flexWrap: 'wrap' },
   templateChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
   templateChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   templateChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
   templateChipTextActive: { color: '#ffffff' },
+  routeChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: '#ffffff' },
+  routeChipActive: { backgroundColor: '#173b5f', borderColor: '#173b5f' },
+  routeChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
+  routeChipTextActive: { color: '#ffffff' },
   workingWeekPanel: { gap: 12, backgroundColor: '#eff6ff', borderColor: '#bfdbfe', borderWidth: 1, borderRadius: 14, padding: 12, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' },
   workingWeekSummary: { flex: 1, minWidth: 240, gap: 4 },
   workingWeekTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
