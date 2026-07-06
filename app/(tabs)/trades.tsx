@@ -8,9 +8,8 @@ import { getActivitiesForTemplateDay } from '../../utils/templateProgramme';
 
 const PROGRAMME_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const WORKING_DAY_COUNT = 5;
-const DAY_WIDTH = 72;
+const DAY_WIDTH = 82;
 const WEEK_WIDTH = DAY_WIDTH * 7;
-const MOVE_WIDTH = 128;
 const ISSUE_TIME_OPTIONS = ['06:30', '07:00', '07:30', '08:00', '09:00', '10:00', '12:00', '14:00', '15:00', '16:00', '17:00'];
 
 type ProgrammeRow = {
@@ -18,6 +17,7 @@ type ProgrammeRow = {
   cells: string[];
   activeActivity?: { code: string; displayText: string };
   delayDays: number;
+  lastActiveIndex: number;
 };
 
 function getShortWeekDate(week: number, dayIndex: number) {
@@ -123,7 +123,10 @@ export default function TradesScreen() {
         const cells = tradeActivitiesByDay.map((activities) => activities.map((activity) => activity.displayText).join('\n'));
         const activeActivity = tradeActivitiesByDay.flat()[0];
         const delayDays = activeActivity ? activityDelays.find((delay) => delay.plotId === plot.id && delay.activityCode === activeActivity.code)?.delayDays ?? 0 : 0;
-        return { plot, cells, activeActivity, delayDays };
+        const lastActiveIndex = activeActivity
+          ? tradeActivitiesByDay.reduce((last, activities, index) => (activities.some((activity) => activity.code === activeActivity.code) ? index : last), -1)
+          : -1;
+        return { plot, cells, activeActivity, delayDays, lastActiveIndex };
       })
       .filter((row) => row.cells.some(Boolean));
   }, [activeContact, sitePlots, tableDays, activityDelays, plotTemplates]);
@@ -147,33 +150,14 @@ export default function TradesScreen() {
 
   const moveFix = async (row: ProgrammeRow, change: number) => {
     if (!row.activeActivity) return;
+    const nextDelay = row.delayDays + change;
     await setActivityDelay({
       plotId: row.plot.id,
       activityCode: row.activeActivity.code,
-      delayDays: row.delayDays + change,
+      delayDays: nextDelay,
     });
-    const direction = change > 0 ? 'forward' : 'back';
-    setSaveMessage(`Plot ${row.plot.plotNo} ${row.activeActivity.displayText} moved ${direction} 1 working day`);
-  };
-
-  const moveVisibleFixes = async (change: number) => {
-    const rowsToMove = programmeRows.filter((row) => row.activeActivity);
-    if (!rowsToMove.length) {
-      setSaveMessage('No visible fix to move in this trade window');
-      return;
-    }
-    await Promise.all(
-      rowsToMove.map((row) =>
-        setActivityDelay({
-          plotId: row.plot.id,
-          activityCode: row.activeActivity!.code,
-          delayDays: row.delayDays + change,
-        }),
-      ),
-    );
-    const direction = change > 0 ? 'forward' : 'back';
-    const fixName = rowsToMove[0].activeActivity?.displayText ?? 'fix';
-    setSaveMessage(`${activeContact?.trade ?? 'Trade'} ${fixName} moved ${direction} 1 working day`);
+    const direction = change > 0 ? 'extended / pushed forward' : 'reduced / pulled back';
+    setSaveMessage(`Plot ${row.plot.plotNo} ${row.activeActivity.displayText} ${direction} by 1 working day`);
   };
 
   const saveTradeContact = async () => {
@@ -217,10 +201,10 @@ export default function TradesScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>2-Week Trade Programme</Text>
-        <Text style={styles.subtitle}>Use Move Fix -/+ Day to change the actual activity date.</Text>
+        <Text style={styles.subtitle}>Use the +/- buttons in the last active fix cell to extend or reduce the fix and move the following 2-week programme.</Text>
       </View>
 
-      <SectionCard title="2-week trade programme" subtitle="The top -/+ day buttons now move the visible selected trade fix, not just the viewing window.">
+      <SectionCard title="2-week trade programme" subtitle="The +/- controls sit in the final day of the fix. The master programme is not changed.">
         <View style={styles.viewerHeaderRow}>
           <View style={styles.inputWrapSmall}>
             <Text style={styles.label}>Start week</Text>
@@ -236,15 +220,6 @@ export default function TradesScreen() {
         </View>
 
         {saveMessage && !tradeSaved && !tradeAdded && !tradeExists && !issueSettingsSaved && !programmeIssued ? <Text style={styles.moveNotice}>{saveMessage}</Text> : null}
-
-        <View style={styles.fixMovePanel}>
-          <Text style={styles.fixMoveTitle}>Move visible fix</Text>
-          <Text style={styles.fixMoveHelp}>Moves the selected trade activity itself. Example: Scaffold 2nd Lift +1 moves Friday work to Monday.</Text>
-          <View style={styles.dayMoveRow}>
-            <Pressable style={styles.dayMoveBack} onPress={() => moveVisibleFixes(-1)}><Text style={styles.dayMoveButtonText}>- 1 Day</Text></Pressable>
-            <Pressable style={styles.dayMoveForward} onPress={() => moveVisibleFixes(1)}><Text style={styles.dayMoveButtonText}>+ 1 Day</Text></Pressable>
-          </View>
-        </View>
 
         <View style={styles.viewPanel}>
           <Text style={styles.viewPanelTitle}>View only</Text>
@@ -274,21 +249,18 @@ export default function TradesScreen() {
               <Text style={[styles.tableHeader, styles.plotNoCell]} />
               <Text style={[styles.tableHeader, styles.tradeCell]} />
               <Text style={[styles.tableHeader, styles.fixCell]} />
-              <Text style={[styles.tableHeader, styles.moveCell]} />
               {weekGroups.map((week, index) => <Text key={`${week}-${index}`} style={styles.weekGroupHeader}>WK{String(week).padStart(2, '0')}</Text>)}
             </View>
             <View style={styles.tableRow}>
               <Text style={[styles.tableHeader, styles.plotNoCell]}>Plot No</Text>
               <Text style={[styles.tableHeader, styles.tradeCell]}>Trade</Text>
               <Text style={[styles.tableHeader, styles.fixCell]}>Fix / Stage</Text>
-              <Text style={[styles.tableHeader, styles.moveCell]}>Move Fix</Text>
               {tableDays.map((item) => <Text key={item.key} style={[styles.dayHeaderCell, item.weekend ? styles.weekendHeader : null]}>{item.dayName}</Text>)}
             </View>
             <View style={styles.tableRow}>
               <Text style={[styles.dateBlankCell, styles.plotNoCell]} />
               <Text style={[styles.dateBlankCell, styles.tradeCell]} />
               <Text style={[styles.dateBlankCell, styles.fixCell]} />
-              <Text style={[styles.dateBlankCell, styles.moveCell]} />
               {tableDays.map((item) => <Text key={`date-${item.key}`} style={[styles.dateHeaderCell, item.weekend ? styles.weekendDateCell : null]}>{item.date}</Text>)}
             </View>
 
@@ -299,12 +271,20 @@ export default function TradesScreen() {
                 <Text style={[styles.bodyCell, styles.plotNoCell]}>{row.plot.plotNo}</Text>
                 <Text style={[styles.bodyCell, styles.tradeCell]}>{activeContact?.trade ?? ''}</Text>
                 <Text style={[styles.bodyCell, styles.fixCell]}>{row.activeActivity?.displayText ?? row.cells.find(Boolean) ?? '-'}</Text>
-                <View style={[styles.bodyCell, styles.moveCell, styles.moveFixCell]}>
-                  <Pressable style={styles.fixBackButton} onPress={() => moveFix(row, -1)}><Text style={styles.fixMoveText}>-1</Text></Pressable>
-                  <Pressable style={styles.fixForwardButton} onPress={() => moveFix(row, 1)}><Text style={styles.fixMoveText}>+1</Text></Pressable>
-                  <Text style={styles.delayText}>{row.delayDays > 0 ? '+' : ''}{row.delayDays}d</Text>
-                </View>
-                {row.cells.map((cell, index) => <Text key={tableDays[index].key} style={[styles.dayBodyCell, tableDays[index].weekend ? styles.weekendCell : null, cell ? styles.activeDayCell : null]}>{cell}</Text>)}
+                {row.cells.map((cell, index) => {
+                  const showControls = index === row.lastActiveIndex && Boolean(row.activeActivity);
+                  return (
+                    <View key={tableDays[index].key} style={[styles.dayBodyCell, tableDays[index].weekend ? styles.weekendCell : null, cell ? styles.activeDayCell : null, showControls ? styles.finalFixCell : null]}>
+                      <Text style={styles.dayBodyText}>{cell}</Text>
+                      {showControls ? (
+                        <View style={styles.cellMoveButtons}>
+                          <Pressable style={styles.fixBackButton} onPress={() => moveFix(row, -1)}><Text style={styles.fixMoveText}>-</Text></Pressable>
+                          <Pressable style={styles.fixForwardButton} onPress={() => moveFix(row, 1)}><Text style={styles.fixMoveText}>+</Text></Pressable>
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
               </View>
             ))}
           </View>
@@ -428,15 +408,9 @@ const styles = StyleSheet.create({
   issueSummary: { flex: 1, minWidth: 220, backgroundColor: '#eff6ff', borderRadius: 12, padding: 12 },
   issueTitle: { color: '#0f172a', fontWeight: '900', fontSize: 18 },
   issueMeta: { color: '#64748b', fontSize: 12, marginTop: 3 },
-  fixMovePanel: { backgroundColor: '#fff7ed', borderColor: '#fed7aa', borderWidth: 1, borderRadius: 14, padding: 12, gap: 8 },
-  fixMoveTitle: { color: '#9a3412', fontWeight: '900', textAlign: 'center' },
-  fixMoveHelp: { color: '#9a3412', fontWeight: '800', fontSize: 12, textAlign: 'center' },
   viewPanel: { backgroundColor: '#f8fafc', borderColor: '#e2e8f0', borderWidth: 1, borderRadius: 14, padding: 12, gap: 8 },
   viewPanelTitle: { color: '#475569', fontWeight: '900', textAlign: 'center' },
   dayMoveRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 10 },
-  dayMoveBack: { backgroundColor: '#7f1d1d', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
-  dayMoveForward: { backgroundColor: '#166534', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
-  dayMoveButtonText: { color: '#ffffff', fontWeight: '900' },
   viewButton: { backgroundColor: '#e2e8f0', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
   viewButtonText: { color: '#334155', fontWeight: '900' },
   resetButton: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe', borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
@@ -447,12 +421,6 @@ const styles = StyleSheet.create({
   plotNoCell: { width: 74 },
   tradeCell: { width: 110 },
   fixCell: { width: 118 },
-  moveCell: { width: MOVE_WIDTH },
-  moveFixCell: { flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  fixBackButton: { backgroundColor: '#7f1d1d', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
-  fixForwardButton: { backgroundColor: '#166534', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
-  fixMoveText: { color: '#ffffff', fontWeight: '900', fontSize: 10 },
-  delayText: { color: '#475569', fontWeight: '900', fontSize: 10 },
   weekGroupHeader: { width: WEEK_WIDTH, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 11, fontWeight: '900' },
   dayHeaderCell: { width: DAY_WIDTH, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 10, fontWeight: '900' },
   weekendHeader: { backgroundColor: '#214c75' },
@@ -460,10 +428,16 @@ const styles = StyleSheet.create({
   dateHeaderCell: { width: DAY_WIDTH, backgroundColor: '#214c75', color: '#dbeafe', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 4, fontSize: 9, fontWeight: '900' },
   weekendDateCell: { backgroundColor: '#2b587f' },
   bodyCell: { color: '#0f172a', padding: 7, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800', fontSize: 11 },
-  dayBodyCell: { width: DAY_WIDTH, minHeight: 38, color: '#0f172a', padding: 5, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800', fontSize: 10, lineHeight: 12 },
-  weekendCell: { backgroundColor: '#f8fafc', color: '#94a3b8' },
+  dayBodyCell: { width: DAY_WIDTH, minHeight: 48, borderWidth: 1, borderColor: '#c8d7e6', paddingHorizontal: 4, paddingVertical: 5, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  dayBodyText: { color: '#0f172a', textAlign: 'center', fontWeight: '900', fontSize: 10, lineHeight: 12 },
+  weekendCell: { backgroundColor: '#f8fafc' },
   activeDayCell: { backgroundColor: '#fff4cc' },
-  emptyProgrammeCell: { width: 74 + 110 + 118 + MOVE_WIDTH + WEEK_WIDTH * 2, textAlign: 'left', color: '#64748b' },
+  finalFixCell: { borderColor: '#16a34a', borderWidth: 2 },
+  cellMoveButtons: { flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center' },
+  fixBackButton: { backgroundColor: '#7f1d1d', borderRadius: 8, width: 24, height: 22, alignItems: 'center', justifyContent: 'center' },
+  fixForwardButton: { backgroundColor: '#166534', borderRadius: 8, width: 24, height: 22, alignItems: 'center', justifyContent: 'center' },
+  fixMoveText: { color: '#ffffff', fontWeight: '900', fontSize: 12 },
+  emptyProgrammeCell: { width: 74 + 110 + 118 + WEEK_WIDTH * 2, textAlign: 'left', color: '#64748b' },
   empty: { color: '#64748b' },
   logRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
   logMain: { flex: 1 },
