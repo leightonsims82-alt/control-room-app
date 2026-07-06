@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Link } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { Link, useLocalSearchParams } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../components/AppScreen';
 import { useSitePlanner } from '../data/sitePlannerStore';
@@ -42,7 +42,12 @@ function buildTwoWeekWindow(startWeek: number) {
   });
 }
 
-function guessTrade(text: string) {
+function normaliseSlug(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function guessTrade(text: string, fallbackTrade?: string) {
+  if (fallbackTrade) return fallbackTrade;
   const lower = text.toLowerCase();
   if (lower.includes('brick') || lower.includes('block') || lower.includes('dpc')) return 'Brickwork';
   if (lower.includes('drain') || lower.includes('foundation') || lower.includes('slab')) return 'Groundworks';
@@ -56,12 +61,22 @@ function guessTrade(text: string) {
 }
 
 export default function SupervisorProgrammeView() {
+  const params = useLocalSearchParams<{ trade?: string }>();
   const { sitePlots, activityDelays, plotTemplates, tradeContacts, issueLogs } = useSitePlanner();
-  const [selectedTrade, setSelectedTrade] = useState('All trades');
+  const tradeOptions = useMemo(() => ['All trades', ...Array.from(new Set(tradeContacts.map((contact) => contact.trade).filter(Boolean))), 'General'], [tradeContacts]);
+  const linkedTrade = useMemo(() => {
+    const requested = Array.isArray(params.trade) ? params.trade[0] : params.trade;
+    if (!requested) return 'All trades';
+    return tradeOptions.find((trade) => normaliseSlug(trade) === normaliseSlug(String(requested))) ?? 'All trades';
+  }, [params.trade, tradeOptions]);
+  const [selectedTrade, setSelectedTrade] = useState(linkedTrade);
   const startWeek = getCurrentProgrammeWeek();
   const days = useMemo(() => buildTwoWeekWindow(startWeek), [startWeek]);
-  const tradeOptions = ['All trades', ...Array.from(new Set(tradeContacts.map((contact) => contact.trade).filter(Boolean))), 'General'];
   const latestIssue = issueLogs[0];
+
+  useEffect(() => {
+    setSelectedTrade(linkedTrade);
+  }, [linkedTrade]);
 
   const rows = useMemo(() => {
     return sitePlots.flatMap((plot) => {
@@ -70,7 +85,7 @@ export default function SupervisorProgrammeView() {
         const activities = getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates);
         return activities.map((activity) => {
           const displayText = activity.displayText || activity.code;
-          const trade = guessTrade(displayText);
+          const trade = guessTrade(displayText, activity.trade);
           return {
             key: `${plot.id}-${day.key}-${activity.code}`,
             plotNo: plot.plotNo,
@@ -89,21 +104,21 @@ export default function SupervisorProgrammeView() {
     <AppScreen>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.kicker}>Supervisor app</Text>
-          <Text style={styles.title}>My Trade Programme</Text>
-          <Text style={styles.subtitle}>Read-only supervisor view of the latest 2-week lookahead. Use this for live coordination while the PDF remains the formal issue record.</Text>
+          <Text style={styles.kicker}>Live supervisor app</Text>
+          <Text style={styles.title}>{selectedTrade === 'All trades' ? 'Live Trade Programme' : `${selectedTrade} Programme`}</Text>
+          <Text style={styles.subtitle}>Read-only live view. This updates from the programme data, so supervisors can check their current trade programme at any time.</Text>
         </View>
-        <Link href="/(tabs)/two-week" asChild>
+        <Link href="/(tabs)/trades" asChild>
           <Pressable style={styles.backButton}>
             <Ionicons name="arrow-back" size={16} color="#ffffff" />
-            <Text style={styles.backButtonText}>Back to programme</Text>
+            <Text style={styles.backButtonText}>Back to trades</Text>
           </Pressable>
         </Link>
       </View>
 
       <View style={styles.issueCard}>
-        <Text style={styles.issueTitle}>Latest issued revision</Text>
-        <Text style={styles.issueText}>{latestIssue ? latestIssue.note : 'No formal issue logged yet. Issue the programme first to create the PDF record.'}</Text>
+        <Text style={styles.issueTitle}>Live programme status</Text>
+        <Text style={styles.issueText}>{latestIssue ? latestIssue.note : 'Live view available. No formal PDF record has been generated yet.'}</Text>
         {latestIssue ? <Text style={styles.issueMeta}>{new Date(latestIssue.issuedAt).toLocaleString('en-GB')}</Text> : null}
       </View>
 
@@ -121,7 +136,7 @@ export default function SupervisorProgrammeView() {
       <View style={styles.summaryRow}>
         <MiniStat label="Activities" value={rows.length} />
         <MiniStat label="View" value={selectedTrade} />
-        <MiniStat label="Mode" value="Read-only" />
+        <MiniStat label="Mode" value="Live read-only" />
       </View>
 
       <View style={styles.card}>
