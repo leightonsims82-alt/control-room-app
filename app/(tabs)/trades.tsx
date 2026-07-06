@@ -45,6 +45,10 @@ function twoWeekDays(startWeek: number) {
   );
 }
 
+function makeTradeId(trade: string) {
+  return `trade-${trade.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`;
+}
+
 export default function TradesScreen() {
   const {
     sitePlots,
@@ -65,6 +69,8 @@ export default function TradesScreen() {
   const [issueTime, setIssueTime] = useState(issueSettings.issueTime);
   const [autoIssueEnabled, setAutoIssueEnabled] = useState(issueSettings.autoIssueEnabled);
   const [issueStartWeek, setIssueStartWeek] = useState('1');
+  const [newTradeName, setNewTradeName] = useState('');
+  const [saveMessage, setSaveMessage] = useState('');
 
   useEffect(() => {
     setDraftContact(activeContact);
@@ -98,10 +104,36 @@ export default function TradesScreen() {
   const saveTradeContact = async () => {
     if (!draftContact) return;
     await upsertTradeContact(draftContact);
+    setSaveMessage(`${draftContact.trade} saved`);
+  };
+
+  const addNewTrade = async () => {
+    const trade = newTradeName.trim();
+    if (!trade) return;
+    const existing = tradeContacts.find((contact) => contact.trade.toLowerCase() === trade.toLowerCase());
+    if (existing) {
+      setSelectedTradeId(existing.id);
+      setSaveMessage(`${existing.trade} already exists`);
+      setNewTradeName('');
+      return;
+    }
+    const newContact: TradeContact = {
+      id: makeTradeId(trade),
+      trade,
+      contractor: '',
+      supervisorName: '',
+      supervisorEmail: '',
+      supervisorPhone: '',
+    };
+    await upsertTradeContact(newContact);
+    setSelectedTradeId(newContact.id);
+    setNewTradeName('');
+    setSaveMessage(`${trade} added`);
   };
 
   const saveIssueSettings = async () => {
     await setIssueSettings({ managerEmail, issueDay, issueTime, autoIssueEnabled });
+    setSaveMessage('Issue settings saved');
   };
 
   const markIssued = async () => {
@@ -110,6 +142,7 @@ export default function TradesScreen() {
       recipientCount,
       note: `Programme prepared for manager and saved trade contacts for WK${String(activeIssueWeek).padStart(2, '0')} + WK${String(normaliseWeek(activeIssueWeek + 1)).padStart(2, '0')}`,
     });
+    setSaveMessage('Programme marked as issued');
   };
 
   return (
@@ -118,6 +151,8 @@ export default function TradesScreen() {
         <Text style={styles.title}>2-Week Trade Programme</Text>
         <Text style={styles.subtitle}>Site manager table view first. Select the week and trade to see plot-by-plot daily activity.</Text>
       </View>
+
+      {saveMessage ? <Text style={styles.saveMessage}>{saveMessage}</Text> : null}
 
       <SectionCard title="2-week trade programme" subtitle="One row per plot. Dates sit on their own row, with weekends shown blank unless specifically planned.">
         <View style={styles.viewerHeaderRow}>
@@ -195,6 +230,16 @@ export default function TradesScreen() {
       </SectionCard>
 
       <SectionCard title="Trade setup" subtitle="Each trade can have its contractor, supervisor, email and phone saved against it.">
+        <View style={styles.addTradeRow}>
+          <View style={styles.addTradeInputWrap}>
+            <Text style={styles.label}>Add trade</Text>
+            <TextInput value={newTradeName} onChangeText={setNewTradeName} style={styles.input} placeholder="e.g. Solar Panels Installer" />
+          </View>
+          <Pressable style={styles.addButton} onPress={addNewTrade}>
+            <Text style={styles.saveButtonText}>Add Trade</Text>
+          </Pressable>
+        </View>
+
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View style={styles.tradeChips}>
             {tradeContacts.map((contact) => {
@@ -281,6 +326,7 @@ const styles = StyleSheet.create({
   header: { gap: 4 },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
   subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
+  saveMessage: { backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1, color: '#166534', fontWeight: '900', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
   tradeChips: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
   tradeChipsWide: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
   tradeChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
@@ -288,12 +334,15 @@ const styles = StyleSheet.create({
   tradeChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
   tradeChipTextActive: { color: '#ffffff' },
   formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
+  addTradeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
+  addTradeInputWrap: { gap: 6, minWidth: 240, flex: 1 },
   inputWrap: { gap: 6, minWidth: 190, flex: 1 },
   inputWrapSmall: { gap: 6, width: 120 },
   label: { color: '#334155', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
   input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', fontWeight: '800' },
   lockedInput: { backgroundColor: '#f1f5f9', color: '#64748b' },
   saveButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-end' },
+  addButton: { backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-end' },
   saveButtonText: { color: '#ffffff', fontWeight: '900' },
   toggleButton: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#ffffff' },
   toggleActive: { backgroundColor: '#dcfce7', borderColor: '#16a34a' },
