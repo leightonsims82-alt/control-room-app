@@ -19,6 +19,7 @@ function wkDate(week: number, day: number) {
 function makeDays(start: number) { return Array.from({ length: 14 }, (_, i) => ({ key: `${i}`, week: nw(start + Math.floor(i / 7)), day: (i % 7) + 1, name: DAYS[i % 7], date: wkDate(nw(start + Math.floor(i / 7)), i % 7), weekend: i % 7 >= 5 })); }
 function slug(t: string) { return t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
 function liveLink(trade: string) { return Platform.OS === 'web' && typeof window !== 'undefined' ? `${window.location.origin}/supervisor?trade=${slug(trade)}` : `/supervisor?trade=${slug(trade)}`; }
+function printLink(trade: string) { return Platform.OS === 'web' && typeof window !== 'undefined' ? `${window.location.origin}/supervisor?trade=${slug(trade)}&print=1` : `/supervisor?trade=${slug(trade)}&print=1`; }
 
 export default function TradesNoFixScreen() {
   const { sitePlots, activityDelays, tradeContacts, plotTemplates, setActivityDelay, recordIssue } = useSitePlanner();
@@ -29,6 +30,7 @@ export default function TradesNoFixScreen() {
   const startWeek = nw(Number(weekText) || 1);
   const days = useMemo(() => makeDays(startWeek), [startWeek]);
   const link = liveLink(trade);
+  const pdfUrl = printLink(trade);
 
   const rows = useMemo(() => sitePlots.map((plot) => {
     const cells = days.map((day) => day.weekend ? '' : getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates).filter((a) => a.trade === trade).map((a) => a.displayText).join('\n'));
@@ -45,7 +47,16 @@ export default function TradesNoFixScreen() {
   };
   const openLive = () => { Linking.openURL(link); setMessage(`Live supervisor view opened for ${trade}.`); };
   const copyLive = async () => { if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) await navigator.clipboard.writeText(link); setMessage(`Live supervisor link copied for ${trade}.`); };
-  const pdf = async () => { await recordIssue({ startWeek, recipientCount: 1, note: `${trade} PDF record generated for WK${String(startWeek).padStart(2, '0')}` }); setMessage(`${trade} PDF record logged. Use the live view to save the trade-only table as PDF.`); };
+  const pdf = async () => {
+    await recordIssue({ startWeek, recipientCount: 1, note: `${trade} PDF record opened for WK${String(startWeek).padStart(2, '0')}` });
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.open(pdfUrl, '_blank');
+      setMessage(`${trade} PDF record opened in a new tab. Choose Save as PDF.`);
+      return;
+    }
+    Linking.openURL(pdfUrl);
+    setMessage(`${trade} PDF record opened.`);
+  };
 
   return (
     <AppScreen>
