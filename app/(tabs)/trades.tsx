@@ -87,6 +87,8 @@ export default function TradesScreen() {
   const tableDays = useMemo(() => twoWeekDays(activeIssueWeek), [activeIssueWeek]);
   const savedSupervisorEmails = getSavedSupervisorEmails(tradeContacts);
   const recipientCount = savedSupervisorEmails.length + (managerEmail.trim() ? 1 : 0);
+  const tradeSaveMessage = saveMessage && draftContact && saveMessage.toLowerCase().includes(draftContact.trade.toLowerCase()) ? saveMessage : '';
+  const setupSaveMessage = saveMessage && !tradeSaveMessage ? saveMessage : '';
 
   const programmeRows = useMemo(() => {
     if (!activeContact) return [];
@@ -152,8 +154,6 @@ export default function TradesScreen() {
         <Text style={styles.subtitle}>Site manager table view first. Select the week and trade to see plot-by-plot daily activity.</Text>
       </View>
 
-      {saveMessage ? <Text style={styles.saveMessage}>{saveMessage}</Text> : null}
-
       <SectionCard title="2-week trade programme" subtitle="One row per plot. Dates sit on their own row, with weekends shown blank unless specifically planned.">
         <View style={styles.viewerHeaderRow}>
           <View style={styles.inputWrapSmall}>
@@ -164,9 +164,12 @@ export default function TradesScreen() {
             <Text style={styles.issueTitle}>{activeContact?.trade ?? 'Trade'} Programme</Text>
             <Text style={styles.issueMeta}>WK{String(activeIssueWeek).padStart(2, '0')} + WK{String(normaliseWeek(activeIssueWeek + 1)).padStart(2, '0')}</Text>
           </View>
-          <Pressable style={styles.saveButton} onPress={markIssued}>
-            <Text style={styles.saveButtonText}>Mark Issued</Text>
-          </Pressable>
+          <View style={styles.saveControlWrap}>
+            <Pressable style={styles.saveButton} onPress={markIssued}>
+              <Text style={styles.saveButtonText}>Mark Issued</Text>
+            </Pressable>
+            {setupSaveMessage === 'Programme marked as issued' ? <Text style={styles.inlineSaveMessage}>{setupSaveMessage}</Text> : null}
+          </View>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator>
@@ -235,9 +238,12 @@ export default function TradesScreen() {
             <Text style={styles.label}>Add trade</Text>
             <TextInput value={newTradeName} onChangeText={setNewTradeName} style={styles.input} placeholder="e.g. Solar Panels Installer" />
           </View>
-          <Pressable style={styles.addButton} onPress={addNewTrade}>
-            <Text style={styles.saveButtonText}>Add Trade</Text>
-          </Pressable>
+          <View style={styles.saveControlWrap}>
+            <Pressable style={styles.addButton} onPress={addNewTrade}>
+              <Text style={styles.saveButtonText}>Add Trade</Text>
+            </Pressable>
+            {setupSaveMessage && setupSaveMessage !== 'Issue settings saved' && setupSaveMessage !== 'Programme marked as issued' ? <Text style={styles.inlineSaveMessage}>{setupSaveMessage}</Text> : null}
+          </View>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator>
@@ -275,9 +281,12 @@ export default function TradesScreen() {
               <Text style={styles.label}>Supervisor phone</Text>
               <TextInput value={draftContact.supervisorPhone} onChangeText={(supervisorPhone) => setDraftContact({ ...draftContact, supervisorPhone })} style={styles.input} placeholder="07..." keyboardType="phone-pad" />
             </View>
-            <Pressable style={styles.saveButton} onPress={saveTradeContact}>
-              <Text style={styles.saveButtonText}>Save Trade</Text>
-            </Pressable>
+            <View style={styles.saveControlWrap}>
+              <Pressable style={styles.saveButton} onPress={saveTradeContact}>
+                <Text style={styles.saveButtonText}>Save Trade</Text>
+              </Pressable>
+              {tradeSaveMessage ? <Text style={styles.inlineSaveMessage}>{tradeSaveMessage}</Text> : null}
+            </View>
           </View>
         ) : null}
       </SectionCard>
@@ -299,9 +308,12 @@ export default function TradesScreen() {
           <Pressable style={[styles.toggleButton, autoIssueEnabled ? styles.toggleActive : null]} onPress={() => setAutoIssueEnabled((value) => !value)}>
             <Text style={[styles.toggleText, autoIssueEnabled ? styles.toggleTextActive : null]}>{autoIssueEnabled ? 'Auto issue on' : 'Auto issue off'}</Text>
           </Pressable>
-          <Pressable style={styles.saveButton} onPress={saveIssueSettings}>
-            <Text style={styles.saveButtonText}>Save Issue Settings</Text>
-          </Pressable>
+          <View style={styles.saveControlWrap}>
+            <Pressable style={styles.saveButton} onPress={saveIssueSettings}>
+              <Text style={styles.saveButtonText}>Save Issue Settings</Text>
+            </Pressable>
+            {setupSaveMessage === 'Issue settings saved' ? <Text style={styles.inlineSaveMessage}>{setupSaveMessage}</Text> : null}
+          </View>
         </View>
         <Text style={styles.helperText}>Recipients currently saved: {recipientCount}. Manager receives the full programme. Supervisors receive their trade programme once server-side email sending is connected.</Text>
       </SectionCard>
@@ -327,6 +339,8 @@ const styles = StyleSheet.create({
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
   subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
   saveMessage: { backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1, color: '#166534', fontWeight: '900', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
+  inlineSaveMessage: { backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1, color: '#166534', fontWeight: '900', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, fontSize: 12, textAlign: 'center' },
+  saveControlWrap: { gap: 6, alignSelf: 'flex-end' },
   tradeChips: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
   tradeChipsWide: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
   tradeChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
