@@ -18,9 +18,9 @@ function formatWeekLabel(week: number) {
   return `WK${String(normaliseProgrammeWeek(week)).padStart(2, '0')}`;
 }
 
-function getProgrammeDate(week: number, dayIndex: number) {
+function getProgrammeDateFromIndex(dayIndexFromStart: number) {
   const date = new Date(PROGRAMME_START_DATE);
-  date.setDate(PROGRAMME_START_DATE.getDate() + (normaliseProgrammeWeek(week) - 1) * 7 + dayIndex);
+  date.setDate(PROGRAMME_START_DATE.getDate() + dayIndexFromStart);
   return date;
 }
 
@@ -34,8 +34,26 @@ function formatShortDate(date: Date) {
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 }
 
-function formatDateRange(startWeek: number) {
-  return `${formatShortDate(getProgrammeDate(startWeek, 0))} - ${formatShortDate(getProgrammeDate(startWeek + 1, 6))}`;
+function buildTwoWeekWindow(startWeek: number, dayOffset: number) {
+  const baseIndex = (normaliseProgrammeWeek(startWeek) - 1) * 7 + dayOffset;
+  return Array.from({ length: 14 }, (_, columnIndex) => {
+    const absoluteDayIndex = baseIndex + columnIndex;
+    const week = normaliseProgrammeWeek(Math.floor(absoluteDayIndex / 7) + 1);
+    const dayIndex = ((absoluteDayIndex % 7) + 7) % 7;
+    return {
+      key: `${absoluteDayIndex}-${columnIndex}`,
+      week,
+      dayIndex,
+      day: dayIndex + 1,
+      dayName: PROGRAMME_DAYS[dayIndex],
+      date: getProgrammeDateFromIndex(absoluteDayIndex),
+      weekend: dayIndex >= WORKING_DAY_COUNT,
+    };
+  });
+}
+
+function formatDateRange(windowDays: ReturnType<typeof buildTwoWeekWindow>) {
+  return `${formatShortDate(windowDays[0].date)} - ${formatShortDate(windowDays[windowDays.length - 1].date)}`;
 }
 
 function simplifyActivity(text: string) {
@@ -61,10 +79,7 @@ function simplifyActivity(text: string) {
 }
 
 function buildCellText(activities: ReturnType<typeof getActivitiesForTemplateDay>) {
-  return activities
-    .map((activity) => simplifyActivity(activity.displayText || activity.code))
-    .filter(Boolean)
-    .join('\n');
+  return activities.map((activity) => simplifyActivity(activity.displayText || activity.code)).filter(Boolean).join('\n');
 }
 
 function isWeekend(dayIndex: number) {
@@ -74,23 +89,25 @@ function isWeekend(dayIndex: number) {
 export default function TwoWeekProgrammeScreen() {
   const { sitePlots, activityDelays, plotTemplates } = useSitePlanner();
   const [startWeek, setStartWeek] = useState(getCurrentProgrammeWeek());
-  const twoWeekDates = formatDateRange(startWeek);
-  const visibleWeeks = [startWeek, normaliseProgrammeWeek(startWeek + 1)];
+  const [dayOffset, setDayOffset] = useState(0);
+  const windowDays = useMemo(() => buildTwoWeekWindow(startWeek, dayOffset), [startWeek, dayOffset]);
+  const twoWeekDates = formatDateRange(windowDays);
+  const weekGroups = [windowDays[0].week, windowDays[7].week];
 
   const programmeRows = useMemo(() => {
     return sitePlots.map((plot) => {
-      const dailyActivities = visibleWeeks.flatMap((week) =>
-        PROGRAMME_DAYS.map((_, dayIndex) => {
-          if (isWeekend(dayIndex)) return [];
-          return getActivitiesForTemplateDay(plot, week, dayIndex + 1, activityDelays, plotTemplates);
-        }),
-      );
-      return {
-        plot,
-        cells: dailyActivities.map(buildCellText),
-      };
+      const dailyActivities = windowDays.map((item) => {
+        if (item.weekend) return [];
+        return getActivitiesForTemplateDay(plot, item.week, item.day, activityDelays, plotTemplates);
+      });
+      return { plot, cells: dailyActivities.map(buildCellText) };
     });
-  }, [sitePlots, visibleWeeks, activityDelays, plotTemplates]);
+  }, [sitePlots, windowDays, activityDelays, plotTemplates]);
+
+  const resetWindow = () => {
+    setStartWeek(getCurrentProgrammeWeek());
+    setDayOffset(0);
+  };
 
   return (
     <AppScreen>
@@ -110,23 +127,33 @@ export default function TwoWeekProgrammeScreen() {
         <View style={styles.weekControls}>
           <Pressable style={styles.weekButton} onPress={() => setStartWeek((week) => normaliseProgrammeWeek(week - 1))}>
             <Ionicons name="chevron-back" size={16} color="#ffffff" />
-            <Text style={styles.weekButtonText}>Previous</Text>
+            <Text style={styles.weekButtonText}>Previous week</Text>
           </Pressable>
           <View style={styles.weekCentre}>
-            <Text style={styles.weekLabel}>{formatWeekLabel(startWeek)} + {formatWeekLabel(startWeek + 1)}</Text>
+            <Text style={styles.weekLabel}>{formatWeekLabel(weekGroups[0])} + {formatWeekLabel(weekGroups[1])}</Text>
             <Text style={styles.weekDateLabel}>{twoWeekDates}</Text>
           </View>
           <Pressable style={styles.weekButton} onPress={() => setStartWeek((week) => normaliseProgrammeWeek(week + 1))}>
-            <Text style={styles.weekButtonText}>Next</Text>
+            <Text style={styles.weekButtonText}>Next week</Text>
             <Ionicons name="chevron-forward" size={16} color="#ffffff" />
           </Pressable>
         </View>
 
-        <View style={styles.quickActionRow}>
-          <Pressable style={styles.currentWeekButton} onPress={() => setStartWeek(getCurrentProgrammeWeek())}>
-            <Ionicons name="locate-outline" size={16} color="#1d4ed8" />
-            <Text style={styles.currentWeekButtonText}>Jump to current week</Text>
-          </Pressable>
+        <View style={styles.dayMovePanel}>
+          <Text style={styles.dayMoveTitle}>Move 2-week programme by days</Text>
+          <View style={styles.quickActionRow}>
+            <Pressable style={styles.dayMoveBack} onPress={() => setDayOffset((value) => value - 1)}>
+              <Text style={styles.dayMoveButtonText}>- 1 Day</Text>
+            </Pressable>
+            <Pressable style={styles.currentWeekButton} onPress={resetWindow}>
+              <Ionicons name="locate-outline" size={16} color="#1d4ed8" />
+              <Text style={styles.currentWeekButtonText}>Reset to current</Text>
+            </Pressable>
+            <Pressable style={styles.dayMoveForward} onPress={() => setDayOffset((value) => value + 1)}>
+              <Text style={styles.dayMoveButtonText}>+ 1 Day</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.dayMoveNote}>Offset: {dayOffset > 0 ? '+' : ''}{dayOffset} day{Math.abs(dayOffset) === 1 ? '' : 's'}</Text>
         </View>
 
         <View style={styles.summaryStrip}>
@@ -162,25 +189,25 @@ export default function TwoWeekProgrammeScreen() {
                 <View style={styles.weekHeaderRow}>
                   <Text style={[styles.weekHeaderBlank, styles.plotCell]} />
                   <Text style={[styles.weekHeaderBlank, styles.typeCell]} />
-                  {visibleWeeks.map((week) => <Text key={week} style={styles.weekGroup}>{formatWeekLabel(week)}</Text>)}
+                  {weekGroups.map((week, index) => <Text key={`${week}-${index}`} style={styles.weekGroup}>{formatWeekLabel(week)}</Text>)}
                 </View>
                 <View style={styles.dateHeaderRow}>
                   <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
                   <Text style={[styles.headerCell, styles.typeCell]}>Type</Text>
-                  {visibleWeeks.flatMap((week) => PROGRAMME_DAYS.map((day, dayIndex) => (
-                    <View key={`${week}-${day}`} style={[styles.dayHeader, isWeekend(dayIndex) ? styles.weekendHeader : null]}>
-                      <Text style={styles.dayHeaderName}>{day}</Text>
-                      <Text style={styles.dayHeaderDate}>{formatShortDate(getProgrammeDate(week, dayIndex))}</Text>
+                  {windowDays.map((item) => (
+                    <View key={item.key} style={[styles.dayHeader, item.weekend ? styles.weekendHeader : null]}>
+                      <Text style={styles.dayHeaderName}>{item.dayName}</Text>
+                      <Text style={styles.dayHeaderDate}>{formatShortDate(item.date)}</Text>
                     </View>
-                  )))}
+                  ))}
                 </View>
                 {programmeRows.map((row, rowIndex) => (
                   <View key={row.plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                     <Text style={[styles.bodyCell, styles.plotCell]}>{row.plot.plotNo}</Text>
                     <Text style={[styles.bodyCell, styles.typeCell]}>{plotTemplates.find((template) => template.id === row.plot.templateId)?.name ?? '3 Bedroom'}</Text>
                     {row.cells.map((text, index) => {
-                      const dayIndex = index % PROGRAMME_DAYS.length;
-                      return <Text key={`${row.plot.id}-${index}`} style={[styles.dayCell, isWeekend(dayIndex) ? styles.weekendCell : null, text ? styles.activeDayCell : null]}>{text}</Text>;
+                      const item = windowDays[index];
+                      return <Text key={`${row.plot.id}-${item.key}`} style={[styles.dayCell, isWeekend(item.dayIndex) ? styles.weekendCell : null, text ? styles.activeDayCell : null]}>{text}</Text>;
                     })}
                   </View>
                 ))}
@@ -220,6 +247,12 @@ const styles = StyleSheet.create({
   quickActionRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 10 },
   currentWeekButton: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#eff6ff', borderRadius: 999, borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 12, paddingVertical: 8 },
   currentWeekButtonText: { color: '#1d4ed8', fontSize: 12, fontWeight: '900' },
+  dayMovePanel: { backgroundColor: '#fff7ed', borderColor: '#fed7aa', borderWidth: 1, borderRadius: 14, padding: 12, gap: 10 },
+  dayMoveTitle: { color: '#9a3412', fontWeight: '900', textAlign: 'center' },
+  dayMoveBack: { backgroundColor: '#7f1d1d', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
+  dayMoveForward: { backgroundColor: '#166534', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
+  dayMoveButtonText: { color: '#ffffff', fontWeight: '900' },
+  dayMoveNote: { color: '#9a3412', fontSize: 12, fontWeight: '900', textAlign: 'center' },
   summaryStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   miniStat: { flex: 1, minWidth: 120, backgroundColor: '#f8fafc', borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', padding: 12 },
   miniStatValue: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
