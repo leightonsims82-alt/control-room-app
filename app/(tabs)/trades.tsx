@@ -68,10 +68,6 @@ function openTradeEmail(email: string, subject: string, body: string) {
   Linking.openURL(url);
 }
 
-function cleanCellText(value: string) {
-  return value.replace(/\n/g, ' / ').trim() || '-';
-}
-
 export default function TradesScreen() {
   const {
     sitePlots,
@@ -140,16 +136,13 @@ export default function TradesScreen() {
       .filter((row) => row.cells.some(Boolean));
   }, [activeContact, sitePlots, tableDays, activityDelays, plotTemplates]);
 
-  const buildEmailProgrammeText = () => {
-    const heading = `${activeContact?.trade ?? 'Trade'} 2-week programme`;
-    const weekText = `WK${String(weekGroups[0]).padStart(2, '0')} + WK${String(weekGroups[1]).padStart(2, '0')}`;
-    const dayHeader = ['Plot', 'Fix / Stage', ...tableDays.map((item) => `${item.dayName} ${item.date}`)].join(' | ');
-    const divider = dayHeader.replace(/[^|]/g, '-');
-    const rows = programmeRows.length
-      ? programmeRows.map((row) => [row.plot.plotNo, row.activeActivity?.displayText ?? '-', ...row.cells.map(cleanCellText)].join(' | ')).join('\n')
-      : `No planned ${activeContact?.trade ?? 'trade'} activity in this 2-week window.`;
+  const buildCleanEmailBody = () => {
+    const trade = activeContact?.trade ?? 'trade';
+    const weeks = `WK${String(weekGroups[0]).padStart(2, '0')} + WK${String(weekGroups[1]).padStart(2, '0')}`;
+    const firstThree = programmeRows.slice(0, 3).map((row) => `- Plot ${row.plot.plotNo}: ${row.activeActivity?.displayText ?? row.cells.find(Boolean) ?? 'Planned activity'}`);
+    const activitySummary = firstThree.length ? firstThree.join('\n') : `- No planned ${trade} activity in this 2-week window.`;
 
-    return `${heading}\n${weekText}\n\n${dayHeader}\n${divider}\n${rows}`;
+    return `Good afternoon,\n\nYour ${trade} 2-week programme has been issued in Programme Buddy.\n\nPlease review the attached PDF or open the Supervisor App view for the latest trade-specific programme.\n\nSummary:\n- Trade: ${trade}\n- Period: ${weeks}\n- Plots with planned ${trade} activity: ${programmeRows.length}\n\nKey activities:\n${activitySummary}\n\nPlease confirm receipt and raise any access, labour, material or sequencing issues as soon as possible.\n\nKind regards`;
   };
 
   const updateDraft = (changes: Partial<TradeContact>) => {
@@ -223,14 +216,13 @@ export default function TradesScreen() {
       setSaveMessage(`Add supervisor email for ${activeContact.trade} first`);
       return;
     }
-    const programmeText = buildEmailProgrammeText();
     openTradeEmail(
       activeContact.supervisorEmail.trim(),
       `${activeContact.trade} 2-week programme - WK${String(activeIssueWeek).padStart(2, '0')}`,
-      `Please find your ${activeContact.trade} 2-week programme below.\n\nThis issue contains your trade-specific programme only.\n\n${programmeText}\n\nPlease confirm receipt.`,
+      buildCleanEmailBody(),
     );
-    await recordIssue({ startWeek: activeIssueWeek, recipientCount: 1, note: `${activeContact.trade} programme issued to ${activeContact.supervisorEmail}` });
-    setSaveMessage(`${activeContact.trade} issue email opened with programme included`);
+    await recordIssue({ startWeek: activeIssueWeek, recipientCount: 1, note: `${activeContact.trade} email note prepared for ${activeContact.supervisorEmail}` });
+    setSaveMessage(`${activeContact.trade} email note opened. Attach the PDF or share the Supervisor App link before sending.`);
   };
 
   return (
@@ -299,9 +291,7 @@ export default function TradesScreen() {
               <Text style={[styles.dateBlankCell, styles.fixCell]} />
               {tableDays.map((item) => <Text key={`date-${item.key}`} style={[styles.dateHeaderCell, item.weekend ? styles.weekendDateCell : null]}>{item.date}</Text>)}
             </View>
-
             {programmeRows.length === 0 ? <View style={styles.tableRow}><Text style={[styles.bodyCell, styles.emptyProgrammeCell]}>No planned {activeContact?.trade ?? 'trade'} activity in this 2-week window.</Text></View> : null}
-
             {programmeRows.map((row, rowIndex) => (
               <View key={row.plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                 <Text style={[styles.bodyCell, styles.plotNoCell]}>{row.plot.plotNo}</Text>
@@ -328,11 +318,11 @@ export default function TradesScreen() {
 
         <View style={styles.issueTradePanel}>
           <View style={styles.issueTradeTextWrap}>
-            <Text style={styles.issueTradeTitle}>Ready to issue this trade programme?</Text>
-            <Text style={styles.issueTradeText}>{activeContact?.supervisorEmail ? `Will open an email to ${activeContact.supervisorEmail} with the programme included in the email body.` : `Add a supervisor email for ${activeContact?.trade ?? 'this trade'} before issuing.`}</Text>
+            <Text style={styles.issueTradeTitle}>Prepare trade issue email</Text>
+            <Text style={styles.issueTradeText}>{activeContact?.supervisorEmail ? `Opens a clean email note to ${activeContact.supervisorEmail}. Attach the PDF or share the Supervisor App link.` : `Add a supervisor email for ${activeContact?.trade ?? 'this trade'} before issuing.`}</Text>
           </View>
           <Pressable style={styles.issueTradeButton} onPress={issueToCurrentTrade}>
-            <Text style={styles.issueTradeButtonText}>Issue to {activeContact?.trade ?? 'Trade'}</Text>
+            <Text style={styles.issueTradeButtonText}>Prepare Email</Text>
           </Pressable>
         </View>
       </SectionCard>
@@ -373,7 +363,7 @@ export default function TradesScreen() {
         ) : null}
       </SectionCard>
 
-      <SectionCard title="Automatic issue settings" subtitle="Stores the schedule and recipient source for the 2-week trade programme. A backend email job will be needed for true background auto-send.">
+      <SectionCard title="Automatic issue settings" subtitle="Stores the schedule and recipient source for the 2-week trade programme. Use PDF or Supervisor App issue first; email sending can come later.">
         <View style={styles.formGrid}>
           <View style={styles.inputWrap}><Text style={styles.label}>Manager email</Text><TextInput value={managerEmail} onChangeText={(text) => { setSaveMessage(''); setManagerEmail(text); }} style={styles.input} placeholder="manager@example.com" keyboardType="email-address" autoCapitalize="none" /></View>
           <View style={styles.inputWrap}><Text style={styles.label}>Issue day</Text><TextInput value={issueDay} onChangeText={(text) => { setSaveMessage(''); setIssueDay(text); }} style={styles.input} placeholder="Friday" /></View>
@@ -395,7 +385,7 @@ export default function TradesScreen() {
           <Pressable style={[styles.toggleButton, autoIssueEnabled ? styles.toggleActive : null]} onPress={() => { setSaveMessage(''); setAutoIssueEnabled((value) => !value); }}><Text style={[styles.toggleText, autoIssueEnabled ? styles.toggleTextActive : null]}>{autoIssueEnabled ? 'Auto issue on' : 'Auto issue off'}</Text></Pressable>
           <Pressable style={[styles.saveButton, issueSettingsSaved ? styles.savedButton : null]} onPress={saveIssueSettings}><Text style={styles.saveButtonText}>{issueSettingsSaved ? 'Saved ✓' : 'Save Issue Settings'}</Text></Pressable>
         </View>
-        <Text style={styles.helperText}>Recipients currently saved: {recipientCount}. Manager receives the full programme. Supervisors receive their trade programme once server-side email sending is connected.</Text>
+        <Text style={styles.helperText}>Recipients currently saved: {recipientCount}. Use the Issue tab for the PDF record and Supervisor App view.</Text>
       </SectionCard>
 
       <SectionCard title="Issue history" subtitle="Local audit trail for programme issue actions during the pilot.">
