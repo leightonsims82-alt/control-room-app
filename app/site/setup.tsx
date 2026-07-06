@@ -5,7 +5,6 @@ import { useSitePlanner } from '../../data/sitePlannerStore';
 import { getEffectiveProgrammeWeeks, TemplateActivity } from '../../utils/templateProgramme';
 
 const allowedStages = [1, 2, 4, 5, 6, 7, 8, 9] as const;
-
 type AllowedStage = typeof allowedStages[number];
 
 function cleanCode(value: string) {
@@ -17,19 +16,20 @@ function toStage(value: string): AllowedStage {
   return allowedStages.includes(parsed as AllowedStage) ? parsed as AllowedStage : 6;
 }
 
+function reorderActivities(activities: TemplateActivity[]) {
+  return activities
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((activity, index) => ({ ...activity, order: index + 1, overlapAllowed: false }));
+}
+
 export default function SiteSetupScreen() {
   const { siteSetup, plotTemplates, sitePlots, resetPlotData, updateSiteSetup, updatePlotTemplate, updateTemplateActivityDuration } = useSitePlanner();
   const [selectedTemplateId, setSelectedTemplateId] = useState(plotTemplates[2]?.id ?? plotTemplates[0]?.id ?? 'threeBed');
   const [saved, setSaved] = useState(false);
-  const [newSeq, setNewSeq] = useState('');
-  const [newTask, setNewTask] = useState('');
-  const [newTrade, setNewTrade] = useState('');
-  const [newDisplay, setNewDisplay] = useState('');
-  const [newStage, setNewStage] = useState('6');
-  const [newDays, setNewDays] = useState('1');
-  const [addMessage, setAddMessage] = useState('');
+  const [message, setMessage] = useState('');
   const selectedTemplate = plotTemplates.find((template) => template.id === selectedTemplateId) ?? plotTemplates[0];
-  const orderedActivities = selectedTemplate ? selectedTemplate.activities.slice().sort((a, b) => a.order - b.order) : [];
+  const orderedActivities = selectedTemplate ? reorderActivities(selectedTemplate.activities) : [];
 
   const markChanged = () => setSaved(false);
 
@@ -47,10 +47,12 @@ export default function SiteSetupScreen() {
   const updateActivity = (activityCode: string, changes: Partial<TemplateActivity>) => {
     if (!selectedTemplate) return;
     markChanged();
-    updatePlotTemplate({
-      ...selectedTemplate,
-      activities: selectedTemplate.activities.map((activity) => (activity.code === activityCode ? { ...activity, ...changes, overlapAllowed: false } : activity)),
+    const nextActivities = selectedTemplate.activities.map((activity) => {
+      if (activity.code !== activityCode) return activity;
+      const nextCode = changes.code ? cleanCode(String(changes.code)) : activity.code;
+      return { ...activity, ...changes, code: nextCode, overlapAllowed: false };
     });
+    updatePlotTemplate({ ...selectedTemplate, activities: reorderActivities(nextActivities) });
   };
 
   const updateDuration = (templateId: string, activityCode: string, durationDays: number) => {
@@ -58,53 +60,35 @@ export default function SiteSetupScreen() {
     updateTemplateActivityDuration(templateId, activityCode, durationDays);
   };
 
-  const addFix = () => {
+  const addFixAfter = (activity: TemplateActivity) => {
     if (!selectedTemplate) return;
-    const taskCode = cleanCode(newTask);
-    const trade = newTrade.trim();
-    const displayText = newDisplay.trim() || taskCode;
-    const durationDays = Math.max(1, Number(newDays) || 1);
-    const stage = toStage(newStage);
-    const maxOrder = orderedActivities.length ? Math.max(...orderedActivities.map((item) => item.order)) : 0;
-    const insertOrder = Math.max(1, Math.min(Number(newSeq) || maxOrder + 1, maxOrder + 1));
-
-    if (!taskCode || !trade) {
-      setAddMessage('Add a task code and trade first.');
-      return;
-    }
-
-    if (selectedTemplate.activities.some((activity) => activity.code.toLowerCase() === taskCode.toLowerCase())) {
-      setAddMessage(`${taskCode} already exists in this template.`);
-      return;
-    }
-
+    const insertOrder = activity.order + 1;
+    const uniqueSuffix = Date.now().toString().slice(-5);
     const newActivity: TemplateActivity = {
       order: insertOrder,
-      code: taskCode,
-      trade,
-      displayText,
-      durationDays,
+      code: `NEW FIX ${uniqueSuffix}`,
+      trade: activity.trade,
+      displayText: 'New Fix',
+      durationDays: 1,
       relativeWeek: 1,
       relativeDay: 1,
-      stage,
+      stage: activity.stage,
       overlapAllowed: false,
     };
-
     const nextActivities = selectedTemplate.activities
-      .map((activity) => activity.order >= insertOrder ? { ...activity, order: activity.order + 1 } : activity)
-      .concat(newActivity)
-      .sort((a, b) => a.order - b.order)
-      .map((activity, index) => ({ ...activity, order: index + 1, overlapAllowed: false }));
-
+      .map((item) => (item.order >= insertOrder ? { ...item, order: item.order + 1 } : item))
+      .concat(newActivity);
     markChanged();
-    updatePlotTemplate({ ...selectedTemplate, activities: nextActivities });
-    setAddMessage(`${taskCode} added at sequence ${insertOrder}.`);
-    setNewSeq('');
-    setNewTask('');
-    setNewTrade('');
-    setNewDisplay('');
-    setNewStage('6');
-    setNewDays('1');
+    updatePlotTemplate({ ...selectedTemplate, activities: reorderActivities(nextActivities) });
+    setMessage(`New fix added below ${activity.code}. Edit the row in the table.`);
+  };
+
+  const deleteFix = (activity: TemplateActivity) => {
+    if (!selectedTemplate) return;
+    const nextActivities = selectedTemplate.activities.filter((item) => item.code !== activity.code);
+    markChanged();
+    updatePlotTemplate({ ...selectedTemplate, activities: reorderActivities(nextActivities) });
+    setMessage(`${activity.code} deleted.`);
   };
 
   return (
@@ -112,7 +96,7 @@ export default function SiteSetupScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>Site Setup</Text>
         <Text style={styles.title}>Programme & Plot Templates</Text>
-        <Text style={styles.subtitle}>Set site defaults, reset test data and edit task names, trades, stages and durations by plot type.</Text>
+        <Text style={styles.subtitle}>Edit the build sequence directly in the table. Use + to insert a fix below a row, or Delete to remove one.</Text>
       </View>
 
       <View style={styles.card}>
@@ -125,12 +109,30 @@ export default function SiteSetupScreen() {
         </View>
       </View>
 
-      <View style={styles.warningCard}><View style={styles.warningTextWrap}><Text style={styles.warningTitle}>Plot data reset</Text><Text style={styles.warningText}>Clears all current plots and plot delays so you can add your own site data and test for glitches from a clean start.</Text><Text style={styles.warningMeta}>Current plots: {sitePlots.length}</Text></View><Pressable style={styles.dangerButton} onPress={resetPlotData}><Text style={styles.dangerButtonText}>Reset plot data</Text></Pressable></View>
+      <View style={styles.warningCard}>
+        <View style={styles.warningTextWrap}>
+          <Text style={styles.warningTitle}>Plot data reset</Text>
+          <Text style={styles.warningText}>Clears all current plots and plot delays so you can add your own site data and test from a clean start.</Text>
+          <Text style={styles.warningMeta}>Current plots: {sitePlots.length}</Text>
+        </View>
+        <Pressable style={styles.dangerButton} onPress={resetPlotData}><Text style={styles.dangerButtonText}>Reset plot data</Text></Pressable>
+      </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Plot type templates</Text>
-        <Text style={styles.helpText}>Each plot type has its own durations. The live programme runs in strict sequence from this setup and uses the saved working week.</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}><View style={styles.templateChips}>{plotTemplates.map((template) => { const active = template.id === selectedTemplateId; return <Pressable key={template.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => { markChanged(); setSelectedTemplateId(template.id); setAddMessage(''); }}><Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>{template.name}</Text></Pressable>; })}</View></ScrollView>
+        <View style={styles.cardHeadingRow}>
+          <View>
+            <Text style={styles.cardTitle}>Plot type templates</Text>
+            <Text style={styles.helpText}>Each plot type has its own strict sequence and durations.</Text>
+          </View>
+          {message ? <Text style={styles.message}>{message}</Text> : null}
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.templateChips}>{plotTemplates.map((template) => {
+            const active = template.id === selectedTemplateId;
+            return <Pressable key={template.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => { setSelectedTemplateId(template.id); setMessage(''); }}><Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>{template.name}</Text></Pressable>;
+          })}</View>
+        </ScrollView>
 
         {selectedTemplate ? (
           <View style={styles.templatePanel}>
@@ -141,24 +143,32 @@ export default function SiteSetupScreen() {
               <View style={styles.summaryBox}><Text style={styles.summaryLabel}>Calculated weeks</Text><Text style={styles.summaryValue}>{getEffectiveProgrammeWeeks(selectedTemplate, siteSetup)}</Text></View>
             </View>
 
-            <View style={styles.addFixPanel}>
-              <View style={styles.addFixHeader}>
-                <Text style={styles.addFixTitle}>Add fix / task</Text>
-                <Text style={styles.addFixHelp}>Insert a new activity into the selected template. Existing sequence numbers move down automatically.</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator>
+              <View>
+                <View style={styles.tableRow}>
+                  <Text style={[styles.headerCell, styles.orderCell]}>Seq</Text>
+                  <Text style={[styles.headerCell, styles.taskCell]}>Task</Text>
+                  <Text style={[styles.headerCell, styles.tradeCell]}>Trade</Text>
+                  <Text style={[styles.headerCell, styles.displayCell]}>Display</Text>
+                  <Text style={[styles.headerCell, styles.stageCell]}>Stage</Text>
+                  <Text style={[styles.headerCell, styles.durationCell]}>Days</Text>
+                  <Text style={[styles.headerCell, styles.actionCell]}>Add</Text>
+                  <Text style={[styles.headerCell, styles.actionCell]}>Delete</Text>
+                </View>
+                {orderedActivities.map((activity, index) => (
+                  <View key={`${activity.order}-${activity.code}`} style={[styles.tableRow, index % 2 ? styles.altRow : null]}>
+                    <Text style={[styles.bodyCell, styles.orderCell]}>{activity.order}</Text>
+                    <TextInput defaultValue={activity.code} onEndEditing={(event) => updateActivity(activity.code, { code: event.nativeEvent.text })} style={[styles.bodyInput, styles.taskCell]} />
+                    <TextInput defaultValue={activity.trade} onEndEditing={(event) => updateActivity(activity.code, { trade: event.nativeEvent.text })} style={[styles.bodyInput, styles.tradeCell]} />
+                    <TextInput defaultValue={activity.displayText} onEndEditing={(event) => updateActivity(activity.code, { displayText: event.nativeEvent.text })} style={[styles.bodyInput, styles.displayCell]} />
+                    <TextInput defaultValue={String(activity.stage)} keyboardType="number-pad" onEndEditing={(event) => updateActivity(activity.code, { stage: toStage(event.nativeEvent.text) })} style={[styles.bodyInput, styles.stageCell]} />
+                    <TextInput defaultValue={String(activity.durationDays)} keyboardType="number-pad" onEndEditing={(event) => updateDuration(selectedTemplate.id, activity.code, Number(event.nativeEvent.text) || 0)} style={[styles.durationInput, styles.durationCell]} />
+                    <Pressable style={styles.addButton} onPress={() => addFixAfter(activity)}><Text style={styles.addButtonText}>+</Text></Pressable>
+                    <Pressable style={styles.deleteButton} onPress={() => deleteFix(activity)}><Text style={styles.deleteButtonText}>Delete</Text></Pressable>
+                  </View>
+                ))}
               </View>
-              <View style={styles.formGrid}>
-                <Field label="Seq"><TextInput value={newSeq} onChangeText={setNewSeq} placeholder="e.g. 24" keyboardType="number-pad" style={styles.input} /></Field>
-                <Field label="Task"><TextInput value={newTask} onChangeText={setNewTask} placeholder="e.g. WINDOWS" style={styles.input} /></Field>
-                <Field label="Trade"><TextInput value={newTrade} onChangeText={setNewTrade} placeholder="e.g. Windows" style={styles.input} /></Field>
-                <Field label="Display"><TextInput value={newDisplay} onChangeText={setNewDisplay} placeholder="e.g. Windows" style={styles.input} /></Field>
-                <Field label="Stage"><TextInput value={newStage} onChangeText={setNewStage} placeholder="6" keyboardType="number-pad" style={styles.input} /></Field>
-                <Field label="Days"><TextInput value={newDays} onChangeText={setNewDays} placeholder="1" keyboardType="number-pad" style={styles.input} /></Field>
-                <Pressable style={styles.addFixButton} onPress={addFix}><Text style={styles.addFixButtonText}>Add Fix</Text></Pressable>
-              </View>
-              {addMessage ? <Text style={styles.addMessage}>{addMessage}</Text> : null}
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator><View><View style={styles.tableRow}><Text style={[styles.headerCell, styles.orderCell]}>Seq</Text><Text style={[styles.headerCell, styles.taskCell]}>Task</Text><Text style={[styles.headerCell, styles.tradeCell]}>Trade</Text><Text style={[styles.headerCell, styles.displayCell]}>Display</Text><Text style={[styles.headerCell, styles.stageCell]}>Stage</Text><Text style={[styles.headerCell, styles.durationCell]}>Days</Text></View>{orderedActivities.map((activity, index) => <View key={`${activity.order}-${activity.code}`} style={[styles.tableRow, index % 2 ? styles.altRow : null]}><Text style={[styles.bodyCell, styles.orderCell]}>{activity.order}</Text><TextInput defaultValue={activity.code} onEndEditing={(event) => updateActivity(activity.code, { code: event.nativeEvent.text })} style={[styles.bodyInput, styles.taskCell]} /><TextInput defaultValue={activity.trade} onEndEditing={(event) => updateActivity(activity.code, { trade: event.nativeEvent.text })} style={[styles.bodyInput, styles.tradeCell]} /><TextInput defaultValue={activity.displayText} onEndEditing={(event) => updateActivity(activity.code, { displayText: event.nativeEvent.text })} style={[styles.bodyInput, styles.displayCell]} /><TextInput defaultValue={String(activity.stage)} keyboardType="number-pad" onEndEditing={(event) => updateActivity(activity.code, { stage: toStage(event.nativeEvent.text) })} style={[styles.bodyInput, styles.stageCell]} /><TextInput defaultValue={String(activity.durationDays)} keyboardType="number-pad" onEndEditing={(event) => updateDuration(selectedTemplate.id, activity.code, Number(event.nativeEvent.text) || 0)} style={[styles.durationInput, styles.durationCell]} /></View>)}</View></ScrollView>
+            </ScrollView>
           </View>
         ) : null}
         <Pressable style={[styles.primaryButton, saved ? styles.savedButton : null]} onPress={() => setSaved(true)}><Text style={styles.primaryButtonText}>{saved ? 'Saved' : 'Save'}</Text></Pressable>
@@ -167,8 +177,58 @@ export default function SiteSetupScreen() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <View style={styles.field}><Text style={styles.label}>{label}</Text>{children}</View>; }
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <View style={styles.field}><Text style={styles.label}>{label}</Text>{children}</View>;
+}
 
 const styles = StyleSheet.create({
-  header: { gap: 4 }, eyebrow: { color: '#2563eb', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' }, title: { color: '#0f172a', fontSize: 30, fontWeight: '900' }, subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 }, card: { backgroundColor: '#ffffff', borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', padding: 18, gap: 16 }, warningCard: { backgroundColor: '#fff7ed', borderRadius: 18, borderWidth: 1, borderColor: '#fed7aa', padding: 18, gap: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }, warningTextWrap: { flex: 1, minWidth: 240 }, warningTitle: { color: '#9a3412', fontSize: 18, fontWeight: '900' }, warningText: { color: '#9a3412', fontSize: 13, lineHeight: 19, marginTop: 5 }, warningMeta: { color: '#7c2d12', fontSize: 12, fontWeight: '900', marginTop: 8 }, dangerButton: { backgroundColor: '#c2410c', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11 }, dangerButtonText: { color: '#ffffff', fontWeight: '900', fontSize: 13 }, cardTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' }, formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }, field: { gap: 8, minWidth: 150, flex: 1 }, label: { color: '#475569', fontSize: 13, fontWeight: '900' }, input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', backgroundColor: '#ffffff', fontWeight: '800' }, helpText: { color: '#64748b', fontSize: 12, lineHeight: 18 }, summaryBox: { minWidth: 150, backgroundColor: '#eff6ff', borderRadius: 12, padding: 12 }, summaryLabel: { color: '#2563eb', fontSize: 12, fontWeight: '900' }, summaryValue: { color: '#0f172a', fontSize: 24, fontWeight: '900' }, templateChips: { flexDirection: 'row', gap: 8, paddingVertical: 2 }, templateChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' }, templateChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' }, templateChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' }, templateChipTextActive: { color: '#ffffff' }, templatePanel: { gap: 14 }, addFixPanel: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0', borderWidth: 1, borderRadius: 14, padding: 12, gap: 12 }, addFixHeader: { gap: 3 }, addFixTitle: { color: '#166534', fontSize: 16, fontWeight: '900' }, addFixHelp: { color: '#166534', fontSize: 12, lineHeight: 17, fontWeight: '800' }, addFixButton: { backgroundColor: '#166534', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 }, addFixButtonText: { color: '#ffffff', fontWeight: '900' }, addMessage: { color: '#166534', fontWeight: '900', fontSize: 12 }, tableRow: { flexDirection: 'row', alignItems: 'stretch' }, altRow: { backgroundColor: '#f8fafc' }, headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' }, bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', fontWeight: '800' }, bodyInput: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff', fontWeight: '800' }, orderCell: { width: 54, textAlign: 'center' }, taskCell: { width: 150 }, tradeCell: { width: 150 }, displayCell: { width: 140 }, stageCell: { width: 70, textAlign: 'center' }, durationCell: { width: 80, textAlign: 'center' }, durationInput: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fff4cc', fontWeight: '900' }, primaryButton: { alignSelf: 'flex-start', backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 }, savedButton: { backgroundColor: '#16a34a' }, primaryButtonText: { color: '#ffffff', fontWeight: '900' }
+  header: { gap: 4 },
+  eyebrow: { color: '#2563eb', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
+  subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
+  card: { backgroundColor: '#ffffff', borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', padding: 18, gap: 16 },
+  cardHeadingRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' },
+  warningCard: { backgroundColor: '#fff7ed', borderRadius: 18, borderWidth: 1, borderColor: '#fed7aa', padding: 18, gap: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' },
+  warningTextWrap: { flex: 1, minWidth: 240 },
+  warningTitle: { color: '#9a3412', fontSize: 18, fontWeight: '900' },
+  warningText: { color: '#9a3412', fontSize: 13, lineHeight: 19, marginTop: 5 },
+  warningMeta: { color: '#7c2d12', fontSize: 12, fontWeight: '900', marginTop: 8 },
+  dangerButton: { backgroundColor: '#c2410c', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11 },
+  dangerButtonText: { color: '#ffffff', fontWeight: '900', fontSize: 13 },
+  cardTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
+  formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
+  field: { gap: 8, minWidth: 150, flex: 1 },
+  label: { color: '#475569', fontSize: 13, fontWeight: '900' },
+  input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', backgroundColor: '#ffffff', fontWeight: '800' },
+  helpText: { color: '#64748b', fontSize: 12, lineHeight: 18 },
+  message: { color: '#166534', fontWeight: '900', fontSize: 12, backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, maxWidth: 420 },
+  summaryBox: { minWidth: 150, backgroundColor: '#eff6ff', borderRadius: 12, padding: 12 },
+  summaryLabel: { color: '#2563eb', fontSize: 12, fontWeight: '900' },
+  summaryValue: { color: '#0f172a', fontSize: 24, fontWeight: '900' },
+  templateChips: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
+  templateChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
+  templateChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  templateChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
+  templateChipTextActive: { color: '#ffffff' },
+  templatePanel: { gap: 14 },
+  tableRow: { flexDirection: 'row', alignItems: 'stretch' },
+  altRow: { backgroundColor: '#f8fafc' },
+  headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', fontWeight: '800' },
+  bodyInput: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff', fontWeight: '800' },
+  orderCell: { width: 54, textAlign: 'center' },
+  taskCell: { width: 150 },
+  tradeCell: { width: 150 },
+  displayCell: { width: 140 },
+  stageCell: { width: 70, textAlign: 'center' },
+  durationCell: { width: 80, textAlign: 'center' },
+  durationInput: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fff4cc', fontWeight: '900' },
+  actionCell: { width: 72, textAlign: 'center' },
+  addButton: { width: 72, borderWidth: 1, borderColor: '#c8d7e6', alignItems: 'center', justifyContent: 'center', backgroundColor: '#dcfce7' },
+  addButtonText: { color: '#166534', fontWeight: '900', fontSize: 18 },
+  deleteButton: { width: 72, borderWidth: 1, borderColor: '#c8d7e6', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fee2e2' },
+  deleteButtonText: { color: '#991b1b', fontWeight: '900', fontSize: 11 },
+  primaryButton: { alignSelf: 'flex-start', backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  savedButton: { backgroundColor: '#16a34a' },
+  primaryButtonText: { color: '#ffffff', fontWeight: '900' },
 });
