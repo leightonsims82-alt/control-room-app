@@ -4,7 +4,7 @@ import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
-import { getMilestoneForPlotWeek, getStage1StartWeekForPlot, getTemplateForPlot } from '../../utils/templateProgramme';
+import { getMilestoneForPlotWeek, getStage1StartWeekForPlot, getTemplateForPlot, normaliseProgrammeWeek } from '../../utils/templateProgramme';
 
 function getShortWeekDate(week: number) {
   const year = new Date().getFullYear();
@@ -26,6 +26,8 @@ export default function MasterProgrammeScreen() {
   const [plotNo, setPlotNo] = useState('');
   const [stage9Week, setStage9Week] = useState('');
   const [templateId, setTemplateId] = useState(plotTemplates[2]?.id ?? 'threeBed');
+  const [moveScope, setMoveScope] = useState('all');
+  const [moveMessage, setMoveMessage] = useState('');
 
   const savePlot = async () => {
     const parsedWeek = Number(stage9Week);
@@ -33,6 +35,28 @@ export default function MasterProgrammeScreen() {
     await upsertSitePlot({ plotNo, stage9CompleteWeek: parsedWeek, templateId });
     setPlotNo('');
     setStage9Week('');
+  };
+
+  const moveProgrammeByWeek = async (change: number) => {
+    const selectedPlot = sitePlots.find((plot) => plot.id === moveScope);
+    const plotsToMove = moveScope === 'all' ? sitePlots : selectedPlot ? [selectedPlot] : [];
+
+    if (!plotsToMove.length) {
+      setMoveMessage('Add a plot first');
+      return;
+    }
+
+    for (const plot of plotsToMove) {
+      await upsertSitePlot({
+        plotNo: plot.plotNo,
+        stage9CompleteWeek: normaliseProgrammeWeek(plot.stage9CompleteWeek + change),
+        templateId: plot.templateId || 'threeBed',
+      });
+    }
+
+    const scopeLabel = moveScope === 'all' ? 'Whole programme' : `Plot ${selectedPlot?.plotNo}`;
+    const direction = change > 0 ? 'later' : 'earlier';
+    setMoveMessage(`${scopeLabel} moved 1 week ${direction}`);
   };
 
   return (
@@ -53,7 +77,7 @@ export default function MasterProgrammeScreen() {
             <TextInput value={stage9Week} onChangeText={setStage9Week} style={styles.input} keyboardType="number-pad" placeholder="Enter week no" />
           </View>
           <View style={styles.inputWrapWide}>
-            <Text style={styles.label}>Plot template</Text>
+            <Text style={styles.label}>House type</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.templateChips}>
                 {plotTemplates.map((template) => {
@@ -73,12 +97,44 @@ export default function MasterProgrammeScreen() {
         </View>
       </SectionCard>
 
-      <SectionCard title="Master Build Programme" subtitle="Milestone numbers are generated from each plot template, so a 2 bed, 5 bed or apartment can run to different programme lengths.">
+      <SectionCard title="Move programme manually" subtitle="Move the whole programme or one plot earlier or later by one week.">
+        <View style={styles.movePanel}>
+          <View style={styles.inputWrapWide}>
+            <Text style={styles.label}>Move scope</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.templateChips}>
+                <Pressable style={[styles.templateChip, moveScope === 'all' ? styles.templateChipActive : null]} onPress={() => { setMoveScope('all'); setMoveMessage(''); }}>
+                  <Text style={[styles.templateChipText, moveScope === 'all' ? styles.templateChipTextActive : null]}>Whole programme</Text>
+                </Pressable>
+                {sitePlots.map((plot) => {
+                  const active = plot.id === moveScope;
+                  return (
+                    <Pressable key={plot.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => { setMoveScope(plot.id); setMoveMessage(''); }}>
+                      <Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>Plot {plot.plotNo}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+          <View style={styles.moveButtons}>
+            <Pressable style={styles.earlierButton} onPress={() => moveProgrammeByWeek(-1)}>
+              <Text style={styles.moveButtonText}>Earlier 1 week</Text>
+            </Pressable>
+            <Pressable style={styles.laterButton} onPress={() => moveProgrammeByWeek(1)}>
+              <Text style={styles.moveButtonText}>Later 1 week</Text>
+            </Pressable>
+          </View>
+          {moveMessage ? <Text style={styles.moveMessage}>{moveMessage}</Text> : null}
+        </View>
+      </SectionCard>
+
+      <SectionCard title="Master Build Programme" subtitle="Milestone numbers are generated from each house type, so a 2 bed, 5 bed or apartment can run to different programme lengths.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.tableRow}>
               <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
-              <Text style={[styles.headerCell, styles.templateCell]}>Type</Text>
+              <Text style={[styles.headerCell, styles.templateCell]}>House</Text>
               <Text style={[styles.headerCell, styles.weekInputCell]}>S9 Week</Text>
               <Text style={[styles.headerCell, styles.weekInputCell]}>S1 Start</Text>
               {WEEK_NUMBERS.map((week) => (
@@ -130,6 +186,12 @@ const styles = StyleSheet.create({
   templateChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   templateChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
   templateChipTextActive: { color: '#ffffff' },
+  movePanel: { gap: 12 },
+  moveButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  earlierButton: { backgroundColor: '#7f1d1d', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  laterButton: { backgroundColor: '#166534', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  moveButtonText: { color: '#ffffff', fontWeight: '900' },
+  moveMessage: { alignSelf: 'flex-start', backgroundColor: '#dcfce7', color: '#166534', borderColor: '#86efac', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, fontWeight: '900' },
   tableRow: { flexDirection: 'row', minHeight: 34, alignItems: 'stretch' },
   altRow: { backgroundColor: '#eaf2fb' },
   headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 9, lineHeight: 10, paddingHorizontal: 2, paddingVertical: 5, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
