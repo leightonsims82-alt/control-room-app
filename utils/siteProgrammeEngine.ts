@@ -4,7 +4,7 @@ export type SitePlot = { id: string; plotNo: string; stage9CompleteWeek: number 
 export type ActivityDelay = { plotId: string; activityCode: string; delayDays: number };
 export type ProgrammeActivity = { order: number; code: string; trade: string; displayText: string; durationDays: number; relativeWeek: number; relativeDay: number; stage: 1 | 2 | 4 | 5 | 6 | 7 | 8 | 9 };
 
-export const DAY_NAMES: DayName[] = ['Mon', 'Tue', 'Wed', 'Fri'];
+export const DAY_NAMES: DayName[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 export const WEEK_NUMBERS = Array.from({ length: 52 }, (_, index) => index + 1);
 export function dayIndexFromWeekDay(week: number, day: number) { return (week - 1) * 5 + day; }
 
