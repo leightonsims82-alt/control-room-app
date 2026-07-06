@@ -13,6 +13,7 @@ type BuildRoute = 'Traditional' | 'Timber Frame';
 function cleanCode(value: string) { return value.trim().replace(/\s+/g, ' '); }
 function toStage(value: string): AllowedStage { const parsed = Number(value); return allowedStages.includes(parsed as AllowedStage) ? parsed as AllowedStage : 6; }
 function reorderActivities(activities: TemplateActivity[]) { return activities.slice().sort((a, b) => a.order - b.order).map((activity, index) => ({ ...activity, order: index + 1, overlapAllowed: activity.overlapAllowed ?? false })); }
+function renumberActivities(activities: TemplateActivity[]) { return activities.map((activity, index) => ({ ...activity, order: index + 1, overlapAllowed: activity.overlapAllowed ?? false })); }
 function currentWorkingDays(setup: { includeSaturday?: boolean; includeSunday?: boolean }): WorkingDays { if (setup.includeSunday) return 7; if (setup.includeSaturday) return 6; return 5; }
 function workingWeekLabel(days: WorkingDays) { if (days === 7) return '7 days - Monday to Sunday'; if (days === 6) return '6 days - Monday to Saturday'; return '5 days - Monday to Friday'; }
 function workingWeekChanges(days: WorkingDays) { return { workingWeek: workingWeekLabel(days), includeSaturday: days >= 6, includeSunday: days >= 7 }; }
@@ -48,7 +49,7 @@ export default function SiteSetupScreen() {
     const nextActivities = currentActivities.slice();
     [nextActivities[currentIndex], nextActivities[nextIndex]] = [nextActivities[nextIndex], nextActivities[currentIndex]];
     markChanged();
-    updatePlotTemplate({ ...selectedTemplate, activities: reorderActivities(nextActivities) });
+    updatePlotTemplate({ ...selectedTemplate, activities: renumberActivities(nextActivities) });
     setMessage(`${activity.code} moved ${direction < 0 ? 'up' : 'down'}.`);
   };
   const addFixAfter = (activity: TemplateActivity) => {
