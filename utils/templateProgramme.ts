@@ -22,6 +22,8 @@ export type SiteProgrammeSetup = {
   defaultProgrammeWeeks: number;
   stageCount: number;
   workingWeek: string;
+  includeSaturday: boolean;
+  includeSunday: boolean;
 };
 
 export const DEFAULT_SITE_PROGRAMME_SETUP: SiteProgrammeSetup = {
@@ -29,6 +31,8 @@ export const DEFAULT_SITE_PROGRAMME_SETUP: SiteProgrammeSetup = {
   defaultProgrammeWeeks: 23,
   stageCount: 9,
   workingWeek: 'Monday to Friday',
+  includeSaturday: false,
+  includeSunday: false,
 };
 
 export const STAGE_LABELS: Record<number, string> = {
