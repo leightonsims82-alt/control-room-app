@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../components/AppScreen';
 import { useSitePlanner } from '../data/sitePlannerStore';
 import { getActivitiesForTemplateDay, normaliseProgrammeWeek } from '../utils/templateProgramme';
@@ -65,14 +65,22 @@ function shortActivity(text: string) {
 }
 
 export default function SupervisorLockedView() {
-  const params = useLocalSearchParams<{ trade?: string }>();
+  const params = useLocalSearchParams<{ trade?: string; print?: string }>();
   const { sitePlots, activityDelays, plotTemplates, tradeContacts, issueLogs } = useSitePlanner();
   const requestedTrade = Array.isArray(params.trade) ? params.trade[0] : params.trade;
+  const printMode = String(Array.isArray(params.print) ? params.print[0] : params.print ?? '') === '1';
   const lockedTrade = tradeContacts.find((trade) => slug(trade.trade) === slug(String(requestedTrade ?? '')))?.trade ?? tradeContacts[0]?.trade ?? 'Trade';
   const startWeek = getCurrentProgrammeWeek();
   const days = useMemo(() => buildTwoWeekWindow(startWeek), [startWeek]);
   const weekGroups = [days[0]?.week ?? startWeek, days[7]?.week ?? normaliseProgrammeWeek(startWeek + 1)];
   const latestIssue = issueLogs[0];
+
+  useEffect(() => {
+    if (printMode && Platform.OS === 'web' && typeof window !== 'undefined') {
+      const timer = window.setTimeout(() => window.print(), 650);
+      return () => window.clearTimeout(timer);
+    }
+  }, [printMode]);
 
   const rows = useMemo(() => {
     return sitePlots.map((plot) => {
@@ -90,22 +98,26 @@ export default function SupervisorLockedView() {
   return (
     <AppScreen>
       <View style={styles.header}>
-        <Text style={styles.kicker}>Live supervisor app</Text>
+        <Text style={styles.kicker}>{printMode ? 'PDF record' : 'Live supervisor app'}</Text>
         <Text style={styles.title}>{lockedTrade} Programme</Text>
-        <Text style={styles.subtitle}>Read-only live view for your allocated trade only.</Text>
+        <Text style={styles.subtitle}>{printMode ? `WK${String(weekGroups[0]).padStart(2, '0')} + WK${String(weekGroups[1]).padStart(2, '0')} formal PDF record.` : 'Read-only live view for your allocated trade only.'}</Text>
       </View>
 
-      <View style={styles.issueCard}>
-        <Text style={styles.issueTitle}>Live programme status</Text>
-        <Text style={styles.issueText}>{latestIssue ? latestIssue.note : 'Live supervisor view available.'}</Text>
-        {latestIssue ? <Text style={styles.issueMeta}>{new Date(latestIssue.issuedAt).toLocaleString('en-GB')}</Text> : null}
-      </View>
+      {!printMode ? (
+        <View style={styles.issueCard}>
+          <Text style={styles.issueTitle}>Live programme status</Text>
+          <Text style={styles.issueText}>{latestIssue ? latestIssue.note : 'Live supervisor view available.'}</Text>
+          {latestIssue ? <Text style={styles.issueMeta}>{new Date(latestIssue.issuedAt).toLocaleString('en-GB')}</Text> : null}
+        </View>
+      ) : null}
 
-      <View style={styles.summaryRow}>
-        <MiniStat label="Rows" value={rows.length} />
-        <MiniStat label="Allocated trade" value={lockedTrade} />
-        <MiniStat label="Mode" value="Read-only" />
-      </View>
+      {!printMode ? (
+        <View style={styles.summaryRow}>
+          <MiniStat label="Rows" value={rows.length} />
+          <MiniStat label="Allocated trade" value={lockedTrade} />
+          <MiniStat label="Mode" value="Read-only" />
+        </View>
+      ) : null}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{lockedTrade} programme table</Text>
