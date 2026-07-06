@@ -1,4 +1,4 @@
-import { ActivityDelay, BUILD_SEQUENCE, dayIndexFromWeekDay, ProgrammeActivity, SitePlot, TRADE_ORDER } from './siteProgrammeEngine';
+import { ActivityDelay, BUILD_SEQUENCE, ProgrammeActivity, SitePlot, TRADE_ORDER } from './siteProgrammeEngine';
 
 export type TemplateSitePlot = SitePlot & {
   templateId?: string;
@@ -44,6 +44,11 @@ export const STAGE_LABELS: Record<number, string> = {
 };
 
 const WEEKS_IN_YEAR = 52;
+const WORKING_DAYS_IN_WEEK = 5;
+
+function programmeDayIndex(week: number, day: number) {
+  return (week - 1) * WORKING_DAYS_IN_WEEK + day;
+}
 
 export function normaliseProgrammeWeek(week: number) {
   if (!Number.isFinite(week)) return 1;
@@ -110,7 +115,7 @@ function orderedActivities(template: PlotTemplate) {
 export function getTemplateActivityRanges(template: PlotTemplate) {
   let nextSequentialDay = 1;
   return orderedActivities(template).map((activity) => {
-    const plannedDay = dayIndexFromWeekDay(activity.relativeWeek, activity.relativeDay);
+    const plannedDay = programmeDayIndex(activity.relativeWeek, activity.relativeDay);
     const start = activity.overlapAllowed ? plannedDay : nextSequentialDay;
     const finish = start + activity.durationDays - 1;
     if (!activity.overlapAllowed) nextSequentialDay = finish + 1;
@@ -120,8 +125,8 @@ export function getTemplateActivityRanges(template: PlotTemplate) {
 
 export function getEffectiveProgrammeWeeks(template: PlotTemplate) {
   const ranges = getTemplateActivityRanges(template);
-  const lastFinish = ranges.length ? Math.max(...ranges.map((range) => range.finish)) : template.programmeWeeks * 5;
-  return Math.max(template.programmeWeeks, Math.ceil(lastFinish / 5));
+  const lastFinish = ranges.length ? Math.max(...ranges.map((range) => range.finish)) : template.programmeWeeks * WORKING_DAYS_IN_WEEK;
+  return Math.max(template.programmeWeeks, Math.ceil(lastFinish / WORKING_DAYS_IN_WEEK));
 }
 
 export function getLinearStage1StartWeekForPlot(plot: TemplateSitePlot, templates: PlotTemplate[]) {
@@ -166,7 +171,7 @@ function activityRange(plot: TemplateSitePlot, template: PlotTemplate, activity:
   const scheduled = getTemplateActivityRanges(template).find((item) => item.activity.code === activity.code);
   const relativeStart = scheduled?.start ?? 1;
   const relativeFinish = scheduled?.finish ?? relativeStart;
-  const baseOffset = dayIndexFromWeekDay(linearStage1Week, 1) - 1;
+  const baseOffset = programmeDayIndex(linearStage1Week, 1) - 1;
   return {
     start: baseOffset + relativeStart + delayBefore(plot.id, activity.order, delays, template.activities),
     finish: baseOffset + relativeFinish + delayUpTo(plot.id, activity.order, delays, template.activities),
@@ -183,7 +188,7 @@ function weekCandidates(week: number, centreWeek: number) {
 export function getActivitiesForTemplateDay(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[]) {
   const template = getTemplateForPlot(plot, templates);
   const linearStage1Week = getLinearStage1StartWeekForPlot(plot, [template]);
-  const currentDays = weekCandidates(week, linearStage1Week).map((candidateWeek) => dayIndexFromWeekDay(candidateWeek, day));
+  const currentDays = weekCandidates(week, linearStage1Week).map((candidateWeek) => programmeDayIndex(candidateWeek, day));
   return orderedActivities(template).filter((activity) => {
     const range = activityRange(plot, template, activity, delays);
     return currentDays.some((currentDay) => currentDay >= range.start && currentDay <= range.finish);
