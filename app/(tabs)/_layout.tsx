@@ -59,7 +59,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="two-week"
         options={{
-          title: '2-Week',
+          title: '2 Week',
           tabBarIcon: ({ color }) => <Ionicons name="grid-outline" color={color} size={22} />,
         }}
       />
