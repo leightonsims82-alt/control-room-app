@@ -13,6 +13,13 @@ const WEEK_WIDTH = DAY_WIDTH * 7;
 const MOVE_WIDTH = 128;
 const ISSUE_TIME_OPTIONS = ['06:30', '07:00', '07:30', '08:00', '09:00', '10:00', '12:00', '14:00', '15:00', '16:00', '17:00'];
 
+type ProgrammeRow = {
+  plot: { id: string; plotNo: string };
+  cells: string[];
+  activeActivity?: { code: string; displayText: string };
+  delayDays: number;
+};
+
 function getShortWeekDate(week: number, dayIndex: number) {
   const year = new Date().getFullYear();
   const firstThursday = new Date(year, 0, 4);
@@ -79,7 +86,7 @@ export default function TradesScreen() {
   const [showIssueTimes, setShowIssueTimes] = useState(false);
   const [autoIssueEnabled, setAutoIssueEnabled] = useState(issueSettings.autoIssueEnabled);
   const [issueStartWeek, setIssueStartWeek] = useState('1');
-  const [dayOffset, setDayOffset] = useState(0);
+  const [viewDayOffset, setViewDayOffset] = useState(0);
   const [newTradeName, setNewTradeName] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
 
@@ -95,7 +102,7 @@ export default function TradesScreen() {
   }, [issueSettings]);
 
   const activeIssueWeek = normaliseWeek(Number(issueStartWeek) || 1);
-  const tableDays = useMemo(() => buildTwoWeekDays(activeIssueWeek, dayOffset), [activeIssueWeek, dayOffset]);
+  const tableDays = useMemo(() => buildTwoWeekDays(activeIssueWeek, viewDayOffset), [activeIssueWeek, viewDayOffset]);
   const weekGroups = [tableDays[0]?.week ?? activeIssueWeek, tableDays[7]?.week ?? normaliseWeek(activeIssueWeek + 1)];
   const savedSupervisorEmails = getSavedSupervisorEmails(tradeContacts);
   const recipientCount = savedSupervisorEmails.length + (managerEmail.trim() ? 1 : 0);
@@ -105,7 +112,7 @@ export default function TradesScreen() {
   const issueSettingsSaved = saveMessage === 'Issue settings saved';
   const programmeIssued = saveMessage === 'Programme marked as issued';
 
-  const programmeRows = useMemo(() => {
+  const programmeRows = useMemo<ProgrammeRow[]>(() => {
     if (!activeContact) return [];
     return sitePlots
       .map((plot) => {
@@ -138,7 +145,7 @@ export default function TradesScreen() {
     setShowIssueTimes(false);
   };
 
-  const moveFix = async (row: { plot: { id: string; plotNo: string }; activeActivity?: { code: string; displayText: string }; delayDays: number }, change: number) => {
+  const moveFix = async (row: ProgrammeRow, change: number) => {
     if (!row.activeActivity) return;
     await setActivityDelay({
       plotId: row.plot.id,
@@ -146,7 +153,27 @@ export default function TradesScreen() {
       delayDays: row.delayDays + change,
     });
     const direction = change > 0 ? 'forward' : 'back';
-    setSaveMessage(`Plot ${row.plot.plotNo} ${row.activeActivity.displayText} moved ${direction} 1 day`);
+    setSaveMessage(`Plot ${row.plot.plotNo} ${row.activeActivity.displayText} moved ${direction} 1 working day`);
+  };
+
+  const moveVisibleFixes = async (change: number) => {
+    const rowsToMove = programmeRows.filter((row) => row.activeActivity);
+    if (!rowsToMove.length) {
+      setSaveMessage('No visible fix to move in this trade window');
+      return;
+    }
+    await Promise.all(
+      rowsToMove.map((row) =>
+        setActivityDelay({
+          plotId: row.plot.id,
+          activityCode: row.activeActivity!.code,
+          delayDays: row.delayDays + change,
+        }),
+      ),
+    );
+    const direction = change > 0 ? 'forward' : 'back';
+    const fixName = rowsToMove[0].activeActivity?.displayText ?? 'fix';
+    setSaveMessage(`${activeContact?.trade ?? 'Trade'} ${fixName} moved ${direction} 1 working day`);
   };
 
   const saveTradeContact = async () => {
@@ -165,14 +192,7 @@ export default function TradesScreen() {
       setNewTradeName('');
       return;
     }
-    const newContact: TradeContact = {
-      id: makeTradeId(trade),
-      trade,
-      contractor: '',
-      supervisorName: '',
-      supervisorEmail: '',
-      supervisorPhone: '',
-    };
+    const newContact: TradeContact = { id: makeTradeId(trade), trade, contractor: '', supervisorName: '', supervisorEmail: '', supervisorPhone: '' };
     await upsertTradeContact(newContact);
     setSelectedTradeId(newContact.id);
     setNewTradeName('');
@@ -197,18 +217,18 @@ export default function TradesScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>2-Week Trade Programme</Text>
-        <Text style={styles.subtitle}>Use View -/+ Day to look around. Use Move Fix -/+ Day to change the actual activity date.</Text>
+        <Text style={styles.subtitle}>Use Move Fix -/+ Day to change the actual activity date.</Text>
       </View>
 
-      <SectionCard title="2-week trade programme" subtitle="Move Fix changes the programme data. View Day only slides the window you are looking at.">
+      <SectionCard title="2-week trade programme" subtitle="The top -/+ day buttons now move the visible selected trade fix, not just the viewing window.">
         <View style={styles.viewerHeaderRow}>
           <View style={styles.inputWrapSmall}>
             <Text style={styles.label}>Start week</Text>
-            <TextInput value={issueStartWeek} onChangeText={(text) => { setDayOffset(0); setIssueStartWeek(text); }} style={styles.input} keyboardType="number-pad" />
+            <TextInput value={issueStartWeek} onChangeText={(text) => { setViewDayOffset(0); setIssueStartWeek(text); }} style={styles.input} keyboardType="number-pad" />
           </View>
           <View style={styles.issueSummary}>
             <Text style={styles.issueTitle}>{activeContact?.trade ?? 'Trade'} Programme</Text>
-            <Text style={styles.issueMeta}>WK{String(weekGroups[0]).padStart(2, '0')} + WK{String(weekGroups[1]).padStart(2, '0')} | View offset {dayOffset > 0 ? '+' : ''}{dayOffset} day{Math.abs(dayOffset) === 1 ? '' : 's'}</Text>
+            <Text style={styles.issueMeta}>WK{String(weekGroups[0]).padStart(2, '0')} + WK{String(weekGroups[1]).padStart(2, '0')}</Text>
           </View>
           <Pressable style={[styles.saveButton, programmeIssued ? styles.savedButton : null]} onPress={markIssued}>
             <Text style={styles.saveButtonText}>{programmeIssued ? 'Issued ✓' : 'Mark Issued'}</Text>
@@ -217,12 +237,21 @@ export default function TradesScreen() {
 
         {saveMessage && !tradeSaved && !tradeAdded && !tradeExists && !issueSettingsSaved && !programmeIssued ? <Text style={styles.moveNotice}>{saveMessage}</Text> : null}
 
-        <View style={styles.dayMovePanel}>
-          <Text style={styles.dayMoveTitle}>View window only</Text>
+        <View style={styles.fixMovePanel}>
+          <Text style={styles.fixMoveTitle}>Move visible fix</Text>
+          <Text style={styles.fixMoveHelp}>Moves the selected trade activity itself. Example: Scaffold 2nd Lift +1 moves Friday work to Monday.</Text>
           <View style={styles.dayMoveRow}>
-            <Pressable style={styles.dayMoveBack} onPress={() => setDayOffset((value) => value - 1)}><Text style={styles.dayMoveButtonText}>View -1 Day</Text></Pressable>
-            <Pressable style={styles.resetButton} onPress={() => setDayOffset(0)}><Text style={styles.resetButtonText}>Reset View</Text></Pressable>
-            <Pressable style={styles.dayMoveForward} onPress={() => setDayOffset((value) => value + 1)}><Text style={styles.dayMoveButtonText}>View +1 Day</Text></Pressable>
+            <Pressable style={styles.dayMoveBack} onPress={() => moveVisibleFixes(-1)}><Text style={styles.dayMoveButtonText}>- 1 Day</Text></Pressable>
+            <Pressable style={styles.dayMoveForward} onPress={() => moveVisibleFixes(1)}><Text style={styles.dayMoveButtonText}>+ 1 Day</Text></Pressable>
+          </View>
+        </View>
+
+        <View style={styles.viewPanel}>
+          <Text style={styles.viewPanelTitle}>View only</Text>
+          <View style={styles.dayMoveRow}>
+            <Pressable style={styles.viewButton} onPress={() => setViewDayOffset((value) => value - 1)}><Text style={styles.viewButtonText}>View -1 Day</Text></Pressable>
+            <Pressable style={styles.resetButton} onPress={() => setViewDayOffset(0)}><Text style={styles.resetButtonText}>Reset View</Text></Pressable>
+            <Pressable style={styles.viewButton} onPress={() => setViewDayOffset((value) => value + 1)}><Text style={styles.viewButtonText}>View +1 Day</Text></Pressable>
           </View>
         </View>
 
@@ -399,12 +428,17 @@ const styles = StyleSheet.create({
   issueSummary: { flex: 1, minWidth: 220, backgroundColor: '#eff6ff', borderRadius: 12, padding: 12 },
   issueTitle: { color: '#0f172a', fontWeight: '900', fontSize: 18 },
   issueMeta: { color: '#64748b', fontSize: 12, marginTop: 3 },
-  dayMovePanel: { backgroundColor: '#fff7ed', borderColor: '#fed7aa', borderWidth: 1, borderRadius: 14, padding: 12, gap: 10 },
-  dayMoveTitle: { color: '#9a3412', fontWeight: '900', textAlign: 'center' },
+  fixMovePanel: { backgroundColor: '#fff7ed', borderColor: '#fed7aa', borderWidth: 1, borderRadius: 14, padding: 12, gap: 8 },
+  fixMoveTitle: { color: '#9a3412', fontWeight: '900', textAlign: 'center' },
+  fixMoveHelp: { color: '#9a3412', fontWeight: '800', fontSize: 12, textAlign: 'center' },
+  viewPanel: { backgroundColor: '#f8fafc', borderColor: '#e2e8f0', borderWidth: 1, borderRadius: 14, padding: 12, gap: 8 },
+  viewPanelTitle: { color: '#475569', fontWeight: '900', textAlign: 'center' },
   dayMoveRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 10 },
   dayMoveBack: { backgroundColor: '#7f1d1d', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
   dayMoveForward: { backgroundColor: '#166534', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
   dayMoveButtonText: { color: '#ffffff', fontWeight: '900' },
+  viewButton: { backgroundColor: '#e2e8f0', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
+  viewButtonText: { color: '#334155', fontWeight: '900' },
   resetButton: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe', borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
   resetButtonText: { color: '#1d4ed8', fontWeight: '900' },
   tableRow: { flexDirection: 'row', alignItems: 'stretch' },
