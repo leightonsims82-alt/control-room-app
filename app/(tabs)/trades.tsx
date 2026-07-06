@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { TradeContact, useSitePlanner } from '../../data/sitePlannerStore';
@@ -66,6 +66,14 @@ function makeTradeId(trade: string) {
 function openTradeEmail(email: string, subject: string, body: string) {
   const url = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   Linking.openURL(url);
+}
+
+function makeSupervisorLink(trade: string) {
+  const tradeSlug = trade.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return `${window.location.origin}/supervisor?trade=${tradeSlug}`;
+  }
+  return `programmebuddy://supervisor?trade=${tradeSlug}`;
 }
 
 export default function TradesScreen() {
@@ -136,13 +144,15 @@ export default function TradesScreen() {
       .filter((row) => row.cells.some(Boolean));
   }, [activeContact, sitePlots, tableDays, activityDelays, plotTemplates]);
 
+  const activeTrade = activeContact?.trade ?? 'trade';
+  const supervisorLink = makeSupervisorLink(activeTrade);
+
   const buildCleanEmailBody = () => {
-    const trade = activeContact?.trade ?? 'trade';
     const weeks = `WK${String(weekGroups[0]).padStart(2, '0')} + WK${String(weekGroups[1]).padStart(2, '0')}`;
     const firstThree = programmeRows.slice(0, 3).map((row) => `- Plot ${row.plot.plotNo}: ${row.activeActivity?.displayText ?? row.cells.find(Boolean) ?? 'Planned activity'}`);
-    const activitySummary = firstThree.length ? firstThree.join('\n') : `- No planned ${trade} activity in this 2-week window.`;
+    const activitySummary = firstThree.length ? firstThree.join('\n') : `- No planned ${activeTrade} activity in this 2-week window.`;
 
-    return `Good afternoon,\n\nYour ${trade} 2-week programme has been issued in Programme Buddy.\n\nPlease review the attached PDF or open the Supervisor App view for the latest trade-specific programme.\n\nSummary:\n- Trade: ${trade}\n- Period: ${weeks}\n- Plots with planned ${trade} activity: ${programmeRows.length}\n\nKey activities:\n${activitySummary}\n\nPlease confirm receipt and raise any access, labour, material or sequencing issues as soon as possible.\n\nKind regards`;
+    return `Good afternoon,\n\nYour ${activeTrade} 2-week programme has been issued in Programme Buddy.\n\nPlease review the attached PDF and use the Supervisor App link below for the latest trade-specific programme.\n\nSupervisor App link:\n${supervisorLink}\n\nSummary:\n- Trade: ${activeTrade}\n- Period: ${weeks}\n- Plots with planned ${activeTrade} activity: ${programmeRows.length}\n\nKey activities:\n${activitySummary}\n\nPlease confirm receipt and raise any access, labour, material or sequencing issues as soon as possible.\n\nKind regards`;
   };
 
   const updateDraft = (changes: Partial<TradeContact>) => {
@@ -160,6 +170,29 @@ export default function TradesScreen() {
     setSaveMessage('');
     setIssueTime(time);
     setShowIssueTimes(false);
+  };
+
+  const generateTradePdf = async () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      setSaveMessage(`PDF view opened for ${activeTrade}. Choose Save as PDF, then attach it to the email.`);
+      window.print();
+      return;
+    }
+    setSaveMessage('PDF generation is currently available from the web app using Save as PDF. Native PDF export can be added later.');
+  };
+
+  const openSupervisorApp = () => {
+    Linking.openURL(supervisorLink);
+    setSaveMessage(`Supervisor App opened for ${activeTrade}.`);
+  };
+
+  const copySupervisorLink = async () => {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+      await navigator.clipboard.writeText(supervisorLink);
+      setSaveMessage('Supervisor App link copied. Paste it into Outlook or WhatsApp.');
+      return;
+    }
+    setSaveMessage(`Supervisor App link: ${supervisorLink}`);
   };
 
   const moveFix = async (row: ProgrammeRow, change: number) => {
@@ -221,8 +254,8 @@ export default function TradesScreen() {
       `${activeContact.trade} 2-week programme - WK${String(activeIssueWeek).padStart(2, '0')}`,
       buildCleanEmailBody(),
     );
-    await recordIssue({ startWeek: activeIssueWeek, recipientCount: 1, note: `${activeContact.trade} email note prepared for ${activeContact.supervisorEmail}` });
-    setSaveMessage(`${activeContact.trade} email note opened. Attach the PDF or share the Supervisor App link before sending.`);
+    await recordIssue({ startWeek: activeIssueWeek, recipientCount: 1, note: `${activeContact.trade} PDF/link issue prepared for ${activeContact.supervisorEmail}` });
+    setSaveMessage(`${activeContact.trade} email opened with Supervisor App link. Save the PDF and attach it before sending.`);
   };
 
   return (
@@ -318,12 +351,24 @@ export default function TradesScreen() {
 
         <View style={styles.issueTradePanel}>
           <View style={styles.issueTradeTextWrap}>
-            <Text style={styles.issueTradeTitle}>Prepare trade issue email</Text>
-            <Text style={styles.issueTradeText}>{activeContact?.supervisorEmail ? `Opens a clean email note to ${activeContact.supervisorEmail}. Attach the PDF or share the Supervisor App link.` : `Add a supervisor email for ${activeContact?.trade ?? 'this trade'} before issuing.`}</Text>
+            <Text style={styles.issueTradeTitle}>Issue this trade programme</Text>
+            <Text style={styles.issueTradeText}>Generate the PDF first, then share the Supervisor App link and prepare the covering email.</Text>
+            <Text style={styles.issueTradeLink}>{supervisorLink}</Text>
           </View>
-          <Pressable style={styles.issueTradeButton} onPress={issueToCurrentTrade}>
-            <Text style={styles.issueTradeButtonText}>Prepare Email</Text>
-          </Pressable>
+          <View style={styles.issueButtonWrap}>
+            <Pressable style={styles.issueTradeButton} onPress={generateTradePdf}>
+              <Text style={styles.issueTradeButtonText}>Generate PDF</Text>
+            </Pressable>
+            <Pressable style={styles.issueSecondaryButton} onPress={openSupervisorApp}>
+              <Text style={styles.issueSecondaryButtonText}>Open App View</Text>
+            </Pressable>
+            <Pressable style={styles.issueSecondaryButton} onPress={copySupervisorLink}>
+              <Text style={styles.issueSecondaryButtonText}>Copy Link</Text>
+            </Pressable>
+            <Pressable style={styles.issueTradeButton} onPress={issueToCurrentTrade}>
+              <Text style={styles.issueTradeButtonText}>Prepare Email</Text>
+            </Pressable>
+          </View>
         </View>
       </SectionCard>
 
@@ -455,8 +500,12 @@ const styles = StyleSheet.create({
   issueTradeTextWrap: { flex: 1, minWidth: 220, gap: 3 },
   issueTradeTitle: { color: '#166534', fontWeight: '900', fontSize: 14 },
   issueTradeText: { color: '#166534', fontWeight: '800', fontSize: 12 },
+  issueTradeLink: { color: '#166534', fontWeight: '900', fontSize: 11 },
+  issueButtonWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' },
   issueTradeButton: { backgroundColor: '#166534', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
   issueTradeButtonText: { color: '#ffffff', fontWeight: '900' },
+  issueSecondaryButton: { backgroundColor: '#ffffff', borderColor: '#86efac', borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  issueSecondaryButtonText: { color: '#166534', fontWeight: '900' },
   tableRow: { flexDirection: 'row', alignItems: 'stretch' },
   altRow: { backgroundColor: '#eef6ff' },
   tableHeader: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 11, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
