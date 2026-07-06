@@ -18,7 +18,7 @@ const ISSUE_LOGS_KEY = 'siteprog:issue-logs:v1';
 const PLOT_TEMPLATES_KEY = 'siteprog:plot-templates:v1';
 const SITE_PROGRAMME_SETUP_KEY = 'siteprog:programme-setup:v1';
 
-const REMOVED_TEMPLATE_ACTIVITY_CODES = new Set(['TAC', 'GABLES 1']);
+const REMOVED_TEMPLATE_ACTIVITY_CODES = new Set(['TAC', 'BOARD', 'GABLES 1']);
 
 export type TradeContact = { id: string; trade: string; contractor: string; supervisorName: string; supervisorEmail: string; supervisorPhone: string };
 export type IssueSettings = { managerEmail: string; issueDay: string; issueTime: string; autoIssueEnabled: boolean };
