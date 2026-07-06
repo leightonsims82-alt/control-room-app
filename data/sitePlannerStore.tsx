@@ -1,31 +1,34 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 import { ActivityDelay, TRADE_ORDER } from '../utils/siteProgrammeEngine';
-import {
-  DEFAULT_PLOT_TEMPLATES,
-  DEFAULT_SITE_PROGRAMME_SETUP,
-  DEFAULT_TEMPLATE_PLOTS,
-  PlotTemplate,
-  SiteProgrammeSetup,
-  TemplateSitePlot,
-} from '../utils/templateProgramme';
+import { DEFAULT_PLOT_TEMPLATES, DEFAULT_SITE_PROGRAMME_SETUP, DEFAULT_TEMPLATE_PLOTS, PlotTemplate, SiteProgrammeSetup, TemplateSitePlot } from '../utils/templateProgramme';
 
 const SITE_PLOTS_KEY = 'siteprog:week-based-plots:v3';
 const SITE_DELAYS_KEY = 'siteprog:week-based-delays:v2';
 const TRADE_CONTACTS_KEY = 'siteprog:trade-contacts:v1';
 const ISSUE_SETTINGS_KEY = 'siteprog:issue-settings:v1';
 const ISSUE_LOGS_KEY = 'siteprog:issue-logs:v1';
-const PLOT_TEMPLATES_KEY = 'siteprog:plot-templates:v2';
+const PLOT_TEMPLATES_KEY = 'siteprog:plot-templates:v3';
 const SITE_PROGRAMME_SETUP_KEY = 'siteprog:programme-setup:v1';
 
-const REMOVED_TEMPLATE_ACTIVITY_CODES = new Set(['BOARD', '5TH SCAFF', 'SS']);
+const REMOVED_TEMPLATE_ACTIVITY_CODES = new Set(['BOARD', '5TH SCAFF', 'SS', 'GABLES 1', 'GABLES 2']);
+const RENAMED_TEMPLATE_ACTIVITY_CODES: Record<string, string> = {
+  FND: 'Foundation',
+  DNG: 'Drainage',
+  '1ST BWK': '1ST Lift Brickwork',
+  '2ND BWK': '2ND Lift Brickwork',
+  '3RD BWK': '3RD Lift Brickwork',
+  '4TH BWK': '4TH Lift Brickwork',
+  '1ST CARP': '1ST FIX CARP',
+  '1ST PLUMB': '1ST FIX PLUMB',
+  '1ST ELEC': '1ST FIX ELEC',
+  '1ST SPRINKLER': '1ST FIX SPRINKLER',
+  PP: 'PRE-PLASTER QA',
+};
 
 export type TradeContact = { id: string; trade: string; contractor: string; supervisorName: string; supervisorEmail: string; supervisorPhone: string };
 export type IssueSettings = { managerEmail: string; issueDay: string; issueTime: string; autoIssueEnabled: boolean };
 export type IssueLog = { id: string; startWeek: number; issuedAt: string; recipientCount: number; note: string };
-
-const DEFAULT_TRADE_CONTACTS: TradeContact[] = TRADE_ORDER.map((trade) => ({ id: `trade-${trade.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, trade, contractor: '', supervisorName: '', supervisorEmail: '', supervisorPhone: '' }));
-const DEFAULT_ISSUE_SETTINGS: IssueSettings = { managerEmail: '', issueDay: 'Friday', issueTime: '15:00', autoIssueEnabled: false };
 
 type SitePlannerStore = {
   sitePlots: TemplateSitePlot[];
@@ -48,20 +51,21 @@ type SitePlannerStore = {
   updateTemplateActivityDuration: (templateId: string, activityCode: string, durationDays: number) => Promise<void>;
 };
 
+const DEFAULT_TRADE_CONTACTS: TradeContact[] = TRADE_ORDER.map((trade) => ({ id: `trade-${trade.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, trade, contractor: '', supervisorName: '', supervisorEmail: '', supervisorPhone: '' }));
+const DEFAULT_ISSUE_SETTINGS: IssueSettings = { managerEmail: '', issueDay: 'Friday', issueTime: '15:00', autoIssueEnabled: false };
 const SitePlannerContext = createContext<SitePlannerStore | undefined>(undefined);
 
-async function readArray<T>(key: string, fallback: T[]) {
-  const stored = await AsyncStorage.getItem(key);
-  if (!stored) { await AsyncStorage.setItem(key, JSON.stringify(fallback)); return fallback; }
-  return JSON.parse(stored) as T[];
-}
+async function readArray<T>(key: string, fallback: T[]) { const stored = await AsyncStorage.getItem(key); if (!stored) { await AsyncStorage.setItem(key, JSON.stringify(fallback)); return fallback; } return JSON.parse(stored) as T[]; }
+async function readObject<T>(key: string, fallback: T) { const stored = await AsyncStorage.getItem(key); if (!stored) { await AsyncStorage.setItem(key, JSON.stringify(fallback)); return fallback; } return JSON.parse(stored) as T; }
 
-async function readObject<T>(key: string, fallback: T) {
-  const stored = await AsyncStorage.getItem(key);
-  if (!stored) { await AsyncStorage.setItem(key, JSON.stringify(fallback)); return fallback; }
-  return JSON.parse(stored) as T;
+function canonicalActivityCode(code: string) { return RENAMED_TEMPLATE_ACTIVITY_CODES[code] ?? code; }
+function normaliseStoredActivities(template: PlotTemplate) {
+  const seen = new Set<string>();
+  return template.activities
+    .filter((activity) => !REMOVED_TEMPLATE_ACTIVITY_CODES.has(activity.code))
+    .map((activity) => ({ ...activity, code: canonicalActivityCode(activity.code) }))
+    .filter((activity) => { if (seen.has(activity.code)) return false; seen.add(activity.code); return true; });
 }
-
 function mergeDefaultTradeContacts(stored: TradeContact[]) {
   const storedByTrade = new Map(stored.map((contact) => [contact.trade.toLowerCase(), contact]));
   const defaults = DEFAULT_TRADE_CONTACTS.map((contact) => storedByTrade.get(contact.trade.toLowerCase()) ?? contact);
@@ -69,41 +73,20 @@ function mergeDefaultTradeContacts(stored: TradeContact[]) {
   const customTrades = stored.filter((contact) => !defaultTradeNames.has(contact.trade.toLowerCase()));
   return [...defaults, ...customTrades];
 }
-
 function normalisePlots(stored: TemplateSitePlot[]) { return stored.map((plot) => ({ ...plot, templateId: plot.templateId || 'threeBed' })); }
-
 function repairTemplate(defaultTemplate: PlotTemplate, storedTemplate?: PlotTemplate) {
   if (!storedTemplate) return defaultTemplate;
-  const storedActivities = storedTemplate.activities.filter((activity) => !REMOVED_TEMPLATE_ACTIVITY_CODES.has(activity.code));
+  const storedActivities = normaliseStoredActivities(storedTemplate);
   const storedByCode = new Map(storedActivities.map((activity) => [activity.code, activity]));
-  const legacySecondFix = storedByCode.get('2ND FIX');
   const repairedActivities = defaultTemplate.activities.map((defaultActivity) => {
     const storedActivity = storedByCode.get(defaultActivity.code);
-    if (storedActivity) {
-      return {
-        ...defaultActivity,
-        ...storedActivity,
-        order: defaultActivity.order,
-        relativeWeek: defaultActivity.relativeWeek,
-        relativeDay: defaultActivity.relativeDay,
-        durationDays: storedActivity.durationDays > 0 ? storedActivity.durationDays : defaultActivity.durationDays,
-        overlapAllowed: false,
-      };
-    }
-    if (defaultActivity.code === '2ND CARP' && legacySecondFix) {
-      return { ...defaultActivity, durationDays: legacySecondFix.durationDays > 0 ? legacySecondFix.durationDays : defaultActivity.durationDays };
-    }
-    return defaultActivity;
+    if (!storedActivity) return defaultActivity;
+    return { ...defaultActivity, ...storedActivity, code: defaultActivity.code, order: defaultActivity.order, relativeWeek: defaultActivity.relativeWeek, relativeDay: defaultActivity.relativeDay, durationDays: storedActivity.durationDays > 0 ? storedActivity.durationDays : defaultActivity.durationDays, overlapAllowed: false };
   });
   const defaultCodes = new Set(defaultTemplate.activities.map((activity) => activity.code));
-  const customActivities = storedActivities.filter((activity) => !defaultCodes.has(activity.code) && activity.code !== '2ND FIX');
-  return {
-    ...defaultTemplate,
-    ...storedTemplate,
-    activities: [...repairedActivities, ...customActivities].sort((a, b) => a.order - b.order),
-  };
+  const customActivities = storedActivities.filter((activity) => !defaultCodes.has(activity.code));
+  return { ...defaultTemplate, ...storedTemplate, activities: [...repairedActivities, ...customActivities].sort((a, b) => a.order - b.order) };
 }
-
 function mergeDefaultTemplates(stored: PlotTemplate[]) {
   const storedById = new Map(stored.map((template) => [template.id, template]));
   return DEFAULT_PLOT_TEMPLATES.map((template) => repairTemplate(template, storedById.get(template.id)));
@@ -118,31 +101,19 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   const [plotTemplates, setPlotTemplates] = useState<PlotTemplate[]>(DEFAULT_PLOT_TEMPLATES);
   const [siteSetup, setSiteSetupState] = useState<SiteProgrammeSetup>(DEFAULT_SITE_PROGRAMME_SETUP);
   const [isSitePlannerLoaded, setIsSitePlannerLoaded] = useState(false);
-
   useEffect(() => {
     let mounted = true;
     async function loadPlanner() {
       try {
-        const [storedPlots, storedDelays, storedContacts, storedIssueSettings, storedIssueLogs, storedTemplates, storedSiteSetup] = await Promise.all([
-          readArray<TemplateSitePlot>(SITE_PLOTS_KEY, DEFAULT_TEMPLATE_PLOTS), readArray<ActivityDelay>(SITE_DELAYS_KEY, []), readArray<TradeContact>(TRADE_CONTACTS_KEY, DEFAULT_TRADE_CONTACTS), readObject<IssueSettings>(ISSUE_SETTINGS_KEY, DEFAULT_ISSUE_SETTINGS), readArray<IssueLog>(ISSUE_LOGS_KEY, []), readArray<PlotTemplate>(PLOT_TEMPLATES_KEY, DEFAULT_PLOT_TEMPLATES), readObject<SiteProgrammeSetup>(SITE_PROGRAMME_SETUP_KEY, DEFAULT_SITE_PROGRAMME_SETUP),
-        ]);
+        const [storedPlots, storedDelays, storedContacts, storedIssueSettings, storedIssueLogs, storedTemplates, storedSiteSetup] = await Promise.all([readArray<TemplateSitePlot>(SITE_PLOTS_KEY, DEFAULT_TEMPLATE_PLOTS), readArray<ActivityDelay>(SITE_DELAYS_KEY, []), readArray<TradeContact>(TRADE_CONTACTS_KEY, DEFAULT_TRADE_CONTACTS), readObject<IssueSettings>(ISSUE_SETTINGS_KEY, DEFAULT_ISSUE_SETTINGS), readArray<IssueLog>(ISSUE_LOGS_KEY, []), readArray<PlotTemplate>(PLOT_TEMPLATES_KEY, DEFAULT_PLOT_TEMPLATES), readObject<SiteProgrammeSetup>(SITE_PROGRAMME_SETUP_KEY, DEFAULT_SITE_PROGRAMME_SETUP)]);
         const repairedTemplates = mergeDefaultTemplates(storedTemplates);
-        if (mounted) {
-          setSitePlots(normalisePlots(storedPlots)); setActivityDelays(storedDelays); setTradeContacts(mergeDefaultTradeContacts(storedContacts)); setIssueSettingsState(storedIssueSettings); setIssueLogs(storedIssueLogs); setPlotTemplates(repairedTemplates); setSiteSetupState({ ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup });
-        }
+        if (mounted) { setSitePlots(normalisePlots(storedPlots)); setActivityDelays(storedDelays); setTradeContacts(mergeDefaultTradeContacts(storedContacts)); setIssueSettingsState(storedIssueSettings); setIssueLogs(storedIssueLogs); setPlotTemplates(repairedTemplates); setSiteSetupState({ ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup }); }
         await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(repairedTemplates));
       } catch (error) { console.warn('Unable to load site planner data', error); } finally { if (mounted) setIsSitePlannerLoaded(true); }
     }
     loadPlanner(); return () => { mounted = false; };
   }, []);
-
-  const upsertSitePlot = async (input: { plotNo: string; stage9CompleteWeek: number; templateId: string }) => {
-    const plotNo = input.plotNo.trim(); if (!plotNo || !Number.isFinite(input.stage9CompleteWeek)) return;
-    const existing = sitePlots.find((plot) => plot.plotNo.toLowerCase() === plotNo.toLowerCase());
-    const nextPlot: TemplateSitePlot = existing ? { ...existing, plotNo, stage9CompleteWeek: input.stage9CompleteWeek, templateId: input.templateId } : { id: `site-plot-${Date.now()}`, plotNo, stage9CompleteWeek: input.stage9CompleteWeek, templateId: input.templateId };
-    const nextPlots = existing ? sitePlots.map((plot) => (plot.id === existing.id ? nextPlot : plot)) : [...sitePlots, nextPlot];
-    setSitePlots(nextPlots); await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(nextPlots));
-  };
+  const upsertSitePlot = async (input: { plotNo: string; stage9CompleteWeek: number; templateId: string }) => { const plotNo = input.plotNo.trim(); if (!plotNo || !Number.isFinite(input.stage9CompleteWeek)) return; const existing = sitePlots.find((plot) => plot.plotNo.toLowerCase() === plotNo.toLowerCase()); const nextPlot: TemplateSitePlot = existing ? { ...existing, plotNo, stage9CompleteWeek: input.stage9CompleteWeek, templateId: input.templateId } : { id: `site-plot-${Date.now()}`, plotNo, stage9CompleteWeek: input.stage9CompleteWeek, templateId: input.templateId }; const nextPlots = existing ? sitePlots.map((plot) => (plot.id === existing.id ? nextPlot : plot)) : [...sitePlots, nextPlot]; setSitePlots(nextPlots); await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(nextPlots)); };
   const removeSitePlot = async (plotId: string) => { const nextPlots = sitePlots.filter((plot) => plot.id !== plotId); const nextDelays = activityDelays.filter((delay) => delay.plotId !== plotId); setSitePlots(nextPlots); setActivityDelays(nextDelays); await Promise.all([AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(nextPlots)), AsyncStorage.setItem(SITE_DELAYS_KEY, JSON.stringify(nextDelays))]); };
   const resetPlotData = async () => { setSitePlots([]); setActivityDelays([]); await Promise.all([AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify([])), AsyncStorage.setItem(SITE_DELAYS_KEY, JSON.stringify([]))]); };
   const setActivityDelay = async (input: ActivityDelay) => { const nextDelays = [...activityDelays.filter((delay) => !(delay.plotId === input.plotId && delay.activityCode === input.activityCode)), input].filter((delay) => delay.delayDays !== 0); setActivityDelays(nextDelays); await AsyncStorage.setItem(SITE_DELAYS_KEY, JSON.stringify(nextDelays)); };
