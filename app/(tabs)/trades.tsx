@@ -4,12 +4,13 @@ import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { TradeContact, useSitePlanner } from '../../data/sitePlannerStore';
 import { getSavedSupervisorEmails } from '../../utils/programmeIssue';
-import { getTradeTemplateText } from '../../utils/templateProgramme';
+import { getActivitiesForTemplateDay } from '../../utils/templateProgramme';
 
 const PROGRAMME_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const WORKING_DAY_COUNT = 5;
 const DAY_WIDTH = 72;
 const WEEK_WIDTH = DAY_WIDTH * 7;
+const MOVE_WIDTH = 128;
 const ISSUE_TIME_OPTIONS = ['06:30', '07:00', '07:30', '08:00', '09:00', '10:00', '12:00', '14:00', '15:00', '16:00', '17:00'];
 
 function getShortWeekDate(week: number, dayIndex: number) {
@@ -63,6 +64,7 @@ export default function TradesScreen() {
     plotTemplates,
     issueSettings,
     issueLogs,
+    setActivityDelay,
     upsertTradeContact,
     setIssueSettings,
     recordIssue,
@@ -107,11 +109,14 @@ export default function TradesScreen() {
     if (!activeContact) return [];
     return sitePlots
       .map((plot) => {
-        const cells = tableDays.map((item) => {
-          if (item.weekend) return '';
-          return getTradeTemplateText(plot, activeContact.trade, item.week, item.day, activityDelays, plotTemplates);
+        const tradeActivitiesByDay = tableDays.map((item) => {
+          if (item.weekend) return [];
+          return getActivitiesForTemplateDay(plot, item.week, item.day, activityDelays, plotTemplates).filter((activity) => activity.trade === activeContact.trade);
         });
-        return { plot, cells };
+        const cells = tradeActivitiesByDay.map((activities) => activities.map((activity) => activity.displayText).join('\n'));
+        const activeActivity = tradeActivitiesByDay.flat()[0];
+        const delayDays = activeActivity ? activityDelays.find((delay) => delay.plotId === plot.id && delay.activityCode === activeActivity.code)?.delayDays ?? 0 : 0;
+        return { plot, cells, activeActivity, delayDays };
       })
       .filter((row) => row.cells.some(Boolean));
   }, [activeContact, sitePlots, tableDays, activityDelays, plotTemplates]);
@@ -131,6 +136,17 @@ export default function TradesScreen() {
     setSaveMessage('');
     setIssueTime(time);
     setShowIssueTimes(false);
+  };
+
+  const moveFix = async (row: { plot: { id: string; plotNo: string }; activeActivity?: { code: string; displayText: string }; delayDays: number }, change: number) => {
+    if (!row.activeActivity) return;
+    await setActivityDelay({
+      plotId: row.plot.id,
+      activityCode: row.activeActivity.code,
+      delayDays: row.delayDays + change,
+    });
+    const direction = change > 0 ? 'forward' : 'back';
+    setSaveMessage(`Plot ${row.plot.plotNo} ${row.activeActivity.displayText} moved ${direction} 1 day`);
   };
 
   const saveTradeContact = async () => {
@@ -181,10 +197,10 @@ export default function TradesScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>2-Week Trade Programme</Text>
-        <Text style={styles.subtitle}>Select the week and trade, then move the issue window by days if needed.</Text>
+        <Text style={styles.subtitle}>Use View -/+ Day to look around. Use Move Fix -/+ Day to change the actual activity date.</Text>
       </View>
 
-      <SectionCard title="2-week trade programme" subtitle="One row per plot. Dates sit on their own row, with weekends shown blank unless specifically planned.">
+      <SectionCard title="2-week trade programme" subtitle="Move Fix changes the programme data. View Day only slides the window you are looking at.">
         <View style={styles.viewerHeaderRow}>
           <View style={styles.inputWrapSmall}>
             <Text style={styles.label}>Start week</Text>
@@ -192,19 +208,21 @@ export default function TradesScreen() {
           </View>
           <View style={styles.issueSummary}>
             <Text style={styles.issueTitle}>{activeContact?.trade ?? 'Trade'} Programme</Text>
-            <Text style={styles.issueMeta}>WK{String(weekGroups[0]).padStart(2, '0')} + WK{String(weekGroups[1]).padStart(2, '0')} | Offset {dayOffset > 0 ? '+' : ''}{dayOffset} day{Math.abs(dayOffset) === 1 ? '' : 's'}</Text>
+            <Text style={styles.issueMeta}>WK{String(weekGroups[0]).padStart(2, '0')} + WK{String(weekGroups[1]).padStart(2, '0')} | View offset {dayOffset > 0 ? '+' : ''}{dayOffset} day{Math.abs(dayOffset) === 1 ? '' : 's'}</Text>
           </View>
           <Pressable style={[styles.saveButton, programmeIssued ? styles.savedButton : null]} onPress={markIssued}>
             <Text style={styles.saveButtonText}>{programmeIssued ? 'Issued ✓' : 'Mark Issued'}</Text>
           </Pressable>
         </View>
 
+        {saveMessage && !tradeSaved && !tradeAdded && !tradeExists && !issueSettingsSaved && !programmeIssued ? <Text style={styles.moveNotice}>{saveMessage}</Text> : null}
+
         <View style={styles.dayMovePanel}>
-          <Text style={styles.dayMoveTitle}>Move trade programme by days</Text>
+          <Text style={styles.dayMoveTitle}>View window only</Text>
           <View style={styles.dayMoveRow}>
-            <Pressable style={styles.dayMoveBack} onPress={() => setDayOffset((value) => value - 1)}><Text style={styles.dayMoveButtonText}>- 1 Day</Text></Pressable>
-            <Pressable style={styles.resetButton} onPress={() => setDayOffset(0)}><Text style={styles.resetButtonText}>Reset</Text></Pressable>
-            <Pressable style={styles.dayMoveForward} onPress={() => setDayOffset((value) => value + 1)}><Text style={styles.dayMoveButtonText}>+ 1 Day</Text></Pressable>
+            <Pressable style={styles.dayMoveBack} onPress={() => setDayOffset((value) => value - 1)}><Text style={styles.dayMoveButtonText}>View -1 Day</Text></Pressable>
+            <Pressable style={styles.resetButton} onPress={() => setDayOffset(0)}><Text style={styles.resetButtonText}>Reset View</Text></Pressable>
+            <Pressable style={styles.dayMoveForward} onPress={() => setDayOffset((value) => value + 1)}><Text style={styles.dayMoveButtonText}>View +1 Day</Text></Pressable>
           </View>
         </View>
 
@@ -227,18 +245,21 @@ export default function TradesScreen() {
               <Text style={[styles.tableHeader, styles.plotNoCell]} />
               <Text style={[styles.tableHeader, styles.tradeCell]} />
               <Text style={[styles.tableHeader, styles.fixCell]} />
+              <Text style={[styles.tableHeader, styles.moveCell]} />
               {weekGroups.map((week, index) => <Text key={`${week}-${index}`} style={styles.weekGroupHeader}>WK{String(week).padStart(2, '0')}</Text>)}
             </View>
             <View style={styles.tableRow}>
               <Text style={[styles.tableHeader, styles.plotNoCell]}>Plot No</Text>
               <Text style={[styles.tableHeader, styles.tradeCell]}>Trade</Text>
               <Text style={[styles.tableHeader, styles.fixCell]}>Fix / Stage</Text>
+              <Text style={[styles.tableHeader, styles.moveCell]}>Move Fix</Text>
               {tableDays.map((item) => <Text key={item.key} style={[styles.dayHeaderCell, item.weekend ? styles.weekendHeader : null]}>{item.dayName}</Text>)}
             </View>
             <View style={styles.tableRow}>
               <Text style={[styles.dateBlankCell, styles.plotNoCell]} />
               <Text style={[styles.dateBlankCell, styles.tradeCell]} />
               <Text style={[styles.dateBlankCell, styles.fixCell]} />
+              <Text style={[styles.dateBlankCell, styles.moveCell]} />
               {tableDays.map((item) => <Text key={`date-${item.key}`} style={[styles.dateHeaderCell, item.weekend ? styles.weekendDateCell : null]}>{item.date}</Text>)}
             </View>
 
@@ -248,7 +269,12 @@ export default function TradesScreen() {
               <View key={row.plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                 <Text style={[styles.bodyCell, styles.plotNoCell]}>{row.plot.plotNo}</Text>
                 <Text style={[styles.bodyCell, styles.tradeCell]}>{activeContact?.trade ?? ''}</Text>
-                <Text style={[styles.bodyCell, styles.fixCell]}>{row.cells.find(Boolean) || '-'}</Text>
+                <Text style={[styles.bodyCell, styles.fixCell]}>{row.activeActivity?.displayText ?? row.cells.find(Boolean) ?? '-'}</Text>
+                <View style={[styles.bodyCell, styles.moveCell, styles.moveFixCell]}>
+                  <Pressable style={styles.fixBackButton} onPress={() => moveFix(row, -1)}><Text style={styles.fixMoveText}>-1</Text></Pressable>
+                  <Pressable style={styles.fixForwardButton} onPress={() => moveFix(row, 1)}><Text style={styles.fixMoveText}>+1</Text></Pressable>
+                  <Text style={styles.delayText}>{row.delayDays > 0 ? '+' : ''}{row.delayDays}d</Text>
+                </View>
                 {row.cells.map((cell, index) => <Text key={tableDays[index].key} style={[styles.dayBodyCell, tableDays[index].weekend ? styles.weekendCell : null, cell ? styles.activeDayCell : null]}>{cell}</Text>)}
               </View>
             ))}
@@ -337,6 +363,7 @@ const styles = StyleSheet.create({
   header: { gap: 4 },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
   subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
+  moveNotice: { backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1, color: '#166534', fontWeight: '900', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
   tradeChips: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
   tradeChipsWide: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
   tradeChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
@@ -386,6 +413,12 @@ const styles = StyleSheet.create({
   plotNoCell: { width: 74 },
   tradeCell: { width: 110 },
   fixCell: { width: 118 },
+  moveCell: { width: MOVE_WIDTH },
+  moveFixCell: { flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  fixBackButton: { backgroundColor: '#7f1d1d', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
+  fixForwardButton: { backgroundColor: '#166534', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
+  fixMoveText: { color: '#ffffff', fontWeight: '900', fontSize: 10 },
+  delayText: { color: '#475569', fontWeight: '900', fontSize: 10 },
   weekGroupHeader: { width: WEEK_WIDTH, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 11, fontWeight: '900' },
   dayHeaderCell: { width: DAY_WIDTH, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 10, fontWeight: '900' },
   weekendHeader: { backgroundColor: '#214c75' },
@@ -396,7 +429,7 @@ const styles = StyleSheet.create({
   dayBodyCell: { width: DAY_WIDTH, minHeight: 38, color: '#0f172a', padding: 5, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800', fontSize: 10, lineHeight: 12 },
   weekendCell: { backgroundColor: '#f8fafc', color: '#94a3b8' },
   activeDayCell: { backgroundColor: '#fff4cc' },
-  emptyProgrammeCell: { width: 74 + 110 + 118 + WEEK_WIDTH * 2, textAlign: 'left', color: '#64748b' },
+  emptyProgrammeCell: { width: 74 + 110 + 118 + MOVE_WIDTH + WEEK_WIDTH * 2, textAlign: 'left', color: '#64748b' },
   empty: { color: '#64748b' },
   logRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
   logMain: { flex: 1 },
