@@ -105,10 +105,64 @@ function makeTemplate(id: string, name: string, description: string, programmeWe
   };
 }
 
+function templateActivity(order: number, code: string, trade: string, displayText: string, durationDays: number, relativeWeek: number, relativeDay: number, stage: ProgrammeActivity['stage']): TemplateActivity {
+  return { order, code, trade, displayText, durationDays, relativeWeek, relativeDay, stage, overlapAllowed: false };
+}
+
+function makeTimberFrameTemplate(): PlotTemplate {
+  return {
+    id: 'timberFrame',
+    name: 'Timber Frame',
+    description: 'Timber frame route with sole plate, frame erection, roof/watertight stage, external leaf and then internal fixes.',
+    programmeWeeks: 20,
+    stageCount: 9,
+    activities: [
+      templateActivity(1, 'FND', 'Groundworks', 'FND', 5, 1, 1, 1),
+      templateActivity(2, 'DNG', 'Groundworks', 'DNG', 5, 2, 1, 1),
+      templateActivity(3, 'SLAB', 'Groundworks', 'Slab', 20, 3, 1, 2),
+      templateActivity(4, 'SOLE PLATE', 'Carpenter', 'Sole Plate', 1, 7, 1, 4),
+      templateActivity(5, 'SCAFF', 'Scaffold', 'Scaffold', 2, 7, 2, 4),
+      templateActivity(6, 'TF FRAME', 'Carpenter', 'Timber Frame', 5, 7, 4, 4),
+      templateActivity(7, 'TRUSS', 'Roof', 'Truss', 3, 8, 4, 5),
+      templateActivity(8, 'SS', 'Roof', 'SS', 2, 9, 2, 5),
+      templateActivity(9, 'F&B', 'Roof', 'F&B', 2, 9, 4, 5),
+      templateActivity(10, 'TILE', 'Roof', 'Tile', 2, 10, 1, 5),
+      templateActivity(11, 'WINDOWS', 'Carpenter', 'Windows', 2, 10, 3, 5),
+      templateActivity(12, 'BRICK OUTER', 'Brickwork', 'Outer Leaf', 8, 11, 1, 5),
+      templateActivity(13, 'STRIP BC', 'Scaffold', 'Strip BC', 1, 12, 4, 5),
+      templateActivity(14, '1ST CARP', 'Carpenter', '1st Fix', 4, 12, 5, 6),
+      templateActivity(15, '1ST PLUMB', 'Plumber', '1st Fix', 2, 13, 4, 6),
+      templateActivity(16, '1ST ELEC', 'Electrician', '1st Fix', 2, 14, 1, 6),
+      templateActivity(17, '1ST SPRINKLER', 'Sprinkler', '1st Fix', 1, 14, 3, 6),
+      templateActivity(18, 'PP', 'Plastering', 'PP', 3, 14, 4, 6),
+      templateActivity(19, 'DAB', 'Plastering', 'Dab', 2, 15, 2, 6),
+      templateActivity(20, 'TAPE', 'Plastering', 'Tape', 3, 15, 4, 6),
+      templateActivity(21, 'DRY', 'Dry Liner', 'Dry', 2, 16, 2, 6),
+      templateActivity(22, '2ND CARP', 'Carpenter', '2nd Fix', 4, 16, 4, 7),
+      templateActivity(23, '2ND PLUMB', 'Plumber', '2nd Fix', 2, 17, 3, 7),
+      templateActivity(24, '2ND ELEC', 'Electrician', '2nd Fix', 2, 17, 5, 7),
+      templateActivity(25, 'WALL TILING', 'Tiler', 'Wall Tiling', 2, 18, 2, 7),
+      templateActivity(26, 'KITCHEN', 'Kitchen Fitter', 'Kitchen', 3, 18, 4, 7),
+      templateActivity(27, 'PATCH', 'Dry Liner', 'Patch', 2, 19, 2, 8),
+      templateActivity(28, 'DEC', 'Decorator', 'Decorate', 6, 19, 4, 8),
+      templateActivity(29, 'CARP FINALS', 'Carpenter', 'Finals', 2, 20, 5, 9),
+      templateActivity(30, 'PLUMB FINALS', 'Plumber', 'Finals', 2, 21, 2, 9),
+      templateActivity(31, 'ELEC FINALS', 'Electrician', 'Finals', 2, 21, 4, 9),
+      templateActivity(32, 'FINAL DEC', 'Decorator', 'Final Dec', 4, 22, 1, 9),
+      templateActivity(33, 'BUILD CLEAN', 'Cleaning', 'Build Clean', 1, 22, 5, 9),
+      templateActivity(34, 'MASTIC', 'Mastic', 'Mastic', 1, 23, 1, 9),
+      templateActivity(35, 'FLOORING', 'Flooring', 'Flooring', 3, 23, 2, 9),
+      templateActivity(36, 'SPARKLE', 'Cleaning', 'Sparkle', 2, 23, 5, 9),
+      templateActivity(37, 'PRE HANDOVER', 'Handover / Site Team', 'Pre Handover', 2, 24, 2, 9),
+    ],
+  };
+}
+
 export const DEFAULT_PLOT_TEMPLATES: PlotTemplate[] = [
   makeTemplate('apartment', 'Apartment', 'Shorter apartment route', 20),
   makeTemplate('twoBed', '2 Bedroom', 'Smaller house template with shorter fix and finish durations', 22),
   makeTemplate('threeBed', '3 Bedroom', 'Standard 23-week house template', 23),
+  makeTimberFrameTemplate(),
   makeTemplate('fourBed', '4 Bedroom', 'Larger house with extended fix and finish durations', 26),
   makeTemplate('fiveBed', '5 Bedroom', 'Largest house template with longer finish and handover durations', 28),
 ];
