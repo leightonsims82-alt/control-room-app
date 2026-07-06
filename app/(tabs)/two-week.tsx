@@ -9,10 +9,23 @@ import { getActivitiesForTemplateDay, normaliseProgrammeWeek } from '../../utils
 const PROGRAMME_START_DATE = new Date(2026, 6, 6);
 const PROGRAMME_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const WORKING_DAY_COUNT = 5;
-const DAY_WIDTH = 88;
+const DAY_WIDTH = 92;
 const PLOT_WIDTH = 82;
 const TYPE_WIDTH = 110;
 const WEEK_WIDTH = DAY_WIDTH * 7;
+
+type ActivityRef = {
+  code: string;
+  displayText: string;
+};
+
+type ProgrammeRow = {
+  plot: { id: string; plotNo: string; templateId?: string };
+  cells: string[];
+  activeActivity?: ActivityRef;
+  delayDays: number;
+  lastActiveIndex: number;
+};
 
 function formatWeekLabel(week: number) {
   return `WK${String(normaliseProgrammeWeek(week)).padStart(2, '0')}`;
@@ -87,26 +100,45 @@ function isWeekend(dayIndex: number) {
 }
 
 export default function TwoWeekProgrammeScreen() {
-  const { sitePlots, activityDelays, plotTemplates } = useSitePlanner();
+  const { sitePlots, activityDelays, plotTemplates, setActivityDelay } = useSitePlanner();
   const [startWeek, setStartWeek] = useState(getCurrentProgrammeWeek());
-  const [dayOffset, setDayOffset] = useState(0);
-  const windowDays = useMemo(() => buildTwoWeekWindow(startWeek, dayOffset), [startWeek, dayOffset]);
+  const [viewDayOffset, setViewDayOffset] = useState(0);
+  const [moveMessage, setMoveMessage] = useState('');
+  const windowDays = useMemo(() => buildTwoWeekWindow(startWeek, viewDayOffset), [startWeek, viewDayOffset]);
   const twoWeekDates = formatDateRange(windowDays);
   const weekGroups = [windowDays[0].week, windowDays[7].week];
 
-  const programmeRows = useMemo(() => {
+  const programmeRows = useMemo<ProgrammeRow[]>(() => {
     return sitePlots.map((plot) => {
       const dailyActivities = windowDays.map((item) => {
         if (item.weekend) return [];
         return getActivitiesForTemplateDay(plot, item.week, item.day, activityDelays, plotTemplates);
       });
-      return { plot, cells: dailyActivities.map(buildCellText) };
+      const cells = dailyActivities.map(buildCellText);
+      const activeActivity = dailyActivities.flat()[0];
+      const delayDays = activeActivity ? activityDelays.find((delay) => delay.plotId === plot.id && delay.activityCode === activeActivity.code)?.delayDays ?? 0 : 0;
+      const lastActiveIndex = activeActivity
+        ? dailyActivities.reduce((last, activities, index) => (activities.some((activity) => activity.code === activeActivity.code) ? index : last), -1)
+        : -1;
+      return { plot, cells, activeActivity, delayDays, lastActiveIndex };
     });
   }, [sitePlots, windowDays, activityDelays, plotTemplates]);
 
   const resetWindow = () => {
     setStartWeek(getCurrentProgrammeWeek());
-    setDayOffset(0);
+    setViewDayOffset(0);
+    setMoveMessage('');
+  };
+
+  const moveFix = async (row: ProgrammeRow, change: number) => {
+    if (!row.activeActivity) return;
+    await setActivityDelay({
+      plotId: row.plot.id,
+      activityCode: row.activeActivity.code,
+      delayDays: row.delayDays + change,
+    });
+    const direction = change > 0 ? 'extended / pushed forward' : 'reduced / pulled back';
+    setMoveMessage(`Plot ${row.plot.plotNo} ${row.activeActivity.displayText} ${direction} by 1 working day`);
   };
 
   return (
@@ -115,7 +147,7 @@ export default function TwoWeekProgrammeScreen() {
         <View style={styles.headerMain}>
           <Text style={styles.kicker}>Live lookahead</Text>
           <Text style={styles.title}>2-Week Programme</Text>
-          <Text style={styles.subtitle}>One combined site programme showing all planned work across every plot.</Text>
+          <Text style={styles.subtitle}>One combined site programme showing all planned work across every plot. Use the +/- in the last active cell to move a fix.</Text>
         </View>
         <View style={styles.headerBadge}>
           <Ionicons name="calendar-outline" size={16} color="#2563eb" />
@@ -125,7 +157,7 @@ export default function TwoWeekProgrammeScreen() {
 
       <View style={styles.controlPanel}>
         <View style={styles.weekControls}>
-          <Pressable style={styles.weekButton} onPress={() => setStartWeek((week) => normaliseProgrammeWeek(week - 1))}>
+          <Pressable style={styles.weekButton} onPress={() => { setMoveMessage(''); setStartWeek((week) => normaliseProgrammeWeek(week - 1)); }}>
             <Ionicons name="chevron-back" size={16} color="#ffffff" />
             <Text style={styles.weekButtonText}>Previous week</Text>
           </Pressable>
@@ -133,27 +165,29 @@ export default function TwoWeekProgrammeScreen() {
             <Text style={styles.weekLabel}>{formatWeekLabel(weekGroups[0])} + {formatWeekLabel(weekGroups[1])}</Text>
             <Text style={styles.weekDateLabel}>{twoWeekDates}</Text>
           </View>
-          <Pressable style={styles.weekButton} onPress={() => setStartWeek((week) => normaliseProgrammeWeek(week + 1))}>
+          <Pressable style={styles.weekButton} onPress={() => { setMoveMessage(''); setStartWeek((week) => normaliseProgrammeWeek(week + 1)); }}>
             <Text style={styles.weekButtonText}>Next week</Text>
             <Ionicons name="chevron-forward" size={16} color="#ffffff" />
           </Pressable>
         </View>
 
-        <View style={styles.dayMovePanel}>
-          <Text style={styles.dayMoveTitle}>Move 2-week programme by days</Text>
+        {moveMessage ? <Text style={styles.moveNotice}>{moveMessage}</Text> : null}
+
+        <View style={styles.viewPanel}>
+          <Text style={styles.viewPanelTitle}>View only</Text>
           <View style={styles.quickActionRow}>
-            <Pressable style={styles.dayMoveBack} onPress={() => setDayOffset((value) => value - 1)}>
-              <Text style={styles.dayMoveButtonText}>- 1 Day</Text>
+            <Pressable style={styles.viewButton} onPress={() => { setMoveMessage(''); setViewDayOffset((value) => value - 1); }}>
+              <Text style={styles.viewButtonText}>View -1 Day</Text>
             </Pressable>
             <Pressable style={styles.currentWeekButton} onPress={resetWindow}>
               <Ionicons name="locate-outline" size={16} color="#1d4ed8" />
-              <Text style={styles.currentWeekButtonText}>Reset to current</Text>
+              <Text style={styles.currentWeekButtonText}>Reset View</Text>
             </Pressable>
-            <Pressable style={styles.dayMoveForward} onPress={() => setDayOffset((value) => value + 1)}>
-              <Text style={styles.dayMoveButtonText}>+ 1 Day</Text>
+            <Pressable style={styles.viewButton} onPress={() => { setMoveMessage(''); setViewDayOffset((value) => value + 1); }}>
+              <Text style={styles.viewButtonText}>View +1 Day</Text>
             </Pressable>
           </View>
-          <Text style={styles.dayMoveNote}>Offset: {dayOffset > 0 ? '+' : ''}{dayOffset} day{Math.abs(dayOffset) === 1 ? '' : 's'}</Text>
+          <Text style={styles.viewNote}>View offset: {viewDayOffset > 0 ? '+' : ''}{viewDayOffset} day{Math.abs(viewDayOffset) === 1 ? '' : 's'}. This does not move programme data.</Text>
         </View>
 
         <View style={styles.summaryStrip}>
@@ -176,7 +210,7 @@ export default function TwoWeekProgrammeScreen() {
         <>
           <View style={styles.legendRow}>
             <View style={styles.legendPill}><View style={styles.legendDot} /><Text style={styles.legendText}>Blue cells = planned work</Text></View>
-            <View style={styles.legendPill}><Text style={styles.legendCode}>Sat/Sun</Text><Text style={styles.legendText}>Shown but blank unless weekend work is specifically added</Text></View>
+            <View style={styles.legendPill}><Text style={styles.legendCode}>+/-</Text><Text style={styles.legendText}>Shown in the last active day of the fix</Text></View>
           </View>
 
           <View style={styles.programmeCard}>
@@ -207,7 +241,18 @@ export default function TwoWeekProgrammeScreen() {
                     <Text style={[styles.bodyCell, styles.typeCell]}>{plotTemplates.find((template) => template.id === row.plot.templateId)?.name ?? '3 Bedroom'}</Text>
                     {row.cells.map((text, index) => {
                       const item = windowDays[index];
-                      return <Text key={`${row.plot.id}-${item.key}`} style={[styles.dayCell, isWeekend(item.dayIndex) ? styles.weekendCell : null, text ? styles.activeDayCell : null]}>{text}</Text>;
+                      const showControls = index === row.lastActiveIndex && Boolean(row.activeActivity);
+                      return (
+                        <View key={`${row.plot.id}-${item.key}`} style={[styles.dayCell, isWeekend(item.dayIndex) ? styles.weekendCell : null, text ? styles.activeDayCell : null, showControls ? styles.finalFixCell : null]}>
+                          <Text style={styles.dayCellText}>{text}</Text>
+                          {showControls ? (
+                            <View style={styles.cellMoveButtons}>
+                              <Pressable style={styles.fixBackButton} onPress={() => moveFix(row, -1)}><Text style={styles.fixMoveText}>-</Text></Pressable>
+                              <Pressable style={styles.fixForwardButton} onPress={() => moveFix(row, 1)}><Text style={styles.fixMoveText}>+</Text></Pressable>
+                            </View>
+                          ) : null}
+                        </View>
+                      );
                     })}
                   </View>
                 ))}
@@ -244,15 +289,15 @@ const styles = StyleSheet.create({
   weekCentre: { alignItems: 'center', flex: 1, minWidth: 180 },
   weekLabel: { color: '#0f172a', fontWeight: '900', fontSize: 18 },
   weekDateLabel: { color: '#64748b', fontWeight: '800', fontSize: 12, marginTop: 2 },
+  moveNotice: { backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1, color: '#166534', fontWeight: '900', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
   quickActionRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 10 },
   currentWeekButton: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#eff6ff', borderRadius: 999, borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 12, paddingVertical: 8 },
   currentWeekButtonText: { color: '#1d4ed8', fontSize: 12, fontWeight: '900' },
-  dayMovePanel: { backgroundColor: '#fff7ed', borderColor: '#fed7aa', borderWidth: 1, borderRadius: 14, padding: 12, gap: 10 },
-  dayMoveTitle: { color: '#9a3412', fontWeight: '900', textAlign: 'center' },
-  dayMoveBack: { backgroundColor: '#7f1d1d', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
-  dayMoveForward: { backgroundColor: '#166534', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
-  dayMoveButtonText: { color: '#ffffff', fontWeight: '900' },
-  dayMoveNote: { color: '#9a3412', fontSize: 12, fontWeight: '900', textAlign: 'center' },
+  viewPanel: { backgroundColor: '#f8fafc', borderColor: '#e2e8f0', borderWidth: 1, borderRadius: 14, padding: 12, gap: 8 },
+  viewPanelTitle: { color: '#475569', fontWeight: '900', textAlign: 'center' },
+  viewButton: { backgroundColor: '#e2e8f0', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
+  viewButtonText: { color: '#334155', fontWeight: '900' },
+  viewNote: { color: '#64748b', fontSize: 12, fontWeight: '800', textAlign: 'center' },
   summaryStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   miniStat: { flex: 1, minWidth: 120, backgroundColor: '#f8fafc', borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', padding: 12 },
   miniStatValue: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
@@ -283,10 +328,16 @@ const styles = StyleSheet.create({
   weekendHeader: { backgroundColor: '#214c75' },
   dayHeaderName: { color: '#ffffff', fontWeight: '900', fontSize: 12 },
   dayHeaderDate: { color: '#dbeafe', fontWeight: '900', fontSize: 11, marginTop: 1 },
-  tableRow: { flexDirection: 'row', alignItems: 'stretch', minHeight: 42 },
+  tableRow: { flexDirection: 'row', alignItems: 'stretch', minHeight: 48 },
   altRow: { backgroundColor: '#eef6ff' },
   bodyCell: { color: '#0f172a', borderWidth: 1, borderColor: '#c8d7e6', paddingHorizontal: 7, paddingVertical: 8, textAlign: 'center', fontWeight: '900', fontSize: 11 },
-  dayCell: { width: DAY_WIDTH, color: '#0f172a', borderWidth: 1, borderColor: '#c8d7e6', paddingHorizontal: 4, paddingVertical: 6, textAlign: 'center', fontWeight: '900', fontSize: 10, lineHeight: 12 },
-  weekendCell: { backgroundColor: '#f8fafc', color: '#94a3b8' },
+  dayCell: { width: DAY_WIDTH, minHeight: 50, borderWidth: 1, borderColor: '#c8d7e6', paddingHorizontal: 4, paddingVertical: 5, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  dayCellText: { color: '#0f172a', textAlign: 'center', fontWeight: '900', fontSize: 10, lineHeight: 12 },
+  weekendCell: { backgroundColor: '#f8fafc' },
   activeDayCell: { backgroundColor: '#dbeafe' },
+  finalFixCell: { borderColor: '#16a34a', borderWidth: 2 },
+  cellMoveButtons: { flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center' },
+  fixBackButton: { backgroundColor: '#7f1d1d', borderRadius: 8, width: 24, height: 22, alignItems: 'center', justifyContent: 'center' },
+  fixForwardButton: { backgroundColor: '#166534', borderRadius: 8, width: 24, height: 22, alignItems: 'center', justifyContent: 'center' },
+  fixMoveText: { color: '#ffffff', fontWeight: '900', fontSize: 12 },
 });
