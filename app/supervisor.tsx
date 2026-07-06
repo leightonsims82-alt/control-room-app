@@ -8,6 +8,17 @@ import { getActivitiesForTemplateDay, normaliseProgrammeWeek } from '../utils/te
 
 const PROGRAMME_START_DATE = new Date(2026, 6, 6);
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+const DAY_WIDTH = 82;
+const WEEK_WIDTH = DAY_WIDTH * 7;
+
+type SupervisorRow = {
+  key: string;
+  plotNo: string;
+  plotType: string;
+  trade: string;
+  fix: string;
+  cells: string[];
+};
 
 function getCurrentProgrammeWeek() {
   const today = new Date();
@@ -16,7 +27,7 @@ function getCurrentProgrammeWeek() {
 }
 
 function formatShortDate(date: Date) {
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
 }
 
 function getProgrammeDate(dayIndexFromStart: number) {
@@ -60,6 +71,23 @@ function guessTrade(text: string, fallbackTrade?: string) {
   return 'General';
 }
 
+function shortFix(text: string) {
+  const clean = text.trim();
+  const lower = clean.toLowerCase();
+  if (lower.includes('foundation')) return 'FND';
+  if (lower.includes('drain')) return 'DNG';
+  if (lower.includes('slab')) return 'SLAB';
+  if (lower.includes('scaffold')) return 'SCAFF';
+  if (lower.includes('brick') || lower.includes('block')) return 'BWK';
+  if (lower.includes('roof')) return 'ROOF';
+  if (lower.includes('window')) return 'WINDOWS';
+  if (lower.includes('plaster')) return 'PLASTER';
+  if (lower.includes('decor')) return 'DEC';
+  if (lower.includes('first') || lower.includes('1st')) return '1ST FIX';
+  if (lower.includes('second') || lower.includes('2nd')) return '2ND FIX';
+  return clean.length > 12 ? clean.slice(0, 12).toUpperCase() : clean.toUpperCase();
+}
+
 export default function SupervisorProgrammeView() {
   const params = useLocalSearchParams<{ trade?: string }>();
   const { sitePlots, activityDelays, plotTemplates, tradeContacts, issueLogs } = useSitePlanner();
@@ -72,32 +100,34 @@ export default function SupervisorProgrammeView() {
   const [selectedTrade, setSelectedTrade] = useState(linkedTrade);
   const startWeek = getCurrentProgrammeWeek();
   const days = useMemo(() => buildTwoWeekWindow(startWeek), [startWeek]);
+  const weekGroups = [days[0]?.week ?? startWeek, days[7]?.week ?? normaliseProgrammeWeek(startWeek + 1)];
   const latestIssue = issueLogs[0];
 
   useEffect(() => {
     setSelectedTrade(linkedTrade);
   }, [linkedTrade]);
 
-  const rows = useMemo(() => {
+  const rows = useMemo<SupervisorRow[]>(() => {
     return sitePlots.flatMap((plot) => {
-      return days.flatMap((day) => {
+      const byDay = days.map((day) => {
         if (day.weekend) return [];
-        const activities = getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates);
-        return activities.map((activity) => {
-          const displayText = activity.displayText || activity.code;
-          const trade = guessTrade(displayText, activity.trade);
-          return {
-            key: `${plot.id}-${day.key}-${activity.code}`,
-            plotNo: plot.plotNo,
-            plotType: plotTemplates.find((template) => template.id === plot.templateId)?.name ?? '3 Bedroom',
-            date: `${day.dayName} ${formatShortDate(day.date)}`,
-            activity: displayText,
-            trade,
-            status: 'Planned',
-          };
+        return getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates).filter((activity) => {
+          const trade = guessTrade(activity.displayText || activity.code, activity.trade);
+          return selectedTrade === 'All trades' || trade.toLowerCase() === selectedTrade.toLowerCase();
         });
       });
-    }).filter((row) => selectedTrade === 'All trades' || row.trade.toLowerCase() === selectedTrade.toLowerCase());
+      const first = byDay.flat()[0];
+      if (!first) return [];
+      const trade = guessTrade(first.displayText || first.code, first.trade);
+      return [{
+        key: plot.id,
+        plotNo: plot.plotNo,
+        plotType: plotTemplates.find((template) => template.id === plot.templateId)?.name ?? '3 Bedroom',
+        trade,
+        fix: shortFix(first.displayText || first.code),
+        cells: byDay.map((activities) => activities.map((activity) => shortFix(activity.displayText || activity.code)).join('\n')),
+      }];
+    });
   }, [sitePlots, days, activityDelays, plotTemplates, selectedTrade]);
 
   return (
@@ -106,7 +136,7 @@ export default function SupervisorProgrammeView() {
         <View style={{ flex: 1 }}>
           <Text style={styles.kicker}>Live supervisor app</Text>
           <Text style={styles.title}>{selectedTrade === 'All trades' ? 'Live Trade Programme' : `${selectedTrade} Programme`}</Text>
-          <Text style={styles.subtitle}>Read-only live view. This updates from the programme data, so supervisors can check their current trade programme at any time.</Text>
+          <Text style={styles.subtitle}>Read-only live table view. This matches the trade programme layout and updates from the current programme data.</Text>
         </View>
         <Link href="/(tabs)/trades" asChild>
           <Pressable style={styles.backButton}>
@@ -118,7 +148,7 @@ export default function SupervisorProgrammeView() {
 
       <View style={styles.issueCard}>
         <Text style={styles.issueTitle}>Live programme status</Text>
-        <Text style={styles.issueText}>{latestIssue ? latestIssue.note : 'Live view available. No formal PDF record has been generated yet.'}</Text>
+        <Text style={styles.issueText}>{latestIssue ? latestIssue.note : 'Live supervisor view available. PDF record can be generated separately.'}</Text>
         {latestIssue ? <Text style={styles.issueMeta}>{new Date(latestIssue.issuedAt).toLocaleString('en-GB')}</Text> : null}
       </View>
 
@@ -134,25 +164,48 @@ export default function SupervisorProgrammeView() {
       </ScrollView>
 
       <View style={styles.summaryRow}>
-        <MiniStat label="Activities" value={rows.length} />
+        <MiniStat label="Rows" value={rows.length} />
         <MiniStat label="View" value={selectedTrade} />
         <MiniStat label="Mode" value="Live read-only" />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Programme activities</Text>
-        {rows.length === 0 ? (
-          <Text style={styles.emptyText}>No activities found for this trade in the current 2-week window.</Text>
-        ) : rows.map((row) => (
-          <View key={row.key} style={styles.row}>
-            <View style={styles.plotBadge}><Text style={styles.plotBadgeText}>{row.plotNo}</Text></View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.activityText}>{row.activity}</Text>
-              <Text style={styles.metaText}>{row.trade} • {row.date} • {row.plotType}</Text>
+        <Text style={styles.cardTitle}>Programme table</Text>
+        {rows.length === 0 ? <Text style={styles.emptyText}>No activities found for this trade in the current 2-week window.</Text> : null}
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View style={styles.tableWrap}>
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableHeader, styles.plotNoCell]} />
+              <Text style={[styles.tableHeader, styles.tradeCell]} />
+              <Text style={[styles.tableHeader, styles.fixCell]} />
+              {weekGroups.map((week, index) => <Text key={`${week}-${index}`} style={styles.weekGroupHeader}>WK{String(week).padStart(2, '0')}</Text>)}
             </View>
-            <View style={styles.statusPill}><Text style={styles.statusText}>{row.status}</Text></View>
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableHeader, styles.plotNoCell]}>Plot No</Text>
+              <Text style={[styles.tableHeader, styles.tradeCell]}>Trade</Text>
+              <Text style={[styles.tableHeader, styles.fixCell]}>Fix / Stage</Text>
+              {days.map((item) => <Text key={item.key} style={[styles.dayHeaderCell, item.weekend ? styles.weekendHeader : null]}>{item.dayName}</Text>)}
+            </View>
+            <View style={styles.tableRow}>
+              <Text style={[styles.dateBlankCell, styles.plotNoCell]} />
+              <Text style={[styles.dateBlankCell, styles.tradeCell]} />
+              <Text style={[styles.dateBlankCell, styles.fixCell]} />
+              {days.map((item) => <Text key={`date-${item.key}`} style={[styles.dateHeaderCell, item.weekend ? styles.weekendDateCell : null]}>{formatShortDate(item.date)}</Text>)}
+            </View>
+            {rows.map((row, rowIndex) => (
+              <View key={row.key} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
+                <Text style={[styles.bodyCell, styles.plotNoCell]}>{row.plotNo}</Text>
+                <Text style={[styles.bodyCell, styles.tradeCell]}>{row.trade}</Text>
+                <Text style={[styles.bodyCell, styles.fixCell]}>{row.fix}</Text>
+                {row.cells.map((cell, index) => (
+                  <View key={`${row.key}-${days[index].key}`} style={[styles.dayBodyCell, days[index].weekend ? styles.weekendCell : null, cell ? styles.activeDayCell : null]}>
+                    <Text style={styles.dayBodyText}>{cell}</Text>
+                  </View>
+                ))}
+              </View>
+            ))}
           </View>
-        ))}
+        </ScrollView>
       </View>
     </AppScreen>
   );
@@ -180,7 +233,7 @@ const styles = StyleSheet.create({
   issueMeta: { color: '#64748b', fontWeight: '800', fontSize: 12 },
   filterRow: { gap: 8, paddingVertical: 4 },
   filterPill: { borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#ffffff', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 9 },
-  filterPillActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  filterPillActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   filterText: { color: '#475569', fontWeight: '900', fontSize: 12 },
   filterTextActive: { color: '#ffffff' },
   summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
@@ -190,11 +243,22 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#ffffff', borderRadius: 20, borderWidth: 1, borderColor: '#e2e8f0', padding: 16, gap: 10 },
   cardTitle: { color: '#0f172a', fontWeight: '900', fontSize: 20 },
   emptyText: { color: '#64748b', fontWeight: '800', lineHeight: 20 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 10 },
-  plotBadge: { width: 46, height: 38, borderRadius: 12, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', alignItems: 'center', justifyContent: 'center' },
-  plotBadgeText: { color: '#1d4ed8', fontWeight: '900' },
-  activityText: { color: '#0f172a', fontSize: 14, fontWeight: '900' },
-  metaText: { color: '#64748b', fontSize: 12, fontWeight: '800', marginTop: 2 },
-  statusPill: { backgroundColor: '#dcfce7', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  statusText: { color: '#166534', fontSize: 11, fontWeight: '900' },
+  tableWrap: { minWidth: 74 + 110 + 118 + DAY_WIDTH * 14 },
+  tableRow: { flexDirection: 'row', alignItems: 'stretch' },
+  altRow: { backgroundColor: '#eef6ff' },
+  tableHeader: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 11, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  plotNoCell: { width: 74 },
+  tradeCell: { width: 110 },
+  fixCell: { width: 118 },
+  weekGroupHeader: { width: WEEK_WIDTH, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 11, fontWeight: '900' },
+  dayHeaderCell: { width: DAY_WIDTH, backgroundColor: '#173b5f', color: '#ffffff', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 5, fontSize: 10, fontWeight: '900' },
+  weekendHeader: { backgroundColor: '#214c75' },
+  dateBlankCell: { backgroundColor: '#214c75', borderWidth: 1, borderColor: '#9fb6ce' },
+  dateHeaderCell: { width: DAY_WIDTH, backgroundColor: '#214c75', color: '#dbeafe', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 4, fontSize: 9, fontWeight: '900' },
+  weekendDateCell: { backgroundColor: '#2b587f' },
+  bodyCell: { color: '#0f172a', padding: 7, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800', fontSize: 11 },
+  dayBodyCell: { width: DAY_WIDTH, minHeight: 48, borderWidth: 1, borderColor: '#c8d7e6', paddingHorizontal: 4, paddingVertical: 5, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  dayBodyText: { color: '#0f172a', textAlign: 'center', fontWeight: '900', fontSize: 10, lineHeight: 12 },
+  weekendCell: { backgroundColor: '#f8fafc' },
+  activeDayCell: { backgroundColor: '#fff4cc' },
 });
