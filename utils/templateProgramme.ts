@@ -48,10 +48,32 @@ export const STAGE_LABELS: Record<number, string> = {
 };
 
 const WEEKS_IN_YEAR = 52;
-const WORKING_DAYS_IN_WEEK = 5;
+const DEFAULT_WORKING_DAYS_IN_WEEK = 5;
 
-function programmeDayIndex(week: number, day: number) {
-  return (week - 1) * WORKING_DAYS_IN_WEEK + day;
+export function getWorkingDayNumbers(setup?: Partial<SiteProgrammeSetup>) {
+  const days = [1, 2, 3, 4, 5];
+  if (setup?.includeSaturday) days.push(6);
+  if (setup?.includeSunday) days.push(7);
+  return days;
+}
+
+export function isProgrammeWorkingDay(day: number, setup?: Partial<SiteProgrammeSetup>) {
+  return getWorkingDayNumbers(setup).includes(day);
+}
+
+function workingDaysPerWeek(setup?: Partial<SiteProgrammeSetup>) {
+  return getWorkingDayNumbers(setup).length || DEFAULT_WORKING_DAYS_IN_WEEK;
+}
+
+function programmeDayIndex(week: number, day: number, setup?: Partial<SiteProgrammeSetup>) {
+  const workingDays = getWorkingDayNumbers(setup);
+  const position = workingDays.indexOf(day);
+  if (position < 0) return null;
+  return (week - 1) * workingDays.length + position + 1;
+}
+
+function firstProgrammeDayIndexForWeek(week: number, setup?: Partial<SiteProgrammeSetup>) {
+  return (week - 1) * workingDaysPerWeek(setup) + 1;
 }
 
 export function normaliseProgrammeWeek(week: number) {
@@ -67,12 +89,6 @@ const durationOverrides: Record<string, Record<string, number>> = {
   fiveBed: { SLAB: 30, '1ST BWK': 10, '3RD BWK': 12, '1ST CARP': 7, '1ST PLUMB': 3, '1ST ELEC': 3, PP: 4, TAC: 3, DAB: 3, TAPE: 4, DRY: 4, '2ND CARP': 5, '2ND PLUMB': 3, PATCH: 4, DEC: 9, 'CARP FINALS': 3, 'PLUMB FINALS': 3, FLOORING: 7, 'PRE HANDOVER': 5 },
 };
 
-function stage7SecondFixOverride(activity: ProgrammeActivity): Partial<ProgrammeActivity> {
-  if (activity.code === '2ND CARP') return { code: '2ND FIX', trade: 'Carpenter', displayText: '2nd Fix', durationDays: 5, stage: 7 } as Partial<ProgrammeActivity>;
-  if (activity.code === '2ND PLUMB' || activity.code === '2ND ELEC') return { durationDays: 0, stage: 7 } as Partial<ProgrammeActivity>;
-  return {};
-}
-
 function makeTemplate(id: string, name: string, description: string, programmeWeeks: number): PlotTemplate {
   const taskDurations = durationOverrides[id] ?? {};
   return {
@@ -81,16 +97,11 @@ function makeTemplate(id: string, name: string, description: string, programmeWe
     description,
     programmeWeeks,
     stageCount: 9,
-    activities: BUILD_SEQUENCE.map((activity) => {
-      const stageOverride = stage7SecondFixOverride(activity);
-      const code = stageOverride.code ?? activity.code;
-      return {
-        ...activity,
-        ...stageOverride,
-        durationDays: taskDurations[code] ?? stageOverride.durationDays ?? taskDurations[activity.code] ?? activity.durationDays,
-        overlapAllowed: false,
-      };
-    }).filter((activity) => activity.durationDays > 0),
+    activities: BUILD_SEQUENCE.map((activity) => ({
+      ...activity,
+      durationDays: taskDurations[activity.code] ?? activity.durationDays,
+      overlapAllowed: false,
+    })).filter((activity) => activity.durationDays > 0),
   };
 }
 
@@ -119,32 +130,32 @@ function orderedActivities(template: PlotTemplate) {
 export function getTemplateActivityRanges(template: PlotTemplate) {
   let nextSequentialDay = 1;
   return orderedActivities(template).map((activity) => {
-    const plannedDay = programmeDayIndex(activity.relativeWeek, activity.relativeDay);
-    const start = activity.overlapAllowed ? plannedDay : nextSequentialDay;
-    const finish = start + activity.durationDays - 1;
-    if (!activity.overlapAllowed) nextSequentialDay = finish + 1;
+    const start = nextSequentialDay;
+    const finish = start + Math.max(1, activity.durationDays) - 1;
+    nextSequentialDay = finish + 1;
     return { activity, start, finish };
   });
 }
 
-export function getEffectiveProgrammeWeeks(template: PlotTemplate) {
+export function getEffectiveProgrammeWeeks(template: PlotTemplate, setup?: Partial<SiteProgrammeSetup>) {
+  const workingDays = workingDaysPerWeek(setup);
   const ranges = getTemplateActivityRanges(template);
-  const lastFinish = ranges.length ? Math.max(...ranges.map((range) => range.finish)) : template.programmeWeeks * WORKING_DAYS_IN_WEEK;
-  return Math.max(template.programmeWeeks, Math.ceil(lastFinish / WORKING_DAYS_IN_WEEK));
+  const lastFinish = ranges.length ? Math.max(...ranges.map((range) => range.finish)) : template.programmeWeeks * workingDays;
+  return Math.max(template.programmeWeeks, Math.ceil(lastFinish / workingDays));
 }
 
-export function getLinearStage1StartWeekForPlot(plot: TemplateSitePlot, templates: PlotTemplate[]) {
+export function getLinearStage1StartWeekForPlot(plot: TemplateSitePlot, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
   const template = getTemplateForPlot(plot, templates);
-  return plot.stage9CompleteWeek - getEffectiveProgrammeWeeks(template) + 1;
+  return plot.stage9CompleteWeek - getEffectiveProgrammeWeeks(template, setup) + 1;
 }
 
-export function getStage1StartWeekForPlot(plot: TemplateSitePlot, templates: PlotTemplate[]) {
-  return normaliseProgrammeWeek(getLinearStage1StartWeekForPlot(plot, templates));
+export function getStage1StartWeekForPlot(plot: TemplateSitePlot, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
+  return normaliseProgrammeWeek(getLinearStage1StartWeekForPlot(plot, templates, setup));
 }
 
-export function getMilestoneForPlotWeek(plot: TemplateSitePlot, week: number, templates: PlotTemplate[]) {
+export function getMilestoneForPlotWeek(plot: TemplateSitePlot, week: number, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
   const template = getTemplateForPlot(plot, templates);
-  const effectiveWeeks = getEffectiveProgrammeWeeks(template);
+  const effectiveWeeks = getEffectiveProgrammeWeeks(template, setup);
   const displayWeek = normaliseProgrammeWeek(week);
   for (let stage = 1; stage <= template.stageCount; stage += 1) {
     const weeksFromHandover = Math.round(((template.stageCount - stage) * (effectiveWeeks - 1)) / Math.max(1, template.stageCount - 1));
@@ -170,12 +181,12 @@ function delayUpTo(plotId: string, activityOrder: number, delays: ActivityDelay[
   }, 0);
 }
 
-function activityRange(plot: TemplateSitePlot, template: PlotTemplate, activity: TemplateActivity, delays: ActivityDelay[]) {
-  const linearStage1Week = getLinearStage1StartWeekForPlot(plot, [template]);
+function activityRange(plot: TemplateSitePlot, template: PlotTemplate, activity: TemplateActivity, delays: ActivityDelay[], setup?: Partial<SiteProgrammeSetup>) {
+  const linearStage1Week = getLinearStage1StartWeekForPlot(plot, [template], setup);
   const scheduled = getTemplateActivityRanges(template).find((item) => item.activity.code === activity.code);
   const relativeStart = scheduled?.start ?? 1;
   const relativeFinish = scheduled?.finish ?? relativeStart;
-  const baseOffset = programmeDayIndex(linearStage1Week, 1) - 1;
+  const baseOffset = firstProgrammeDayIndexForWeek(linearStage1Week, setup) - 1;
   return {
     start: baseOffset + relativeStart + delayBefore(plot.id, activity.order, delays, template.activities),
     finish: baseOffset + relativeFinish + delayUpTo(plot.id, activity.order, delays, template.activities),
@@ -189,37 +200,40 @@ function weekCandidates(week: number, centreWeek: number) {
   return candidates.sort((a, b) => Math.abs(a - centre) - Math.abs(b - centre));
 }
 
-export function getActivitiesForTemplateDay(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[]) {
+export function getActivitiesForTemplateDay(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
+  if (!isProgrammeWorkingDay(day, setup)) return [];
   const template = getTemplateForPlot(plot, templates);
-  const linearStage1Week = getLinearStage1StartWeekForPlot(plot, [template]);
-  const currentDays = weekCandidates(week, linearStage1Week).map((candidateWeek) => programmeDayIndex(candidateWeek, day));
+  const linearStage1Week = getLinearStage1StartWeekForPlot(plot, [template], setup);
+  const currentDays = weekCandidates(week, linearStage1Week)
+    .map((candidateWeek) => programmeDayIndex(candidateWeek, day, setup))
+    .filter((value): value is number => typeof value === 'number');
   return orderedActivities(template).filter((activity) => {
-    const range = activityRange(plot, template, activity, delays);
+    const range = activityRange(plot, template, activity, delays, setup);
     return currentDays.some((currentDay) => currentDay >= range.start && currentDay <= range.finish);
   });
 }
 
-export function getPlotBreakdownTemplateText(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[]) {
-  return getActivitiesForTemplateDay(plot, week, day, delays, templates).map((activity) => activity.code).join('\n');
+export function getPlotBreakdownTemplateText(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
+  return getActivitiesForTemplateDay(plot, week, day, delays, templates, setup).map((activity) => activity.code).join('\n');
 }
 
-export function getTradeTemplateText(plot: TemplateSitePlot, trade: string, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[]) {
-  return getActivitiesForTemplateDay(plot, week, day, delays, templates)
+export function getTradeTemplateText(plot: TemplateSitePlot, trade: string, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
+  return getActivitiesForTemplateDay(plot, week, day, delays, templates, setup)
     .filter((activity) => activity.trade === trade)
     .map((activity) => activity.displayText)
     .join('\n');
 }
 
-export function plotHasTradeWorkForTemplate(plot: TemplateSitePlot, trade: string, startWeek: number, delays: ActivityDelay[], templates: PlotTemplate[]) {
+export function plotHasTradeWorkForTemplate(plot: TemplateSitePlot, trade: string, startWeek: number, delays: ActivityDelay[], templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
   for (let offset = 0; offset <= 1; offset += 1) {
     const week = normaliseProgrammeWeek(startWeek + offset);
-    for (let day = 1; day <= 5; day += 1) {
-      if (getTradeTemplateText(plot, trade, week, day, delays, templates)) return true;
+    for (let day = 1; day <= 7; day += 1) {
+      if (getTradeTemplateText(plot, trade, week, day, delays, templates, setup)) return true;
     }
   }
   return false;
 }
 
-export function getActiveTemplateTrades(plots: TemplateSitePlot[], startWeek: number, delays: ActivityDelay[], templates: PlotTemplate[]) {
-  return TRADE_ORDER.filter((trade) => plots.some((plot) => plotHasTradeWorkForTemplate(plot, trade, startWeek, delays, templates)));
+export function getActiveTemplateTrades(plots: TemplateSitePlot[], startWeek: number, delays: ActivityDelay[], templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
+  return TRADE_ORDER.filter((trade) => plots.some((plot) => plotHasTradeWorkForTemplate(plot, trade, startWeek, delays, templates, setup)));
 }
