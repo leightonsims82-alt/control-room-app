@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { TradeContact, useSitePlanner } from '../../data/sitePlannerStore';
@@ -61,6 +61,11 @@ function buildTwoWeekDays(startWeek: number, dayOffset: number) {
 
 function makeTradeId(trade: string) {
   return `trade-${trade.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`;
+}
+
+function openTradeEmail(email: string, subject: string, body: string) {
+  const url = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  Linking.openURL(url);
 }
 
 export default function TradesScreen() {
@@ -197,6 +202,28 @@ export default function TradesScreen() {
     setSaveMessage('Programme marked as issued');
   };
 
+  const issueToCurrentTrade = async () => {
+    if (!activeContact) {
+      setSaveMessage('Select a trade first');
+      return;
+    }
+    if (!activeContact.supervisorEmail.trim()) {
+      setSaveMessage(`Add supervisor email for ${activeContact.trade} first`);
+      return;
+    }
+    openTradeEmail(
+      activeContact.supervisorEmail.trim(),
+      `${activeContact.trade} 2-week programme - WK${String(activeIssueWeek).padStart(2, '0')}`,
+      `Please find your ${activeContact.trade} 2-week programme.\n\nThis issue contains your trade-specific programme only.\n\nStart week: WK${String(activeIssueWeek).padStart(2, '0')}\nProgramme window: WK${String(weekGroups[0]).padStart(2, '0')} + WK${String(weekGroups[1]).padStart(2, '0')}\n\nPlease confirm receipt.`,
+    );
+    await recordIssue({
+      startWeek: activeIssueWeek,
+      recipientCount: 1,
+      note: `${activeContact.trade} programme issued to ${activeContact.supervisorEmail}`,
+    });
+    setSaveMessage(`${activeContact.trade} issue email opened`);
+  };
+
   return (
     <AppScreen>
       <View style={styles.header}>
@@ -289,6 +316,16 @@ export default function TradesScreen() {
             ))}
           </View>
         </ScrollView>
+
+        <View style={styles.issueTradePanel}>
+          <View style={styles.issueTradeTextWrap}>
+            <Text style={styles.issueTradeTitle}>Ready to issue this trade programme?</Text>
+            <Text style={styles.issueTradeText}>{activeContact?.supervisorEmail ? `Will open an email to ${activeContact.supervisorEmail}` : `Add a supervisor email for ${activeContact?.trade ?? 'this trade'} before issuing.`}</Text>
+          </View>
+          <Pressable style={styles.issueTradeButton} onPress={issueToCurrentTrade}>
+            <Text style={styles.issueTradeButtonText}>Issue to {activeContact?.trade ?? 'Trade'}</Text>
+          </Pressable>
+        </View>
       </SectionCard>
 
       <SectionCard title="Trade setup" subtitle="Each trade can have its contractor, supervisor, email and phone saved against it.">
@@ -415,6 +452,12 @@ const styles = StyleSheet.create({
   viewButtonText: { color: '#334155', fontWeight: '900' },
   resetButton: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe', borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
   resetButtonText: { color: '#1d4ed8', fontWeight: '900' },
+  issueTradePanel: { marginTop: 12, backgroundColor: '#f0fdf4', borderColor: '#bbf7d0', borderWidth: 1, borderRadius: 14, padding: 12, gap: 10, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' },
+  issueTradeTextWrap: { flex: 1, minWidth: 220, gap: 3 },
+  issueTradeTitle: { color: '#166534', fontWeight: '900', fontSize: 14 },
+  issueTradeText: { color: '#166534', fontWeight: '800', fontSize: 12 },
+  issueTradeButton: { backgroundColor: '#166534', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  issueTradeButtonText: { color: '#ffffff', fontWeight: '900' },
   tableRow: { flexDirection: 'row', alignItems: 'stretch' },
   altRow: { backgroundColor: '#eef6ff' },
   tableHeader: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 11, padding: 7, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
