@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
+import { exportMainTwoWeekPdf, exportMasterProgrammePdf, exportTradeProgrammesPdf } from '../../utils/programmePdfExport';
 
 function splitEmails(value: string) {
   return value
@@ -18,9 +19,9 @@ function mailto(recipients: string[], subject: string, body: string) {
 }
 
 export default function ExportsScreen() {
-  const { sitePlots, siteSetup, issueSettings, tradeContacts, setIssueSettings, recordIssue } = useSitePlanner();
+  const { sitePlots, activityDelays, plotTemplates, siteSetup, issueSettings, tradeContacts, setIssueSettings, recordIssue } = useSitePlanner();
   const [smEmail, setSmEmail] = useState(issueSettings.managerEmail);
-  const [assistantEmails, setAssistantEmails] = useState('');
+  const [assistantEmails, setAssistantEmails] = useState(issueSettings.assistantEmails ?? '');
   const [sendMaster, setSendMaster] = useState(issueSettings.sendMasterToSmTeam ?? true);
   const [sendMainTwoWeek, setSendMainTwoWeek] = useState(issueSettings.sendTwoWeekToSmTeam ?? true);
   const [sendTradeProgrammesToSmTeam, setSendTradeProgrammesToSmTeam] = useState(issueSettings.sendTradeProgrammeToSmTeam ?? true);
@@ -28,6 +29,7 @@ export default function ExportsScreen() {
   const [startWeek, setStartWeek] = useState('1');
   const [status, setStatus] = useState('');
 
+  const parsedStartWeek = Number(startWeek) || 1;
   const smTeamRecipients = [smEmail.trim(), ...splitEmails(assistantEmails)].filter(Boolean);
   const tradeRecipients = tradeContacts.filter((contact) => contact.supervisorEmail.trim());
   const selectedOutputs = [
@@ -35,17 +37,39 @@ export default function ExportsScreen() {
     sendMainTwoWeek ? 'Main 2-Week Programme' : '',
     sendTradeProgrammesToSmTeam ? 'All Individual Trade Programmes' : '',
   ].filter(Boolean);
+  const allTradeNames = tradeContacts.map((contact) => contact.trade);
+  const tradeNamesWithEmails = tradeRecipients.map((contact) => contact.trade);
 
   const saveIssueSetup = async () => {
     await setIssueSettings({
       ...issueSettings,
       managerEmail: smEmail,
+      assistantEmails,
       sendMasterToSmTeam: sendMaster,
       sendTwoWeekToSmTeam: sendMainTwoWeek,
       sendTradeProgrammeToSmTeam: sendTradeProgrammesToSmTeam,
       sendTradeProgrammesToTrades,
     });
     setStatus('Issue setup saved');
+  };
+
+  const exportSmPdfPack = () => {
+    let opened = false;
+    if (sendMaster) opened = exportMasterProgrammePdf({ siteName: siteSetup.siteName, plots: sitePlots, templates: plotTemplates }) || opened;
+    if (sendMainTwoWeek) opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates }) || opened;
+    if (sendTradeProgrammesToSmTeam) opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates, trades: allTradeNames }) || opened;
+    setStatus(opened ? 'PDF export opened — use Save as PDF in the print window' : 'Allow pop-ups to export PDF');
+  };
+
+  const exportTradePdfPack = () => {
+    const trades = tradeNamesWithEmails.length ? tradeNamesWithEmails : allTradeNames;
+    const opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates, trades });
+    setStatus(opened ? 'Trade PDF export opened — use Save as PDF in the print window' : 'Allow pop-ups to export PDF');
+  };
+
+  const exportMainPdf = () => {
+    const opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates });
+    setStatus(opened ? 'Main 2-week PDF export opened' : 'Allow pop-ups to export PDF');
   };
 
   const sendToSmTeam = async () => {
@@ -58,14 +82,14 @@ export default function ExportsScreen() {
     mailto(
       recipients,
       `${siteSetup.siteName} programme issue - WK${startWeek}`,
-      `Please find the programme issue for ${siteSetup.siteName}.\n\nOutputs selected: ${outputs}.\n\nPDF attachment generation is the next step in Programme Buddy.`,
+      `Please find the programme issue for ${siteSetup.siteName}.\n\nOutputs selected: ${outputs}.\n\nExport the selected PDF from Programme Buddy and attach it to this email.`,
     );
     await recordIssue({
-      startWeek: Number(startWeek) || 1,
+      startWeek: parsedStartWeek,
       recipientCount: recipients.length,
       note: `SM / assistant issue prepared: ${outputs}`,
     });
-    setStatus('SM / assistant email opened');
+    setStatus('SM / assistant email opened — attach exported PDF');
   };
 
   const sendToTrades = async () => {
@@ -81,15 +105,15 @@ export default function ExportsScreen() {
       mailto(
         [contact.supervisorEmail],
         `${siteSetup.siteName} - ${contact.trade} 2-week programme - WK${startWeek}`,
-        `Please find your ${contact.trade} 2-week programme for ${siteSetup.siteName}.\n\nYou are only being issued your trade-specific programme.\n\nPDF attachment generation is the next step in Programme Buddy.`,
+        `Please find your ${contact.trade} 2-week programme for ${siteSetup.siteName}.\n\nYou are only being issued your trade-specific programme.\n\nExport the ${contact.trade} PDF from Programme Buddy and attach it to this email.`,
       );
     });
     await recordIssue({
-      startWeek: Number(startWeek) || 1,
+      startWeek: parsedStartWeek,
       recipientCount: tradeRecipients.length,
       note: `Trade programmes prepared for ${tradeRecipients.length} trade supervisor${tradeRecipients.length === 1 ? '' : 's'}`,
     });
-    setStatus(`${tradeRecipients.length} trade email${tradeRecipients.length === 1 ? '' : 's'} opened`);
+    setStatus(`${tradeRecipients.length} trade email${tradeRecipients.length === 1 ? '' : 's'} opened — attach exported PDFs`);
   };
 
   return (
@@ -101,7 +125,7 @@ export default function ExportsScreen() {
         <View style={styles.headerText}>
           <Text style={styles.eyebrow}>Programme issue</Text>
           <Text style={styles.title}>Exports & Issue</Text>
-          <Text style={styles.subtitle}>Send the right programme to the right people: management see the full picture, trades only see their trade programme.</Text>
+          <Text style={styles.subtitle}>Export a proper printable PDF first, then open the email issue for SM, assistants and trades.</Text>
         </View>
       </View>
 
@@ -124,6 +148,16 @@ export default function ExportsScreen() {
       </View>
 
       <View style={styles.sectionCard}>
+        <Text style={styles.sectionTitle}>PDF exports</Text>
+        <Text style={styles.sectionText}>These open a print-ready programme. Choose Save as PDF in the print window.</Text>
+        <View style={styles.buttonRow}>
+          <Pressable style={styles.primaryButton} onPress={exportMainPdf}><Text style={styles.primaryButtonText}>Export Main 2-Week PDF</Text></Pressable>
+          <Pressable style={styles.secondaryButton} onPress={exportSmPdfPack}><Text style={styles.secondaryButtonText}>Export SM PDF Pack</Text></Pressable>
+          <Pressable style={styles.secondaryButton} onPress={exportTradePdfPack}><Text style={styles.secondaryButtonText}>Export Trade PDFs</Text></Pressable>
+        </View>
+      </View>
+
+      <View style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>SM / Assistant Site Manager issue</Text>
         <Text style={styles.sectionText}>The trade programme can go to the SM and any assistants associated with the development.</Text>
         <View style={styles.formGrid}>
@@ -133,7 +167,7 @@ export default function ExportsScreen() {
           </View>
           <View style={styles.inputWrapWide}>
             <Text style={styles.label}>Assistant emails</Text>
-            <TextInput value={assistantEmails} onChangeText={setAssistantEmails} style={[styles.input, styles.multiInput]} multiline placeholder="assistant1@example.com&#10;assistant2@example.com" keyboardType="email-address" autoCapitalize="none" />
+            <TextInput value={assistantEmails} onChangeText={setAssistantEmails} style={[styles.input, styles.multiInput]} multiline placeholder={'assistant1@example.com\nassistant2@example.com'} keyboardType="email-address" autoCapitalize="none" />
           </View>
         </View>
         <View style={styles.toggleGrid}>
@@ -164,7 +198,10 @@ export default function ExportsScreen() {
             })}
           </View>
         </ScrollView>
-        <Pressable style={styles.primaryButton} onPress={sendToTrades}><Text style={styles.primaryButtonText}>Send Trade Programmes</Text></Pressable>
+        <View style={styles.buttonRow}>
+          <Pressable style={styles.secondaryButton} onPress={exportTradePdfPack}><Text style={styles.secondaryButtonText}>Export Trade PDFs</Text></Pressable>
+          <Pressable style={styles.primaryButton} onPress={sendToTrades}><Text style={styles.primaryButtonText}>Send Trade Programmes</Text></Pressable>
+        </View>
       </View>
     </AppScreen>
   );
