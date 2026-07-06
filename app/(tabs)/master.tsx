@@ -26,11 +26,17 @@ function workingWeekLabel(includeSaturday: boolean, includeSunday: boolean) {
   return 'Monday to Friday';
 }
 
+function plotNoSortValue(plotNo: string) {
+  const parsed = Number(plotNo.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
+}
+
 type BuildRoute = 'Traditional' | 'Timber Frame';
 
 export default function MasterProgrammeScreen() {
   const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, updateSiteSetup } = useSitePlanner();
   const bedroomTemplates = plotTemplates.filter((template) => template.id !== 'timberFrame');
+  const orderedSitePlots = sitePlots.slice().sort((a, b) => a.stage9CompleteWeek - b.stage9CompleteWeek || plotNoSortValue(a.plotNo) - plotNoSortValue(b.plotNo));
   const [plotNo, setPlotNo] = useState('');
   const [stage9Week, setStage9Week] = useState('');
   const [buildRoute, setBuildRoute] = useState<BuildRoute>('Traditional');
@@ -72,7 +78,7 @@ export default function MasterProgrammeScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Master 23 Week Build</Text>
-        <Text style={styles.subtitle}>Milestone completion view. Add a plot, choose its build route and house type, then enter the Stage 9 complete week.</Text>
+        <Text style={styles.subtitle}>Milestone completion view. Plots are shown with the closest Stage 9 completion first.</Text>
       </View>
 
       <SectionCard title="WORKING WEEK" subtitle="Choose whether Saturday and Sunday are included separately in the programme setup.">
@@ -96,7 +102,7 @@ export default function MasterProgrammeScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.templateChips}>
                 <Pressable style={[styles.templateChip, moveScope === 'all' ? styles.templateChipActive : null]} onPress={() => { setMoveScope('all'); setMoveMessage(''); }}><Text style={[styles.templateChipText, moveScope === 'all' ? styles.templateChipTextActive : null]}>Whole programme</Text></Pressable>
-                {sitePlots.map((plot) => {
+                {orderedSitePlots.map((plot) => {
                   const active = plot.id === moveScope;
                   return <Pressable key={plot.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => { setMoveScope(plot.id); setMoveMessage(''); }}><Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>Plot {plot.plotNo}</Text></Pressable>;
                 })}
@@ -146,7 +152,7 @@ export default function MasterProgrammeScreen() {
               <Text style={[styles.headerCell, styles.actionCell]}>Del</Text>
             </View>
 
-            {sitePlots.map((plot, rowIndex) => {
+            {orderedSitePlots.map((plot, rowIndex) => {
               const template = getTemplateForPlot(plot, plotTemplates);
               return (
                 <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
