@@ -18,6 +18,8 @@ const ISSUE_LOGS_KEY = 'siteprog:issue-logs:v1';
 const PLOT_TEMPLATES_KEY = 'siteprog:plot-templates:v1';
 const SITE_PROGRAMME_SETUP_KEY = 'siteprog:programme-setup:v1';
 
+const REMOVED_TEMPLATE_ACTIVITY_CODES = new Set(['TAC', 'GABLES 1']);
+
 export type TradeContact = { id: string; trade: string; contractor: string; supervisorName: string; supervisorEmail: string; supervisorPhone: string };
 export type IssueSettings = { managerEmail: string; issueDay: string; issueTime: string; autoIssueEnabled: boolean };
 export type IssueLog = { id: string; startWeek: number; issuedAt: string; recipientCount: number; note: string };
@@ -72,7 +74,8 @@ function normalisePlots(stored: TemplateSitePlot[]) { return stored.map((plot) =
 
 function repairTemplate(defaultTemplate: PlotTemplate, storedTemplate?: PlotTemplate) {
   if (!storedTemplate) return defaultTemplate;
-  const storedByCode = new Map(storedTemplate.activities.map((activity) => [activity.code, activity]));
+  const storedActivities = storedTemplate.activities.filter((activity) => !REMOVED_TEMPLATE_ACTIVITY_CODES.has(activity.code));
+  const storedByCode = new Map(storedActivities.map((activity) => [activity.code, activity]));
   const legacySecondFix = storedByCode.get('2ND FIX');
   const repairedActivities = defaultTemplate.activities.map((defaultActivity) => {
     const storedActivity = storedByCode.get(defaultActivity.code);
@@ -80,7 +83,11 @@ function repairTemplate(defaultTemplate: PlotTemplate, storedTemplate?: PlotTemp
       return {
         ...defaultActivity,
         ...storedActivity,
+        order: defaultActivity.order,
+        relativeWeek: defaultActivity.relativeWeek,
+        relativeDay: defaultActivity.relativeDay,
         durationDays: storedActivity.durationDays > 0 ? storedActivity.durationDays : defaultActivity.durationDays,
+        overlapAllowed: false,
       };
     }
     if (defaultActivity.code === '2ND CARP' && legacySecondFix) {
@@ -89,7 +96,7 @@ function repairTemplate(defaultTemplate: PlotTemplate, storedTemplate?: PlotTemp
     return defaultActivity;
   });
   const defaultCodes = new Set(defaultTemplate.activities.map((activity) => activity.code));
-  const customActivities = storedTemplate.activities.filter((activity) => !defaultCodes.has(activity.code) && activity.code !== '2ND FIX');
+  const customActivities = storedActivities.filter((activity) => !defaultCodes.has(activity.code) && activity.code !== '2ND FIX');
   return {
     ...defaultTemplate,
     ...storedTemplate,
