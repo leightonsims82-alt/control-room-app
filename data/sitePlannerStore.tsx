@@ -15,7 +15,7 @@ const SITE_DELAYS_KEY = 'siteprog:week-based-delays:v2';
 const TRADE_CONTACTS_KEY = 'siteprog:trade-contacts:v1';
 const ISSUE_SETTINGS_KEY = 'siteprog:issue-settings:v1';
 const ISSUE_LOGS_KEY = 'siteprog:issue-logs:v1';
-const PLOT_TEMPLATES_KEY = 'siteprog:plot-templates:v1';
+const PLOT_TEMPLATES_KEY = 'siteprog:plot-templates:v2';
 const SITE_PROGRAMME_SETUP_KEY = 'siteprog:programme-setup:v1';
 
 const REMOVED_TEMPLATE_ACTIVITY_CODES = new Set(['TAC', 'BOARD', 'GABLES 1']);
