@@ -28,9 +28,9 @@ export type SiteProgrammeSetup = {
 
 export const DEFAULT_SITE_PROGRAMME_SETUP: SiteProgrammeSetup = {
   siteName: 'New Site',
-  defaultProgrammeWeeks: 23,
+  defaultProgrammeWeeks: 25,
   stageCount: 9,
-  workingWeek: 'Monday to Friday',
+  workingWeek: '5 days - Monday to Friday',
   includeSaturday: false,
   includeSunday: false,
 };
@@ -81,16 +81,7 @@ export function normaliseProgrammeWeek(week: number) {
   return ((((Math.round(week) - 1) % WEEKS_IN_YEAR) + WEEKS_IN_YEAR) % WEEKS_IN_YEAR) + 1;
 }
 
-const durationOverrides: Record<string, Record<string, number>> = {
-  apartment: { FND: 3, DNG: 3, SLAB: 15, '1ST BWK': 4, SCAFF: 2, '2ND BWK': 2, JOIST: 1, '3RD BWK': 4, TRUSS: 1, '1ST CARP': 3, '1ST PLUMB': 1, '1ST ELEC': 1, PP: 2, TAC: 1, DAB: 1, TAPE: 2, DRY: 2, '2ND CARP': 2, '2ND PLUMB': 1, PATCH: 2, DEC: 4, FLOORING: 2, 'PRE HANDOVER': 2 },
-  twoBed: { '1ST CARP': 3, '1ST PLUMB': 1, '1ST ELEC': 1, PP: 2, TAC: 1, DAB: 1, TAPE: 2, DRY: 2, '2ND CARP': 2, '2ND PLUMB': 1, DEC: 4, FLOORING: 3, 'PRE HANDOVER': 3 },
-  threeBed: {},
-  fourBed: { SLAB: 28, '1ST BWK': 10, '1ST CARP': 6, '1ST PLUMB': 3, '1ST ELEC': 3, PP: 4, TAC: 3, DAB: 3, TAPE: 4, DRY: 4, '2ND CARP': 4, '2ND PLUMB': 3, PATCH: 4, DEC: 8, FLOORING: 6, 'PRE HANDOVER': 5 },
-  fiveBed: { SLAB: 30, '1ST BWK': 10, '3RD BWK': 12, '1ST CARP': 7, '1ST PLUMB': 3, '1ST ELEC': 3, PP: 4, TAC: 3, DAB: 3, TAPE: 4, DRY: 4, '2ND CARP': 5, '2ND PLUMB': 3, PATCH: 4, DEC: 9, 'CARP FINALS': 3, 'PLUMB FINALS': 3, FLOORING: 7, 'PRE HANDOVER': 5 },
-};
-
-function makeTemplate(id: string, name: string, description: string, programmeWeeks: number): PlotTemplate {
-  const taskDurations = durationOverrides[id] ?? {};
+function makeTemplate(id: string, name: string, description: string, programmeWeeks = 25): PlotTemplate {
   return {
     id,
     name,
@@ -99,72 +90,83 @@ function makeTemplate(id: string, name: string, description: string, programmeWe
     stageCount: 9,
     activities: BUILD_SEQUENCE.map((activity) => ({
       ...activity,
-      durationDays: taskDurations[activity.code] ?? activity.durationDays,
       overlapAllowed: false,
     })).filter((activity) => activity.durationDays > 0),
   };
 }
 
-function templateActivity(order: number, code: string, trade: string, displayText: string, durationDays: number, relativeWeek: number, relativeDay: number, stage: ProgrammeActivity['stage']): TemplateActivity {
-  return { order, code, trade, displayText, durationDays, relativeWeek, relativeDay, stage, overlapAllowed: false };
+function templateActivity(order: number, code: string, trade: string, displayText: string, durationDays: number, stage: ProgrammeActivity['stage'], overlapAllowed = false): TemplateActivity {
+  return { order, code, trade, displayText, durationDays, relativeWeek: 1, relativeDay: 1, stage, overlapAllowed };
 }
 
 function makeTimberFrameTemplate(): PlotTemplate {
   return {
     id: 'timberFrame',
     name: 'Timber Frame',
-    description: 'Timber frame route with sole plate, frame erection, roof/watertight stage, external leaf and then internal fixes.',
-    programmeWeeks: 20,
+    description: 'Timber frame route using frame erection as the main structure driver, with external envelope and internal fixes prepared for overlap rules.',
+    programmeWeeks: 25,
     stageCount: 9,
     activities: [
-      templateActivity(1, 'FND', 'Groundworks', 'FND', 5, 1, 1, 1),
-      templateActivity(2, 'DNG', 'Groundworks', 'DNG', 5, 2, 1, 1),
-      templateActivity(3, 'SLAB', 'Groundworks', 'Slab', 20, 3, 1, 2),
-      templateActivity(4, 'SOLE PLATE', 'Carpenter', 'Sole Plate', 1, 7, 1, 4),
-      templateActivity(5, 'SCAFF', 'Scaffold', 'Scaffold', 2, 7, 2, 4),
-      templateActivity(6, 'TF FRAME', 'Carpenter', 'Timber Frame', 5, 7, 4, 4),
-      templateActivity(7, 'TRUSS', 'Roof', 'Truss', 3, 8, 4, 5),
-      templateActivity(8, 'SS', 'Roof', 'SS', 2, 9, 2, 5),
-      templateActivity(9, 'F&B', 'Roof', 'F&B', 2, 9, 4, 5),
-      templateActivity(10, 'TILE', 'Roof', 'Tile', 2, 10, 1, 5),
-      templateActivity(11, 'WINDOWS', 'Carpenter', 'Windows', 2, 10, 3, 5),
-      templateActivity(12, 'BRICK OUTER', 'Brickwork', 'Outer Leaf', 8, 11, 1, 5),
-      templateActivity(13, 'STRIP BC', 'Scaffold', 'Strip BC', 1, 12, 4, 5),
-      templateActivity(14, '1ST CARP', 'Carpenter', '1st Fix', 4, 12, 5, 6),
-      templateActivity(15, '1ST PLUMB', 'Plumber', '1st Fix', 2, 13, 4, 6),
-      templateActivity(16, '1ST ELEC', 'Electrician', '1st Fix', 2, 14, 1, 6),
-      templateActivity(17, '1ST SPRINKLER', 'Sprinkler', '1st Fix', 1, 14, 3, 6),
-      templateActivity(18, 'PP', 'Plastering', 'PP', 3, 14, 4, 6),
-      templateActivity(19, 'DAB', 'Plastering', 'Dab', 2, 15, 2, 6),
-      templateActivity(20, 'TAPE', 'Plastering', 'Tape', 3, 15, 4, 6),
-      templateActivity(21, 'DRY', 'Dry Liner', 'Dry', 2, 16, 2, 6),
-      templateActivity(22, '2ND CARP', 'Carpenter', '2nd Fix', 4, 16, 4, 7),
-      templateActivity(23, '2ND PLUMB', 'Plumber', '2nd Fix', 2, 17, 3, 7),
-      templateActivity(24, '2ND ELEC', 'Electrician', '2nd Fix', 2, 17, 5, 7),
-      templateActivity(25, 'WALL TILING', 'Tiler', 'Wall Tiling', 2, 18, 2, 7),
-      templateActivity(26, 'KITCHEN', 'Kitchen Fitter', 'Kitchen', 3, 18, 4, 7),
-      templateActivity(27, 'PATCH', 'Dry Liner', 'Patch', 2, 19, 2, 8),
-      templateActivity(28, 'DEC', 'Decorator', 'Decorate', 6, 19, 4, 8),
-      templateActivity(29, 'CARP FINALS', 'Carpenter', 'Finals', 2, 20, 5, 9),
-      templateActivity(30, 'PLUMB FINALS', 'Plumber', 'Finals', 2, 21, 2, 9),
-      templateActivity(31, 'ELEC FINALS', 'Electrician', 'Finals', 2, 21, 4, 9),
-      templateActivity(32, 'FINAL DEC', 'Decorator', 'Final Dec', 4, 22, 1, 9),
-      templateActivity(33, 'BUILD CLEAN', 'Cleaning', 'Build Clean', 1, 22, 5, 9),
-      templateActivity(34, 'MASTIC', 'Mastic', 'Mastic', 1, 23, 1, 9),
-      templateActivity(35, 'FLOORING', 'Flooring', 'Flooring', 3, 23, 2, 9),
-      templateActivity(36, 'SPARKLE', 'Cleaning', 'Sparkle', 2, 23, 5, 9),
-      templateActivity(37, 'PRE HANDOVER', 'Handover / Site Team', 'Pre Handover', 2, 24, 2, 9),
+      templateActivity(1, 'Foundation', 'Groundworker', 'FND', 5, 1),
+      templateActivity(2, 'Drainage', 'Groundworker', 'DNG', 5, 1),
+      templateActivity(3, 'QA Drainage', 'Site Team', 'QA', 1, 1),
+      templateActivity(4, 'Slab', 'Groundworker', 'Slab', 15, 2),
+      templateActivity(5, 'Sole plate', 'Carpenter', 'Sole Plate', 1, 4),
+      templateActivity(6, 'Timber frame delivery', 'Carpenter', 'TF Delivery', 1, 4),
+      templateActivity(7, 'Timber frame erection', 'Carpenter', 'TF Frame', 5, 4),
+      templateActivity(8, 'Frame QA', 'Site Team', 'Frame QA', 1, 4),
+      templateActivity(9, 'Scaffold adapt', 'Scaffolder', 'Adapt', 2, 5),
+      templateActivity(10, 'Truss', 'Carpenter', 'Truss', 3, 5),
+      templateActivity(11, 'Roof membrane and batten', 'Roofer', 'RMB', 1, 5),
+      templateActivity(12, 'Solar Panels', 'Solar Installer', 'Solar', 1, 5),
+      templateActivity(13, 'Tile', 'Roofer', 'Tile', 2, 5),
+      templateActivity(14, 'Windows', 'Window Fitter', 'Windows', 1, 5),
+      templateActivity(15, 'External brickwork', 'Bricklayer', 'External BWK', 8, 5, true),
+      templateActivity(16, 'External QA', 'Site Team', 'QA', 1, 5),
+      templateActivity(17, '1st fix carpentry', 'Carpenter', '1st Carp', 3, 6, true),
+      templateActivity(18, '1st fix Plumbing', 'Plumber', '1st plum', 2, 6, true),
+      templateActivity(19, '1st fix electrics', 'Electrician', '1st elec', 2, 6, true),
+      templateActivity(20, '1st fix sprinkler', 'Sprinkler', '1st sprinkler', 1, 6, true),
+      templateActivity(21, 'QA pre plaster', 'Site Team', 'QA', 1, 6),
+      templateActivity(22, 'Tac', 'Dry liner', 'Tac', 1, 6),
+      templateActivity(23, 'dab', 'Dry liner', 'dab', 2, 6),
+      templateActivity(24, 'tape and joint', 'Dry liner', 'tape', 3, 6),
+      templateActivity(25, 'sand', 'Dry liner', 'sand', 4, 6),
+      templateActivity(26, 'mist coat', 'Decorator', 'mist', 1, 6),
+      templateActivity(27, '2nd fix carpentry', 'Carpenter', '2nd carp', 2, 7),
+      templateActivity(28, '2nd fix plumbing', 'Plumber', '2nd plumb', 1, 7),
+      templateActivity(29, '2nd fix electrician', 'Electrician', '2nd elec', 1, 7),
+      templateActivity(30, 'Fit kitchen', 'Kitchen fitter', 'Kitchen', 2, 7),
+      templateActivity(31, 'loft insulation', 'Loft insulator', 'Loft', 1, 7),
+      templateActivity(32, 'patch', 'Dry liner', 'patch', 2, 8),
+      templateActivity(33, 'Wall tile', 'Tiler', 'Tile', 1, 8),
+      templateActivity(34, 'decorate', 'Decorator', 'dec', 5, 8),
+      templateActivity(35, 'Carpentry Finals', 'Carpenter', 'Finals carp', 1, 9),
+      templateActivity(36, 'Plumbing finals', 'Plumber', 'Finals Plumb', 1, 9),
+      templateActivity(37, 'Electrical Finals', 'Electrician', 'Finals elec', 1, 9),
+      templateActivity(38, 'Sprinkler commsision', 'Sprinkler', 'Sprinkler Com', 1, 9),
+      templateActivity(39, 'build clean', 'Cleaner', 'Build clean', 1, 9),
+      templateActivity(40, 'Sealant', 'Mastic applicator', 'Mastic', 1, 9),
+      templateActivity(41, 'Fit appliances', 'Appliance fitter', 'Appliances', 1, 9),
+      templateActivity(42, 'Snag patch', 'Dry liner', 'Snag patch', 2, 9),
+      templateActivity(43, 'Decoration finals', 'Decorator', 'Dec Finals', 1, 9),
+      templateActivity(44, 'Flooring', 'Floor layer', 'carpets/vinyl', 3, 9),
+      templateActivity(45, 'Doors over carpets', 'Carpenter', 'DOC', 1, 9),
+      templateActivity(46, 'Touch ups after carpets', 'Decorator', 'After carpets', 1, 9),
+      templateActivity(47, 'Reclean', 'Cleaner', 'Reclean', 1, 9),
+      templateActivity(48, 'QA Pre handover', 'Site Team', 'QA', 1, 9),
+      templateActivity(49, 'Home tour', 'Site Team', 'Home tour', 1, 9),
     ],
   };
 }
 
 export const DEFAULT_PLOT_TEMPLATES: PlotTemplate[] = [
-  makeTemplate('apartment', 'Apartment', 'Shorter apartment route', 20),
-  makeTemplate('twoBed', '2 Bedroom', 'Smaller house template with shorter fix and finish durations', 22),
-  makeTemplate('threeBed', '3 Bedroom', 'Standard 23-week house template', 23),
+  makeTemplate('apartment', 'Apartment', 'Traditional route using the locked sequence and durations', 25),
+  makeTemplate('twoBed', '2 Bedroom', 'Traditional route using the locked sequence and durations', 25),
+  makeTemplate('threeBed', '3 Bedroom', 'Traditional route using the locked sequence and durations', 25),
   makeTimberFrameTemplate(),
-  makeTemplate('fourBed', '4 Bedroom', 'Larger house with extended fix and finish durations', 26),
-  makeTemplate('fiveBed', '5 Bedroom', 'Largest house template with longer finish and handover durations', 28),
+  makeTemplate('fourBed', '4 Bedroom', 'Traditional route using the locked sequence and durations', 25),
+  makeTemplate('fiveBed', '5 Bedroom', 'Traditional route using the locked sequence and durations', 25),
 ];
 
 export const DEFAULT_TEMPLATE_PLOTS: TemplateSitePlot[] = [];
@@ -272,7 +274,7 @@ export function getPlotBreakdownTemplateText(plot: TemplateSitePlot, week: numbe
 }
 
 export function getTradeTemplateText(plot: TemplateSitePlot, trade: string, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
-  return getActivitiesForTemplateDay(plot, week, day, delays, templates, setup)
+  return getActivitiesForTemplateDay(plot, trade === 'All' ? 0 : week, day, delays, templates, setup)
     .filter((activity) => activity.trade === trade)
     .map((activity) => activity.displayText)
     .join('\n');
