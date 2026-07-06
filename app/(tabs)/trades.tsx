@@ -10,6 +10,7 @@ const PROGRAMME_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as cons
 const WORKING_DAY_COUNT = 5;
 const DAY_WIDTH = 72;
 const WEEK_WIDTH = DAY_WIDTH * 7;
+const ISSUE_TIME_OPTIONS = ['06:30', '07:00', '07:30', '08:00', '09:00', '10:00', '12:00', '14:00', '15:00', '16:00', '17:00'];
 
 function getShortWeekDate(week: number, dayIndex: number) {
   const year = new Date().getFullYear();
@@ -45,7 +46,6 @@ function buildTwoWeekDays(startWeek: number, dayOffset: number) {
       dayIndex,
       dayName: PROGRAMME_DAYS[dayIndex],
       date: getShortWeekDate(week, dayIndex),
-      weekLabel: `WK${String(week).padStart(2, '0')}`,
       weekend: isWeekend(dayIndex),
     };
   });
@@ -73,7 +73,8 @@ export default function TradesScreen() {
   const [draftContact, setDraftContact] = useState<TradeContact | undefined>(activeContact);
   const [managerEmail, setManagerEmail] = useState(issueSettings.managerEmail);
   const [issueDay, setIssueDay] = useState(issueSettings.issueDay);
-  const [issueTime, setIssueTime] = useState(issueSettings.issueTime);
+  const [issueTime, setIssueTime] = useState(issueSettings.issueTime || '15:00');
+  const [showIssueTimes, setShowIssueTimes] = useState(false);
   const [autoIssueEnabled, setAutoIssueEnabled] = useState(issueSettings.autoIssueEnabled);
   const [issueStartWeek, setIssueStartWeek] = useState('1');
   const [dayOffset, setDayOffset] = useState(0);
@@ -87,7 +88,7 @@ export default function TradesScreen() {
   useEffect(() => {
     setManagerEmail(issueSettings.managerEmail);
     setIssueDay(issueSettings.issueDay);
-    setIssueTime(issueSettings.issueTime);
+    setIssueTime(issueSettings.issueTime || '15:00');
     setAutoIssueEnabled(issueSettings.autoIssueEnabled);
   }, [issueSettings]);
 
@@ -124,6 +125,12 @@ export default function TradesScreen() {
   const selectTrade = (tradeId: string) => {
     setSaveMessage('');
     setSelectedTradeId(tradeId);
+  };
+
+  const selectIssueTime = (time: string) => {
+    setSaveMessage('');
+    setIssueTime(time);
+    setShowIssueTimes(false);
   };
 
   const saveTradeContact = async () => {
@@ -220,41 +227,29 @@ export default function TradesScreen() {
               <Text style={[styles.tableHeader, styles.plotNoCell]} />
               <Text style={[styles.tableHeader, styles.tradeCell]} />
               <Text style={[styles.tableHeader, styles.fixCell]} />
-              {weekGroups.map((week, index) => (
-                <Text key={`${week}-${index}`} style={styles.weekGroupHeader}>WK{String(week).padStart(2, '0')}</Text>
-              ))}
+              {weekGroups.map((week, index) => <Text key={`${week}-${index}`} style={styles.weekGroupHeader}>WK{String(week).padStart(2, '0')}</Text>)}
             </View>
             <View style={styles.tableRow}>
               <Text style={[styles.tableHeader, styles.plotNoCell]}>Plot No</Text>
               <Text style={[styles.tableHeader, styles.tradeCell]}>Trade</Text>
               <Text style={[styles.tableHeader, styles.fixCell]}>Fix / Stage</Text>
-              {tableDays.map((item) => (
-                <Text key={item.key} style={[styles.dayHeaderCell, item.weekend ? styles.weekendHeader : null]}>{item.dayName}</Text>
-              ))}
+              {tableDays.map((item) => <Text key={item.key} style={[styles.dayHeaderCell, item.weekend ? styles.weekendHeader : null]}>{item.dayName}</Text>)}
             </View>
             <View style={styles.tableRow}>
               <Text style={[styles.dateBlankCell, styles.plotNoCell]} />
               <Text style={[styles.dateBlankCell, styles.tradeCell]} />
               <Text style={[styles.dateBlankCell, styles.fixCell]} />
-              {tableDays.map((item) => (
-                <Text key={`date-${item.key}`} style={[styles.dateHeaderCell, item.weekend ? styles.weekendDateCell : null]}>{item.date}</Text>
-              ))}
+              {tableDays.map((item) => <Text key={`date-${item.key}`} style={[styles.dateHeaderCell, item.weekend ? styles.weekendDateCell : null]}>{item.date}</Text>)}
             </View>
 
-            {programmeRows.length === 0 ? (
-              <View style={styles.tableRow}>
-                <Text style={[styles.bodyCell, styles.emptyProgrammeCell]}>No planned {activeContact?.trade ?? 'trade'} activity in this 2-week window.</Text>
-              </View>
-            ) : null}
+            {programmeRows.length === 0 ? <View style={styles.tableRow}><Text style={[styles.bodyCell, styles.emptyProgrammeCell]}>No planned {activeContact?.trade ?? 'trade'} activity in this 2-week window.</Text></View> : null}
 
             {programmeRows.map((row, rowIndex) => (
               <View key={row.plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                 <Text style={[styles.bodyCell, styles.plotNoCell]}>{row.plot.plotNo}</Text>
                 <Text style={[styles.bodyCell, styles.tradeCell]}>{activeContact?.trade ?? ''}</Text>
                 <Text style={[styles.bodyCell, styles.fixCell]}>{row.cells.find(Boolean) || '-'}</Text>
-                {row.cells.map((cell, index) => (
-                  <Text key={tableDays[index].key} style={[styles.dayBodyCell, tableDays[index].weekend ? styles.weekendCell : null, cell ? styles.activeDayCell : null]}>{cell}</Text>
-                ))}
+                {row.cells.map((cell, index) => <Text key={tableDays[index].key} style={[styles.dayBodyCell, tableDays[index].weekend ? styles.weekendCell : null, cell ? styles.activeDayCell : null]}>{cell}</Text>)}
               </View>
             ))}
           </View>
@@ -301,7 +296,21 @@ export default function TradesScreen() {
         <View style={styles.formGrid}>
           <View style={styles.inputWrap}><Text style={styles.label}>Manager email</Text><TextInput value={managerEmail} onChangeText={(text) => { setSaveMessage(''); setManagerEmail(text); }} style={styles.input} placeholder="manager@example.com" keyboardType="email-address" autoCapitalize="none" /></View>
           <View style={styles.inputWrap}><Text style={styles.label}>Issue day</Text><TextInput value={issueDay} onChangeText={(text) => { setSaveMessage(''); setIssueDay(text); }} style={styles.input} placeholder="Friday" /></View>
-          <View style={styles.inputWrap}><Text style={styles.label}>Issue time</Text><TextInput value={issueTime} onChangeText={(text) => { setSaveMessage(''); setIssueTime(text); }} style={styles.input} placeholder="15:00" /></View>
+          <View style={styles.inputWrap}>
+            <Text style={styles.label}>Issue time</Text>
+            <Pressable style={styles.dropdownButton} onPress={() => setShowIssueTimes((value) => !value)}>
+              <Text style={styles.dropdownButtonText}>{issueTime}</Text>
+              <Text style={styles.dropdownChevron}>{showIssueTimes ? '▲' : '▼'}</Text>
+            </Pressable>
+            {showIssueTimes ? (
+              <View style={styles.timeDropdown}>
+                {ISSUE_TIME_OPTIONS.map((time) => {
+                  const active = time === issueTime;
+                  return <Pressable key={time} style={[styles.timeOption, active ? styles.timeOptionActive : null]} onPress={() => selectIssueTime(time)}><Text style={[styles.timeOptionText, active ? styles.timeOptionTextActive : null]}>{time}</Text></Pressable>;
+                })}
+              </View>
+            ) : null}
+          </View>
           <Pressable style={[styles.toggleButton, autoIssueEnabled ? styles.toggleActive : null]} onPress={() => { setSaveMessage(''); setAutoIssueEnabled((value) => !value); }}><Text style={[styles.toggleText, autoIssueEnabled ? styles.toggleTextActive : null]}>{autoIssueEnabled ? 'Auto issue on' : 'Auto issue off'}</Text></Pressable>
           <Pressable style={[styles.saveButton, issueSettingsSaved ? styles.savedButton : null]} onPress={saveIssueSettings}><Text style={styles.saveButtonText}>{issueSettingsSaved ? 'Saved ✓' : 'Save Issue Settings'}</Text></Pressable>
         </View>
@@ -342,6 +351,14 @@ const styles = StyleSheet.create({
   label: { color: '#334155', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
   input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', fontWeight: '800' },
   lockedInput: { backgroundColor: '#f1f5f9', color: '#64748b' },
+  dropdownButton: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  dropdownButtonText: { color: '#0f172a', fontWeight: '900' },
+  dropdownChevron: { color: '#64748b', fontWeight: '900', fontSize: 11 },
+  timeDropdown: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 8, gap: 6, marginTop: 6 },
+  timeOption: { borderRadius: 9, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#f8fafc' },
+  timeOptionActive: { backgroundColor: '#0f172a' },
+  timeOptionText: { color: '#475569', fontWeight: '900' },
+  timeOptionTextActive: { color: '#ffffff' },
   saveButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-end' },
   addButton: { backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, alignSelf: 'flex-end' },
   savedButton: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
