@@ -21,13 +21,22 @@ function getShortWeekDate(week: number) {
   return `${date}/${month}`;
 }
 
+function workingWeekLabel(includeSaturday: boolean, includeSunday: boolean) {
+  if (includeSaturday && includeSunday) return 'Monday to Sunday';
+  if (includeSaturday) return 'Monday to Saturday';
+  if (includeSunday) return 'Monday to Friday + Sunday';
+  return 'Monday to Friday';
+}
+
 export default function MasterProgrammeScreen() {
-  const { sitePlots, plotTemplates, upsertSitePlot, removeSitePlot } = useSitePlanner();
+  const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, updateSiteSetup } = useSitePlanner();
   const [plotNo, setPlotNo] = useState('');
   const [stage9Week, setStage9Week] = useState('');
   const [templateId, setTemplateId] = useState(plotTemplates[2]?.id ?? 'threeBed');
   const [moveScope, setMoveScope] = useState('all');
   const [moveMessage, setMoveMessage] = useState('');
+  const includeSaturday = Boolean(siteSetup.includeSaturday);
+  const includeSunday = Boolean(siteSetup.includeSunday);
 
   const savePlot = async () => {
     const parsedWeek = Number(stage9Week);
@@ -35,6 +44,17 @@ export default function MasterProgrammeScreen() {
     await upsertSitePlot({ plotNo, stage9CompleteWeek: parsedWeek, templateId });
     setPlotNo('');
     setStage9Week('');
+  };
+
+  const toggleWorkingDay = async (day: 'saturday' | 'sunday') => {
+    const nextSaturday = day === 'saturday' ? !includeSaturday : includeSaturday;
+    const nextSunday = day === 'sunday' ? !includeSunday : includeSunday;
+    await updateSiteSetup({
+      includeSaturday: nextSaturday,
+      includeSunday: nextSunday,
+      workingWeek: workingWeekLabel(nextSaturday, nextSunday),
+    });
+    setMoveMessage(`Working week set to ${workingWeekLabel(nextSaturday, nextSunday)}`);
   };
 
   const moveProgrammeByWeek = async (change: number) => {
@@ -65,6 +85,24 @@ export default function MasterProgrammeScreen() {
         <Text style={styles.title}>Master 23 Week Build</Text>
         <Text style={styles.subtitle}>Milestone completion view. Add a plot, choose its house type template, and enter the Stage 9 complete week.</Text>
       </View>
+
+      <SectionCard title="WORKING WEEK" subtitle="Choose whether Saturday and Sunday are included separately in the programme setup.">
+        <View style={styles.workingWeekPanel}>
+          <View style={styles.workingWeekSummary}>
+            <Text style={styles.label}>Current working week</Text>
+            <Text style={styles.workingWeekTitle}>{siteSetup.workingWeek || workingWeekLabel(includeSaturday, includeSunday)}</Text>
+            <Text style={styles.workingWeekHelp}>Saturday and Sunday can be switched on independently.</Text>
+          </View>
+          <View style={styles.weekendButtons}>
+            <Pressable style={[styles.weekendChip, includeSaturday ? styles.weekendChipActive : null]} onPress={() => toggleWorkingDay('saturday')}>
+              <Text style={[styles.weekendChipText, includeSaturday ? styles.weekendChipTextActive : null]}>{includeSaturday ? 'Saturday included ✓' : 'Include Saturday'}</Text>
+            </Pressable>
+            <Pressable style={[styles.weekendChip, includeSunday ? styles.weekendChipActive : null]} onPress={() => toggleWorkingDay('sunday')}>
+              <Text style={[styles.weekendChipText, includeSunday ? styles.weekendChipTextActive : null]}>{includeSunday ? 'Sunday included ✓' : 'Include Sunday'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </SectionCard>
 
       <SectionCard title="MOVE PROGRAMME FORWARD / BACK" subtitle="Use this to manually move the whole site programme or one selected plot. This changes the Stage 9 week and recalculates the programme.">
         <View style={styles.movePanel}>
@@ -186,6 +224,15 @@ const styles = StyleSheet.create({
   templateChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   templateChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
   templateChipTextActive: { color: '#ffffff' },
+  workingWeekPanel: { gap: 12, backgroundColor: '#eff6ff', borderColor: '#bfdbfe', borderWidth: 1, borderRadius: 14, padding: 12, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' },
+  workingWeekSummary: { flex: 1, minWidth: 240, gap: 4 },
+  workingWeekTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
+  workingWeekHelp: { color: '#64748b', fontSize: 12, fontWeight: '800' },
+  weekendButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  weekendChip: { borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#ffffff' },
+  weekendChipActive: { backgroundColor: '#166534', borderColor: '#166534' },
+  weekendChipText: { color: '#1d4ed8', fontSize: 12, fontWeight: '900' },
+  weekendChipTextActive: { color: '#ffffff' },
   movePanel: { gap: 12, backgroundColor: '#fff7ed', borderColor: '#fed7aa', borderWidth: 1, borderRadius: 14, padding: 12 },
   moveButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   moveBackButton: { backgroundColor: '#7f1d1d', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
