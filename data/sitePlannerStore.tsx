@@ -8,24 +8,8 @@ const SITE_DELAYS_KEY = 'siteprog:week-based-delays:v2';
 const TRADE_CONTACTS_KEY = 'siteprog:trade-contacts:v1';
 const ISSUE_SETTINGS_KEY = 'siteprog:issue-settings:v1';
 const ISSUE_LOGS_KEY = 'siteprog:issue-logs:v1';
-const PLOT_TEMPLATES_KEY = 'siteprog:plot-templates:v5';
+const PLOT_TEMPLATES_KEY = 'siteprog:plot-templates:v6';
 const SITE_PROGRAMME_SETUP_KEY = 'siteprog:programme-setup:v1';
-
-const REMOVED_TEMPLATE_ACTIVITY_CODES = new Set(['BOARD', '5TH SCAFF', 'SS']);
-const RENAMED_TEMPLATE_ACTIVITY_CODES: Record<string, string> = {
-  FND: 'Foundation',
-  DNG: 'Drainage',
-  '1ST BWK': '1ST Lift Brickwork',
-  '2ND BWK': '2ND Lift Brickwork',
-  '3RD BWK': '3RD Lift Brickwork',
-  '4TH BWK': '4TH Lift Brickwork',
-  '1ST CARP': '1ST FIX CARP',
-  '1ST PLUMB': '1ST FIX PLUMB',
-  '1ST ELEC': '1ST FIX ELEC',
-  '1ST SPRINKLER': '1ST FIX SPRINKLER',
-  PP: 'PRE-PLASTER QA',
-  GABLES: 'GABLES 2',
-};
 
 export type TradeContact = { id: string; trade: string; contractor: string; supervisorName: string; supervisorEmail: string; supervisorPhone: string };
 export type IssueSettings = { managerEmail: string; issueDay: string; issueTime: string; autoIssueEnabled: boolean };
@@ -59,14 +43,6 @@ const SitePlannerContext = createContext<SitePlannerStore | undefined>(undefined
 async function readArray<T>(key: string, fallback: T[]) { const stored = await AsyncStorage.getItem(key); if (!stored) { await AsyncStorage.setItem(key, JSON.stringify(fallback)); return fallback; } return JSON.parse(stored) as T[]; }
 async function readObject<T>(key: string, fallback: T) { const stored = await AsyncStorage.getItem(key); if (!stored) { await AsyncStorage.setItem(key, JSON.stringify(fallback)); return fallback; } return JSON.parse(stored) as T; }
 
-function canonicalActivityCode(code: string) { return RENAMED_TEMPLATE_ACTIVITY_CODES[code] ?? code; }
-function normaliseStoredActivities(template: PlotTemplate) {
-  const seen = new Set<string>();
-  return template.activities
-    .filter((activity) => !REMOVED_TEMPLATE_ACTIVITY_CODES.has(activity.code))
-    .map((activity) => ({ ...activity, code: canonicalActivityCode(activity.code) }))
-    .filter((activity) => { if (seen.has(activity.code)) return false; seen.add(activity.code); return true; });
-}
 function mergeDefaultTradeContacts(stored: TradeContact[]) {
   const storedByTrade = new Map(stored.map((contact) => [contact.trade.toLowerCase(), contact]));
   const defaults = DEFAULT_TRADE_CONTACTS.map((contact) => storedByTrade.get(contact.trade.toLowerCase()) ?? contact);
@@ -76,17 +52,14 @@ function mergeDefaultTradeContacts(stored: TradeContact[]) {
 }
 function normalisePlots(stored: TemplateSitePlot[]) { return stored.map((plot) => ({ ...plot, templateId: plot.templateId || 'threeBed' })); }
 function repairTemplate(defaultTemplate: PlotTemplate, storedTemplate?: PlotTemplate) {
-  if (!storedTemplate) return defaultTemplate;
-  const storedActivities = normaliseStoredActivities(storedTemplate);
-  const storedByCode = new Map(storedActivities.map((activity) => [activity.code, activity]));
-  const repairedActivities = defaultTemplate.activities.map((defaultActivity) => {
-    const storedActivity = storedByCode.get(defaultActivity.code);
-    if (!storedActivity) return defaultActivity;
-    return { ...defaultActivity, ...storedActivity, code: defaultActivity.code, order: defaultActivity.order, relativeWeek: defaultActivity.relativeWeek, relativeDay: defaultActivity.relativeDay, durationDays: storedActivity.durationDays > 0 ? storedActivity.durationDays : defaultActivity.durationDays, overlapAllowed: false };
-  });
-  const defaultCodes = new Set(defaultTemplate.activities.map((activity) => activity.code));
-  const customActivities = storedActivities.filter((activity) => !defaultCodes.has(activity.code));
-  return { ...defaultTemplate, ...storedTemplate, activities: [...repairedActivities, ...customActivities].sort((a, b) => a.order - b.order) };
+  return {
+    ...defaultTemplate,
+    name: storedTemplate?.name ?? defaultTemplate.name,
+    description: defaultTemplate.description,
+    programmeWeeks: storedTemplate?.programmeWeeks ?? defaultTemplate.programmeWeeks,
+    stageCount: defaultTemplate.stageCount,
+    activities: defaultTemplate.activities.map((activity) => ({ ...activity, overlapAllowed: false })),
+  };
 }
 function mergeDefaultTemplates(stored: PlotTemplate[]) {
   const storedById = new Map(stored.map((template) => [template.id, template]));
