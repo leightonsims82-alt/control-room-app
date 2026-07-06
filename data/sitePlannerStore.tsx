@@ -100,8 +100,11 @@ async function readObject<T>(key: string, fallback: T) {
 }
 
 function mergeDefaultTradeContacts(stored: TradeContact[]) {
-  const storedByTrade = new Map(stored.map((contact) => [contact.trade, contact]));
-  return DEFAULT_TRADE_CONTACTS.map((contact) => storedByTrade.get(contact.trade) ?? contact);
+  const storedByTrade = new Map(stored.map((contact) => [contact.trade.toLowerCase(), contact]));
+  const defaults = DEFAULT_TRADE_CONTACTS.map((contact) => storedByTrade.get(contact.trade.toLowerCase()) ?? contact);
+  const defaultTradeNames = new Set(DEFAULT_TRADE_CONTACTS.map((contact) => contact.trade.toLowerCase()));
+  const customTrades = stored.filter((contact) => !defaultTradeNames.has(contact.trade.toLowerCase()));
+  return [...defaults, ...customTrades];
 }
 
 function normalisePlots(stored: TemplateSitePlot[]) {
@@ -130,9 +133,9 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
         const [storedPlots, storedDelays, storedContacts, storedIssueSettings, storedIssueLogs, storedTemplates, storedSiteSetup] = await Promise.all([
           readArray<TemplateSitePlot>(SITE_PLOTS_KEY, DEFAULT_TEMPLATE_PLOTS),
           readArray<ActivityDelay>(SITE_DELAYS_KEY, []),
-          readArray<TradeContact>(TRADE_CONTACTS_KEY, DEFAULT_TRADE_CONTACTS),
           readObject<IssueSettings>(ISSUE_SETTINGS_KEY, DEFAULT_ISSUE_SETTINGS),
           readArray<IssueLog>(ISSUE_LOGS_KEY, []),
+          readArray<TradeContact>(TRADE_CONTACTS_KEY, DEFAULT_TRADE_CONTACTS),
           readArray<PlotTemplate>(PLOT_TEMPLATES_KEY, DEFAULT_PLOT_TEMPLATES),
           readObject<SiteProgrammeSetup>(SITE_PROGRAMME_SETUP_KEY, DEFAULT_SITE_PROGRAMME_SETUP),
         ]);
@@ -203,7 +206,15 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   };
 
   const upsertTradeContact = async (input: TradeContact) => {
-    const nextContacts = tradeContacts.map((contact) => (contact.id === input.id ? input : contact));
+    const cleanTrade = input.trade.trim();
+    if (!cleanTrade) return;
+    const cleanInput = { ...input, trade: cleanTrade };
+    const existing = tradeContacts.find(
+      (contact) => contact.id === input.id || contact.trade.toLowerCase() === cleanTrade.toLowerCase(),
+    );
+    const nextContacts = existing
+      ? tradeContacts.map((contact) => (contact.id === existing.id ? { ...cleanInput, id: existing.id } : contact))
+      : [...tradeContacts, cleanInput];
     setTradeContacts(nextContacts);
     await AsyncStorage.setItem(TRADE_CONTACTS_KEY, JSON.stringify(nextContacts));
   };
