@@ -52,13 +52,17 @@ function mergeDefaultTradeContacts(stored: TradeContact[]) {
 }
 function normalisePlots(stored: TemplateSitePlot[]) { return stored.map((plot) => ({ ...plot, templateId: plot.templateId || 'threeBed' })); }
 function repairTemplate(defaultTemplate: PlotTemplate, storedTemplate?: PlotTemplate) {
+  const storedByCode = new Map((storedTemplate?.activities ?? []).map((activity) => [activity.code, activity]));
   return {
     ...defaultTemplate,
     name: storedTemplate?.name ?? defaultTemplate.name,
     description: defaultTemplate.description,
     programmeWeeks: storedTemplate?.programmeWeeks ?? defaultTemplate.programmeWeeks,
     stageCount: defaultTemplate.stageCount,
-    activities: defaultTemplate.activities.map((activity) => ({ ...activity, overlapAllowed: activity.overlapAllowed ?? false })),
+    activities: defaultTemplate.activities.map((activity) => {
+      const saved = storedByCode.get(activity.code);
+      return { ...activity, overlapAllowed: saved?.overlapAllowed ?? activity.overlapAllowed ?? false, overlapLinkCode: saved?.overlapLinkCode ?? activity.overlapLinkCode, overlapStartFrom: saved?.overlapStartFrom ?? activity.overlapStartFrom ?? 'start', overlapLagDays: saved?.overlapLagDays ?? activity.overlapLagDays ?? 0 };
+    }),
   };
 }
 function mergeDefaultTemplates(stored: PlotTemplate[]) {
