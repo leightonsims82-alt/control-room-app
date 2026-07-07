@@ -4,8 +4,13 @@ export type TemplateSitePlot = SitePlot & {
   templateId?: string;
 };
 
+export type OverlapStartFrom = 'start' | 'finish';
+
 export type TemplateActivity = ProgrammeActivity & {
   overlapAllowed?: boolean;
+  overlapLinkCode?: string;
+  overlapStartFrom?: OverlapStartFrom;
+  overlapLagDays?: number;
 };
 
 export type PlotTemplate = {
@@ -91,12 +96,14 @@ function makeTemplate(id: string, name: string, description: string, programmeWe
     activities: BUILD_SEQUENCE.map((activity) => ({
       ...activity,
       overlapAllowed: false,
+      overlapStartFrom: 'start' as OverlapStartFrom,
+      overlapLagDays: 0,
     })).filter((activity) => activity.durationDays > 0),
   };
 }
 
-function templateActivity(order: number, code: string, trade: string, displayText: string, durationDays: number, stage: ProgrammeActivity['stage'], overlapAllowed = false): TemplateActivity {
-  return { order, code, trade, displayText, durationDays, relativeWeek: 1, relativeDay: 1, stage, overlapAllowed };
+function templateActivity(order: number, code: string, trade: string, displayText: string, durationDays: number, stage: ProgrammeActivity['stage'], overlapAllowed = false, overlapLinkCode?: string, overlapStartFrom: OverlapStartFrom = 'start', overlapLagDays = 0): TemplateActivity {
+  return { order, code, trade, displayText, durationDays, relativeWeek: 1, relativeDay: 1, stage, overlapAllowed, overlapLinkCode, overlapStartFrom, overlapLagDays };
 }
 
 function makeTimberFrameTemplate(): PlotTemplate {
@@ -121,12 +128,12 @@ function makeTimberFrameTemplate(): PlotTemplate {
       templateActivity(12, 'Solar Panels', 'Solar Installer', 'Solar', 1, 5),
       templateActivity(13, 'Tile', 'Roofer', 'Tile', 2, 5),
       templateActivity(14, 'Windows', 'Window Fitter', 'Windows', 1, 5),
-      templateActivity(15, 'External brickwork', 'Bricklayer', 'External BWK', 8, 5, true),
+      templateActivity(15, 'External brickwork', 'Bricklayer', 'External BWK', 8, 5, true, 'Frame QA', 'finish', 1),
       templateActivity(16, 'External QA', 'Site Team', 'QA', 1, 5),
-      templateActivity(17, '1st fix carpentry', 'Carpenter', '1st Carp', 3, 6, true),
-      templateActivity(18, '1st fix Plumbing', 'Plumber', '1st plum', 2, 6, true),
-      templateActivity(19, '1st fix electrics', 'Electrician', '1st elec', 2, 6, true),
-      templateActivity(20, '1st fix sprinkler', 'Sprinkler', '1st sprinkler', 1, 6, true),
+      templateActivity(17, '1st fix carpentry', 'Carpenter', '1st Carp', 3, 6, true, 'Windows', 'finish', 0),
+      templateActivity(18, '1st fix Plumbing', 'Plumber', '1st plum', 2, 6, true, '1st fix carpentry', 'start', 1),
+      templateActivity(19, '1st fix electrics', 'Electrician', '1st elec', 2, 6, true, '1st fix carpentry', 'start', 1),
+      templateActivity(20, '1st fix sprinkler', 'Sprinkler', '1st sprinkler', 1, 6, true, '1st fix Plumbing', 'start', 1),
       templateActivity(21, 'QA pre plaster', 'Site Team', 'QA', 1, 6),
       templateActivity(22, 'Tac', 'Dry liner', 'Tac', 1, 6),
       templateActivity(23, 'dab', 'Dry liner', 'dab', 2, 6),
@@ -179,18 +186,31 @@ export function getTemplateById(templateId: string | undefined, templates: PlotT
   return templates.find((template) => template.id === templateId) ?? templates.find((template) => template.id === 'threeBed') ?? templates[0];
 }
 
-function orderedActivities(template: PlotTemplate) {
+export function orderedActivities(template: PlotTemplate) {
   return template.activities.slice().filter((activity) => activity.durationDays > 0).sort((a, b) => a.order - b.order);
 }
 
 export function getTemplateActivityRanges(template: PlotTemplate) {
+  const ranges: { activity: TemplateActivity; start: number; finish: number }[] = [];
+  const byCode = new Map<string, { activity: TemplateActivity; start: number; finish: number }>();
   let nextSequentialDay = 1;
-  return orderedActivities(template).map((activity) => {
-    const start = nextSequentialDay;
+  orderedActivities(template).forEach((activity) => {
+    let start = nextSequentialDay;
+    if (activity.overlapAllowed && activity.overlapLinkCode) {
+      const linkedRange = byCode.get(activity.overlapLinkCode);
+      if (linkedRange) {
+        const lag = Math.max(0, activity.overlapLagDays ?? 0);
+        const anchor = activity.overlapStartFrom === 'finish' ? linkedRange.finish + 1 : linkedRange.start;
+        start = Math.max(1, anchor + lag);
+      }
+    }
     const finish = start + Math.max(1, activity.durationDays) - 1;
-    nextSequentialDay = finish + 1;
-    return { activity, start, finish };
+    const range = { activity, start, finish };
+    ranges.push(range);
+    byCode.set(activity.code, range);
+    nextSequentialDay = Math.max(nextSequentialDay, finish + 1);
   });
+  return ranges;
 }
 
 export function getEffectiveProgrammeWeeks(template: PlotTemplate, setup?: Partial<SiteProgrammeSetup>) {
