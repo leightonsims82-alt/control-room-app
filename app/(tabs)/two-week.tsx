@@ -13,14 +13,28 @@ const PLOT_WIDTH = 82;
 const TYPE_WIDTH = 110;
 const WEEK_WIDTH = DAY_WIDTH * 7;
 
-type ActivityEdge = { firstIndex: number; lastIndex: number; activity: TemplateActivity };
-type ProgrammeRow = { plot: TemplateSitePlot; dailyActivities: TemplateActivity[][]; activityEdges: Record<string, ActivityEdge> };
+type ProgrammeRow = { plot: TemplateSitePlot; dailyActivities: TemplateActivity[][] };
 
 function formatWeekLabel(week: number) { return `WK${String(normaliseProgrammeWeek(week)).padStart(2, '0')}`; }
 function getProgrammeDateFromIndex(dayIndexFromStart: number) { const date = new Date(PROGRAMME_START_DATE); date.setDate(PROGRAMME_START_DATE.getDate() + dayIndexFromStart); return date; }
 function getCurrentProgrammeWeek() { const today = new Date(); const days = Math.floor((today.getTime() - PROGRAMME_START_DATE.getTime()) / (1000 * 60 * 60 * 24)); return normaliseProgrammeWeek(Math.floor(days / 7) + 1); }
 function formatShortDate(date: Date) { return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); }
 function plotNoSortValue(plotNo: string) { const parsed = Number(plotNo.replace(/[^0-9.]/g, '')); return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER; }
+
+function getProgrammeDayFromAbsoluteIndex(absoluteDayIndex: number) {
+  const week = normaliseProgrammeWeek(Math.floor(absoluteDayIndex / 7) + 1);
+  const dayIndex = ((absoluteDayIndex % 7) + 7) % 7;
+  const day = dayIndex + 1;
+  return { week, day };
+}
+
+function findAdjacentWorkingProgrammeDay(absoluteDayIndex: number, direction: -1 | 1, siteSetup: SiteProgrammeSetup) {
+  for (let offset = 1; offset <= 21; offset += 1) {
+    const candidate = getProgrammeDayFromAbsoluteIndex(absoluteDayIndex + offset * direction);
+    if (isProgrammeWorkingDay(candidate.day, siteSetup)) return candidate;
+  }
+  return null;
+}
 
 function buildTwoWeekWindow(startWeek: number, dayOffset: number, siteSetup: SiteProgrammeSetup) {
   const baseIndex = (normaliseProgrammeWeek(startWeek) - 1) * 7 + dayOffset;
@@ -29,7 +43,7 @@ function buildTwoWeekWindow(startWeek: number, dayOffset: number, siteSetup: Sit
     const week = normaliseProgrammeWeek(Math.floor(absoluteDayIndex / 7) + 1);
     const dayIndex = ((absoluteDayIndex % 7) + 7) % 7;
     const day = dayIndex + 1;
-    return { key: `${absoluteDayIndex}-${columnIndex}`, week, dayIndex, day, dayName: PROGRAMME_DAYS[dayIndex], date: getProgrammeDateFromIndex(absoluteDayIndex), nonWorking: !isProgrammeWorkingDay(day, siteSetup) };
+    return { key: `${absoluteDayIndex}-${columnIndex}`, absoluteDayIndex, week, dayIndex, day, dayName: PROGRAMME_DAYS[dayIndex], date: getProgrammeDateFromIndex(absoluteDayIndex), nonWorking: !isProgrammeWorkingDay(day, siteSetup) };
   });
 }
 
@@ -59,17 +73,6 @@ function simplifyActivity(text: string) {
   return clean.length > 14 ? clean.slice(0, 14).toUpperCase() : clean.toUpperCase();
 }
 
-function buildActivityEdges(dailyActivities: TemplateActivity[][]) {
-  const edges: Record<string, ActivityEdge> = {};
-  dailyActivities.forEach((activities, index) => {
-    activities.forEach((activity) => {
-      const existing = edges[activity.code];
-      edges[activity.code] = existing ? { ...existing, lastIndex: index } : { firstIndex: index, lastIndex: index, activity };
-    });
-  });
-  return edges;
-}
-
 export default function TwoWeekProgrammeScreen() {
   const { sitePlots, activityDelays, plotTemplates, siteSetup, setActivityDelay, updatePlotTemplate } = useSitePlanner();
   const [startWeek, setStartWeek] = useState(getCurrentProgrammeWeek());
@@ -82,8 +85,14 @@ export default function TwoWeekProgrammeScreen() {
 
   const programmeRows = useMemo<ProgrammeRow[]>(() => orderedSitePlots.map((plot) => {
     const dailyActivities = windowDays.map((item) => getActivitiesForTemplateDay(plot, item.week, item.day, activityDelays, plotTemplates, siteSetup));
-    return { plot, dailyActivities, activityEdges: buildActivityEdges(dailyActivities) };
+    return { plot, dailyActivities };
   }), [orderedSitePlots, windowDays, activityDelays, plotTemplates, siteSetup]);
+
+  const activityExistsOnAdjacentWorkingDay = (plot: TemplateSitePlot, activityCode: string, absoluteDayIndex: number, direction: -1 | 1) => {
+    const adjacent = findAdjacentWorkingProgrammeDay(absoluteDayIndex, direction, siteSetup);
+    if (!adjacent) return false;
+    return getActivitiesForTemplateDay(plot, adjacent.week, adjacent.day, activityDelays, plotTemplates, siteSetup).some((activity) => activity.code === activityCode);
+  };
 
   const getDelayDays = (plotId: string, activityCode: string) => activityDelays.find((delay) => delay.plotId === plotId && delay.activityCode === activityCode)?.delayDays ?? 0;
 
@@ -161,8 +170,8 @@ export default function TwoWeekProgrammeScreen() {
         <>
           <View style={styles.legendRow}>
             <View style={styles.legendPill}><View style={styles.legendDot} /><Text style={styles.legendText}>Blue cells = planned work</Text></View>
-            <View style={styles.legendPill}><Text style={styles.legendCode}>←</Text><Text style={styles.legendText}>First day: pull fix back / overlap</Text></View>
-            <View style={styles.legendPill}><Text style={styles.legendCode}>- / +</Text><Text style={styles.legendText}>Last day: shorten / extend</Text></View>
+            <View style={styles.legendPill}><Text style={styles.legendCode}>←</Text><Text style={styles.legendText}>True first day only: pull fix back / overlap</Text></View>
+            <View style={styles.legendPill}><Text style={styles.legendCode}>- / +</Text><Text style={styles.legendText}>True last day only: shorten / extend</Text></View>
           </View>
           <View style={styles.programmeCard}>
             <View style={styles.programmeHeader}><Text style={styles.programmeTitle}>Main 2 Week Programme</Text><Text style={styles.programmeSubtitle}>{programmeRows.length} plot{programmeRows.length === 1 ? '' : 's'} shown between {twoWeekDates}</Text></View>
@@ -172,7 +181,7 @@ export default function TwoWeekProgrammeScreen() {
                 <View style={styles.dateHeaderRow}><Text style={[styles.headerCell, styles.plotCell]}>Plot</Text><Text style={[styles.headerCell, styles.typeCell]}>Type</Text>{windowDays.map((item) => <View key={item.key} style={[styles.dayHeader, item.nonWorking ? styles.weekendHeader : null]}><Text style={styles.dayHeaderName}>{item.dayName}</Text><Text style={styles.dayHeaderDate}>{formatShortDate(item.date)}</Text></View>)}</View>
                 {programmeRows.map((row, rowIndex) => {
                   const template = getTemplateForPlot(row.plot, plotTemplates);
-                  return <View key={row.plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}><Text style={[styles.bodyCell, styles.plotCell]}>{row.plot.plotNo}</Text><Text style={[styles.bodyCell, styles.typeCell]}>{template.name}</Text>{row.dailyActivities.map((activities, index) => { const item = windowDays[index]; return <View key={`${row.plot.id}-${item.key}`} style={[styles.dayCell, item.nonWorking ? styles.weekendCell : null, activities.length ? styles.activeDayCell : null]}>{activities.map((activity) => { const edge = row.activityEdges[activity.code]; const isFirstDay = edge?.firstIndex === index; const isLastDay = edge?.lastIndex === index; return <View key={`${activity.code}-${index}`} style={styles.activityBlock}><Text style={styles.dayCellText}>{simplifyActivity(activity.displayText || activity.code)}</Text><View style={styles.activityControls}>{isFirstDay ? <Pressable style={styles.pullBackButton} onPress={() => pullFixBack(row.plot, activity)}><Text style={styles.controlText}>←</Text></Pressable> : null}{isLastDay ? <><Pressable style={styles.fixBackButton} onPress={() => moveFixDuration(row.plot, activity, -1)}><Text style={styles.controlText}>-</Text></Pressable><Pressable style={styles.fixForwardButton} onPress={() => moveFixDuration(row.plot, activity, 1)}><Text style={styles.controlText}>+</Text></Pressable></> : null}</View></View>; })}</View>; })}</View>;
+                  return <View key={row.plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}><Text style={[styles.bodyCell, styles.plotCell]}>{row.plot.plotNo}</Text><Text style={[styles.bodyCell, styles.typeCell]}>{template.name}</Text>{row.dailyActivities.map((activities, index) => { const item = windowDays[index]; return <View key={`${row.plot.id}-${item.key}`} style={[styles.dayCell, item.nonWorking ? styles.weekendCell : null, activities.length ? styles.activeDayCell : null]}>{activities.map((activity) => { const isFirstDay = !activityExistsOnAdjacentWorkingDay(row.plot, activity.code, item.absoluteDayIndex, -1); const isLastDay = !activityExistsOnAdjacentWorkingDay(row.plot, activity.code, item.absoluteDayIndex, 1); return <View key={`${activity.code}-${index}`} style={styles.activityBlock}><Text style={styles.dayCellText}>{simplifyActivity(activity.displayText || activity.code)}</Text><View style={styles.activityControls}>{isFirstDay ? <Pressable style={styles.pullBackButton} onPress={() => pullFixBack(row.plot, activity)}><Text style={styles.controlText}>←</Text></Pressable> : null}{isLastDay ? <><Pressable style={styles.fixBackButton} onPress={() => moveFixDuration(row.plot, activity, -1)}><Text style={styles.controlText}>-</Text></Pressable><Pressable style={styles.fixForwardButton} onPress={() => moveFixDuration(row.plot, activity, 1)}><Text style={styles.controlText}>+</Text></Pressable></> : null}</View></View>; })}</View>; })}</View>;
                 })}
               </View>
             </ScrollView>
