@@ -12,7 +12,17 @@ const PLOT_TEMPLATES_KEY = 'siteprog:plot-templates:v8';
 const SITE_PROGRAMME_SETUP_KEY = 'siteprog:programme-setup:v1';
 
 export type TradeContact = { id: string; trade: string; contractor: string; supervisorName: string; supervisorEmail: string; supervisorPhone: string };
-export type IssueSettings = { managerEmail: string; issueDay: string; issueTime: string; autoIssueEnabled: boolean };
+export type IssueSettings = {
+  managerEmail: string;
+  assistantEmails: string;
+  issueDay: string;
+  issueTime: string;
+  autoIssueEnabled: boolean;
+  sendMasterToSmTeam: boolean;
+  sendTwoWeekToSmTeam: boolean;
+  sendTradeProgrammeToSmTeam: boolean;
+  sendTradeProgrammesToTrades: boolean;
+};
 export type IssueLog = { id: string; startWeek: number; issuedAt: string; recipientCount: number; note: string };
 
 type SitePlannerStore = {
@@ -37,7 +47,17 @@ type SitePlannerStore = {
 };
 
 const DEFAULT_TRADE_CONTACTS: TradeContact[] = TRADE_ORDER.map((trade) => ({ id: `trade-${trade.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, trade, contractor: '', supervisorName: '', supervisorEmail: '', supervisorPhone: '' }));
-const DEFAULT_ISSUE_SETTINGS: IssueSettings = { managerEmail: '', issueDay: 'Friday', issueTime: '15:00', autoIssueEnabled: false };
+const DEFAULT_ISSUE_SETTINGS: IssueSettings = {
+  managerEmail: '',
+  assistantEmails: '',
+  issueDay: 'Friday',
+  issueTime: '15:00',
+  autoIssueEnabled: false,
+  sendMasterToSmTeam: true,
+  sendTwoWeekToSmTeam: true,
+  sendTradeProgrammeToSmTeam: true,
+  sendTradeProgrammesToTrades: true,
+};
 const SitePlannerContext = createContext<SitePlannerStore | undefined>(undefined);
 
 async function readArray<T>(key: string, fallback: T[]) { const stored = await AsyncStorage.getItem(key); if (!stored) { await AsyncStorage.setItem(key, JSON.stringify(fallback)); return fallback; } return JSON.parse(stored) as T[]; }
@@ -85,7 +105,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       try {
         const [storedPlots, storedDelays, storedContacts, storedIssueSettings, storedIssueLogs, storedTemplates, storedSiteSetup] = await Promise.all([readArray<TemplateSitePlot>(SITE_PLOTS_KEY, DEFAULT_TEMPLATE_PLOTS), readArray<ActivityDelay>(SITE_DELAYS_KEY, []), readArray<TradeContact>(TRADE_CONTACTS_KEY, DEFAULT_TRADE_CONTACTS), readObject<IssueSettings>(ISSUE_SETTINGS_KEY, DEFAULT_ISSUE_SETTINGS), readArray<IssueLog>(ISSUE_LOGS_KEY, []), readArray<PlotTemplate>(PLOT_TEMPLATES_KEY, DEFAULT_PLOT_TEMPLATES), readObject<SiteProgrammeSetup>(SITE_PROGRAMME_SETUP_KEY, DEFAULT_SITE_PROGRAMME_SETUP)]);
         const repairedTemplates = mergeDefaultTemplates(storedTemplates);
-        if (mounted) { setSitePlots(normalisePlots(storedPlots)); setActivityDelays(storedDelays); setTradeContacts(mergeDefaultTradeContacts(storedContacts)); setIssueSettingsState(storedIssueSettings); setIssueLogs(storedIssueLogs); setPlotTemplates(repairedTemplates); setSiteSetupState({ ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup }); }
+        if (mounted) { setSitePlots(normalisePlots(storedPlots)); setActivityDelays(storedDelays); setTradeContacts(mergeDefaultTradeContacts(storedContacts)); setIssueSettingsState({ ...DEFAULT_ISSUE_SETTINGS, ...storedIssueSettings }); setIssueLogs(storedIssueLogs); setPlotTemplates(repairedTemplates); setSiteSetupState({ ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup }); }
         await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(repairedTemplates));
       } catch (error) { console.warn('Unable to load site planner data', error); } finally { if (mounted) setIsSitePlannerLoaded(true); }
     }
