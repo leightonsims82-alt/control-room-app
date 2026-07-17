@@ -17,8 +17,11 @@ jobs:
         with:
           node-version: 24
       - name: Install dependencies
-        run: npm install
+        run: npm install --silent
       - name: TypeScript
-        run: npx tsc --noEmit
+        shell: bash
+        run: |
+          set -o pipefail
+          npx tsc --noEmit 2>&1 | tail -n 120
       - name: Expo web export
-        run: npm run build
+        run: npm run build -- --clear
