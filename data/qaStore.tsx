@@ -171,15 +171,37 @@ export function QADataProvider({ children }: PropsWithChildren) {
 
   const updateAction = async (actionId: string, input: UpdateQAActionInput) => {
     const now = new Date().toISOString();
-    const next = actions.map((action) => {
+    const currentAction = actions.find((action) => action.id === actionId);
+    if (!currentAction) return;
+    const nextActions = actions.map((action) => {
       if (action.id !== actionId) return action;
       const sentToTradeAt = input.status === 'Sent to trade' && !action.sentToTradeAt ? now : action.sentToTradeAt;
       const fixedAt = input.status === 'Fixed awaiting verification' && !action.fixedAt ? now : action.fixedAt;
       const verifiedAt = input.status === 'Verified fixed' && !action.verifiedAt ? now : action.verifiedAt;
       return { ...action, ...input, sentToTradeAt, fixedAt, verifiedAt };
     });
-    setActions(next);
-    await AsyncStorage.setItem(ACTIONS_KEY, JSON.stringify(next));
+    const mergedAction = nextActions.find((action) => action.id === actionId) || currentAction;
+    const nextInspections = inspections.map((inspection) => {
+      if (inspection.id !== currentAction.inspectionId) return inspection;
+      return {
+        ...inspection,
+        items: inspection.items.map((item) => item.id === currentAction.inspectionItemId
+          ? {
+            ...item,
+            trade: mergedAction.trade,
+            fixed: mergedAction.status === 'Verified fixed' ? 'Yes' : mergedAction.status === 'Rejected' ? 'No' : item.fixed,
+            closeOutComment: mergedAction.closeOutComment,
+            closeOutPhotoUri: mergedAction.closeOutPhotoUri,
+          }
+          : item),
+      };
+    });
+    setActions(nextActions);
+    setInspections(nextInspections);
+    await Promise.all([
+      AsyncStorage.setItem(ACTIONS_KEY, JSON.stringify(nextActions)),
+      AsyncStorage.setItem(INSPECTIONS_KEY, JSON.stringify(nextInspections)),
+    ]);
   };
 
   const value = useMemo(() => ({
