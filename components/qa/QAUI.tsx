@@ -28,8 +28,9 @@ export function QAStatCard({ icon, label, value, helper, tone = 'blue' }: { icon
   );
 }
 
-export function PhotoEvidenceField({ label, value, onChange }: { label: string; value?: string; onChange: (uri: string) => void }) {
+export function PhotoEvidenceField({ label, value, onChange, disabled = false }: { label: string; value?: string; onChange: (uri: string) => void; disabled?: boolean }) {
   const pickPhoto = () => {
+    if (disabled) return;
     if (Platform.OS !== 'web') {
       Alert.alert('Photo evidence', 'Camera and gallery capture will be enabled in the mobile build. You can paste a photo or file reference below while testing.');
       return;
@@ -54,9 +55,12 @@ export function PhotoEvidenceField({ label, value, onChange }: { label: string; 
   const canPreview = Boolean(value && (value.startsWith('data:image') || value.startsWith('http') || value.startsWith('file:')));
   return (
     <View style={styles.photoWrap}>
-      <View style={styles.photoHeader}><Text style={styles.photoLabel}>{label}</Text><Pressable style={styles.photoButton} onPress={pickPhoto}><Ionicons name="camera-outline" size={16} color="#1d4ed8" /><Text style={styles.photoButtonText}>Add photo</Text></Pressable></View>
+      <View style={styles.photoHeader}>
+        <Text style={styles.photoLabel}>{label}</Text>
+        {!disabled ? <Pressable style={styles.photoButton} onPress={pickPhoto}><Ionicons name="camera-outline" size={16} color="#1d4ed8" /><Text style={styles.photoButtonText}>Add photo</Text></Pressable> : <View style={styles.lockedBadge}><Ionicons name="lock-closed-outline" size={13} color="#64748b" /><Text style={styles.lockedBadgeText}>Locked record</Text></View>}
+      </View>
       {canPreview ? <Image source={{ uri: value }} style={styles.photoPreview} resizeMode="cover" /> : null}
-      <TextInput value={value || ''} onChangeText={onChange} placeholder="Photo, file or image reference" placeholderTextColor="#94a3b8" style={styles.photoInput} />
+      <TextInput editable={!disabled} value={value || ''} onChangeText={onChange} placeholder="Photo, file or image reference" placeholderTextColor="#94a3b8" style={[styles.photoInput, disabled ? styles.photoInputDisabled : null]} />
     </View>
   );
 }
@@ -84,6 +88,9 @@ const styles = StyleSheet.create({
   photoLabel: { color: '#475569', fontSize: 12, fontWeight: '900' },
   photoButton: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 10, borderWidth: 1, borderColor: '#bfdbfe', backgroundColor: '#eff6ff', paddingHorizontal: 10, paddingVertical: 7 },
   photoButtonText: { color: '#1d4ed8', fontWeight: '900', fontSize: 12 },
+  lockedBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, backgroundColor: '#f1f5f9', paddingHorizontal: 9, paddingVertical: 6 },
+  lockedBadgeText: { color: '#64748b', fontSize: 10, fontWeight: '900' },
   photoPreview: { width: '100%', maxWidth: 420, height: 190, borderRadius: 14, backgroundColor: '#e2e8f0' },
   photoInput: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, backgroundColor: '#ffffff', color: '#0f172a', paddingHorizontal: 12, paddingVertical: 10, fontWeight: '700' },
+  photoInputDisabled: { backgroundColor: '#f8fafc', color: '#64748b' },
 });
