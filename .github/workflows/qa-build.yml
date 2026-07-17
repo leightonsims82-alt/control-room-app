@@ -1,0 +1,42 @@
+name: QA Plot Story Build
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [build-qa-plot-story]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm install --silent
+      - name: Capture TypeScript report
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit > tsc-output.txt 2>&1
+          echo $? > tsc-exit.txt
+          exit 0
+      - name: Upload TypeScript report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-typescript-report
+          path: |
+            tsc-output.txt
+            tsc-exit.txt
+      - name: Enforce TypeScript
+        shell: bash
+        run: |
+          cat tsc-output.txt
+          test "$(cat tsc-exit.txt)" = "0"
+      - name: Expo web export
+        run: npm run build -- --clear

@@ -1,9 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
+import { isQAActivity } from '../../data/qaTemplates';
+import { useQAData } from '../../data/qaStore';
 import { useSitePlanner } from '../../data/sitePlannerStore';
+import { QAInspectionStatus } from '../../types/qa';
 import { getActivitiesForTemplateDay, getTemplateForPlot, isProgrammeWorkingDay, normaliseProgrammeWeek, orderedActivities, SiteProgrammeSetup, TemplateActivity, TemplateSitePlot } from '../../utils/templateProgramme';
 
 const PROGRAMME_START_DATE = new Date(2026, 6, 6);
@@ -73,8 +76,17 @@ function simplifyActivity(text: string) {
   return clean.length > 14 ? clean.slice(0, 14).toUpperCase() : clean.toUpperCase();
 }
 
+function qaTone(status?: QAInspectionStatus) {
+  if (status === 'Passed') return { backgroundColor: '#dcfce7', borderColor: '#86efac', color: '#166534' };
+  if (status === 'Failed') return { backgroundColor: '#fee2e2', borderColor: '#fecaca', color: '#991b1b' };
+  if (status === 'Incomplete') return { backgroundColor: '#fef3c7', borderColor: '#fde68a', color: '#92400e' };
+  return { backgroundColor: '#f3e8ff', borderColor: '#ddd6fe', color: '#7c3aed' };
+}
+
 export default function TwoWeekProgrammeScreen() {
+  const router = useRouter();
   const { sitePlots, activityDelays, plotTemplates, siteSetup, setActivityDelay, updatePlotTemplate } = useSitePlanner();
+  const { inspections, startInspection } = useQAData();
   const { width } = useWindowDimensions();
   const [startWeek, setStartWeek] = useState(getCurrentProgrammeWeek());
   const [viewDayOffset, setViewDayOffset] = useState(0);
@@ -124,6 +136,10 @@ export default function TwoWeekProgrammeScreen() {
     return Math.max(0, Math.max(1, previous.durationDays) - (current.overlapLagDays ?? previous.durationDays));
   };
 
+  const latestInspection = (plotId: string, activityCode: string) => inspections
+    .filter((inspection) => inspection.plotId === plotId && inspection.activityCode === activityCode)
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+
   const openActivityEditor = (plot: TemplateSitePlot, activity: TemplateActivity) => {
     const template = getTemplateForPlot(plot, plotTemplates);
     const activities = orderedActivities(template);
@@ -136,6 +152,29 @@ export default function TwoWeekProgrammeScreen() {
     setDraftOverlapDays(Math.max(1, overlapDays || 1));
     setDraftDuration(currentDuration);
     setSelectedEdit({ plotId: plot.id, templateId: template.id, activityCode: activity.code });
+  };
+
+  const openProgrammeActivity = async (plot: TemplateSitePlot, activity: TemplateActivity) => {
+    if (!isQAActivity(activity)) {
+      openActivityEditor(plot, activity);
+      return;
+    }
+    const existing = latestInspection(plot.id, activity.code);
+    if (existing) {
+      router.push(`/qa/inspection/${existing.id}`);
+      return;
+    }
+    const template = getTemplateForPlot(plot, plotTemplates);
+    const inspection = await startInspection({
+      plotId: plot.id,
+      plotNo: plot.plotNo,
+      templateId: template.id,
+      activityCode: activity.code,
+      activityName: activity.displayText || activity.code,
+      stage: activity.stage,
+      trade: activity.trade,
+    });
+    router.push(`/qa/inspection/${inspection.id}`);
   };
 
   const closeActivityEditor = () => {
@@ -187,7 +226,7 @@ export default function TwoWeekProgrammeScreen() {
         <View style={styles.headerMain}>
           <Text style={styles.kicker}>Live lookahead</Text>
           <Text style={styles.title}>2 Week Programme</Text>
-          <Text style={styles.subtitle}>Select an activity to adjust its duration or overlap with the previous trade.</Text>
+          <Text style={styles.subtitle}>Select programme work to edit overlap or duration. Select a QA gateway to inspect the plot.</Text>
         </View>
         <View style={styles.headerBadge}><Ionicons name="calendar-outline" size={16} color="#2563eb" /><Text style={styles.headerBadgeText}>{twoWeekDates}</Text></View>
       </View>
@@ -222,7 +261,7 @@ export default function TwoWeekProgrammeScreen() {
         <>
           <View style={styles.editHint}>
             <Ionicons name="hand-left-outline" size={18} color="#1d4ed8" />
-            <Text style={styles.editHintText}>Select any activity to edit overlap or duration. Adjusted activities show a small status badge.</Text>
+            <Text style={styles.editHintText}>Normal activity: edit overlap or duration. Purple QA activity: open the inspection and plot story.</Text>
           </View>
           <View style={styles.programmeCard}>
             <View style={styles.programmeHeader}><Text style={styles.programmeTitle}>Main 2 Week Programme</Text><Text style={styles.programmeSubtitle}>{programmeRows.length} plot{programmeRows.length === 1 ? '' : 's'} shown between {twoWeekDates}</Text></View>
@@ -245,10 +284,16 @@ export default function TwoWeekProgrammeScreen() {
                               const delayDays = getDelayDays(row.plot.id, activity.code);
                               const overlapDays = getOverlapDays(template.id, activity.code);
                               const hasAdjustment = delayDays !== 0 || overlapDays > 0;
+                              const qaGateway = isQAActivity(activity);
+                              const inspection = qaGateway ? latestInspection(row.plot.id, activity.code) : undefined;
+                              const tone = qaTone(inspection?.status);
                               return (
-                                <Pressable key={`${activity.code}-${index}`} style={({ pressed }) => [styles.activityBlock, pressed ? styles.activityBlockPressed : null]} onPress={() => openActivityEditor(row.plot, activity)}>
+                                <Pressable key={`${activity.code}-${index}`} style={({ pressed }) => [styles.activityBlock, qaGateway ? styles.qaGatewayBlock : null, pressed ? styles.activityBlockPressed : null]} onPress={() => openProgrammeActivity(row.plot, activity)}>
                                   <Text style={styles.dayCellText}>{simplifyActivity(activity.displayText || activity.code)}</Text>
-                                  {isFirstVisibleDay && hasAdjustment ? (
+                                  {qaGateway && isFirstVisibleDay ? (
+                                    <View style={[styles.qaStatusBadge, { backgroundColor: tone.backgroundColor, borderColor: tone.borderColor }]}><Ionicons name="shield-checkmark-outline" size={10} color={tone.color} /><Text style={[styles.qaStatusBadgeText, { color: tone.color }]}>{inspection?.status || 'Due'}</Text></View>
+                                  ) : null}
+                                  {!qaGateway && isFirstVisibleDay && hasAdjustment ? (
                                     <View style={styles.adjustmentRow}>
                                       {overlapDays > 0 ? <View style={styles.adjustmentBadge}><Ionicons name="link-outline" size={10} color="#1d4ed8" /><Text style={styles.adjustmentBadgeText}>{overlapDays}d</Text></View> : null}
                                       {delayDays !== 0 ? <View style={styles.adjustmentBadge}><Ionicons name="time-outline" size={10} color="#1d4ed8" /><Text style={styles.adjustmentBadgeText}>{delayDays > 0 ? '+' : ''}{delayDays}d</Text></View> : null}
@@ -291,12 +336,8 @@ export default function TwoWeekProgrammeScreen() {
               <View style={styles.editorSection}>
                 <Text style={styles.editorLabel}>Start relationship</Text>
                 <View style={styles.modeRow}>
-                  <Pressable style={[styles.modeButton, !draftOverlapEnabled ? styles.modeButtonActive : null]} onPress={() => setDraftOverlapEnabled(false)} disabled={savingEdit}>
-                    <Text style={[styles.modeButtonText, !draftOverlapEnabled ? styles.modeButtonTextActive : null]}>After previous</Text>
-                  </Pressable>
-                  <Pressable style={[styles.modeButton, draftOverlapEnabled ? styles.modeButtonActive : null, !previousActivity ? styles.modeButtonDisabled : null]} onPress={() => previousActivity && setDraftOverlapEnabled(true)} disabled={!previousActivity || savingEdit}>
-                    <Text style={[styles.modeButtonText, draftOverlapEnabled ? styles.modeButtonTextActive : null]}>Overlap previous</Text>
-                  </Pressable>
+                  <Pressable style={[styles.modeButton, !draftOverlapEnabled ? styles.modeButtonActive : null]} onPress={() => setDraftOverlapEnabled(false)} disabled={savingEdit}><Text style={[styles.modeButtonText, !draftOverlapEnabled ? styles.modeButtonTextActive : null]}>After previous</Text></Pressable>
+                  <Pressable style={[styles.modeButton, draftOverlapEnabled ? styles.modeButtonActive : null, !previousActivity ? styles.modeButtonDisabled : null]} onPress={() => previousActivity && setDraftOverlapEnabled(true)} disabled={!previousActivity || savingEdit}><Text style={[styles.modeButtonText, draftOverlapEnabled ? styles.modeButtonTextActive : null]}>Overlap previous</Text></Pressable>
                 </View>
                 {previousActivity ? <Text style={styles.editorHelper}>Previous activity: {previousActivity.displayText}</Text> : <Text style={styles.editorHelper}>This is the first activity in the sequence, so it cannot overlap a previous activity.</Text>}
               </View>
@@ -405,8 +446,11 @@ const styles = StyleSheet.create({
   weekendCell: { backgroundColor: '#f1f5f9' },
   activeDayCell: { backgroundColor: '#dbeafe' },
   activityBlock: { alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 7, paddingHorizontal: 3, borderRadius: 8 },
+  qaGatewayBlock: { backgroundColor: '#faf5ff', borderWidth: 1, borderColor: '#d8b4fe' },
   activityBlockPressed: { backgroundColor: 'rgba(255, 255, 255, 0.72)' },
   dayCellText: { color: '#0f172a', fontSize: 10, lineHeight: 12, fontWeight: '900', textAlign: 'center' },
+  qaStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, borderWidth: 1, borderRadius: 999, paddingHorizontal: 5, paddingVertical: 2 },
+  qaStatusBadgeText: { fontSize: 8, fontWeight: '900' },
   adjustmentRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 3 },
   adjustmentBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#93c5fd', borderRadius: 999, paddingHorizontal: 5, paddingVertical: 2 },
   adjustmentBadgeText: { color: '#1d4ed8', fontSize: 8, fontWeight: '900' },
