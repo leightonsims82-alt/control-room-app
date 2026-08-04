@@ -38,7 +38,7 @@ export type SiteProgrammeSetup = {
   workingWeek: string;
   includeSaturday: boolean;
   includeSunday: boolean;
-  programmeStartDate?: string;
+  programmeStartDate: string;
 };
 
 export const DEFAULT_SITE_PROGRAMME_SETUP: SiteProgrammeSetup = {
@@ -48,6 +48,7 @@ export const DEFAULT_SITE_PROGRAMME_SETUP: SiteProgrammeSetup = {
   workingWeek: '5 days - Monday to Friday',
   includeSaturday: false,
   includeSunday: false,
+  programmeStartDate: '2026-01-05',
 };
 
 export const STAGE_LABELS: Record<number, string> = {

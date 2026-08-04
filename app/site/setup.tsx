@@ -141,8 +141,10 @@ export default function SiteSetupScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Site programme defaults</Text>
+        <Text style={styles.helpText}>The programme start date drives the real date headers in the 2-week and trade programmes. Use YYYY-MM-DD.</Text>
         <View style={styles.formGrid}>
           <Field label="Site name"><TextInput value={siteSetup.siteName} onChangeText={(siteName) => saveSiteSetup({ siteName })} style={styles.input} /></Field>
+          <Field label="Programme start date"><TextInput value={siteSetup.programmeStartDate} onChangeText={(programmeStartDate) => saveSiteSetup({ programmeStartDate })} placeholder="2026-01-05" style={styles.input} /></Field>
           <Field label="Default programme weeks"><TextInput value={String(siteSetup.defaultProgrammeWeeks)} onChangeText={(value) => saveSiteSetup({ defaultProgrammeWeeks: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} /></Field>
           <Field label="Default stage count"><TextInput value={String(siteSetup.stageCount)} onChangeText={(value) => saveSiteSetup({ stageCount: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} /></Field>
           <Field label="Working week">
