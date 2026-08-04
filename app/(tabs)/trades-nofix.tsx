@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
-import { formatProgrammeDate } from '../../utils/programmeDates';
+import { formatProgrammeDate, getCurrentProgrammeWeek } from '../../utils/programmeDates';
 import { getActivitiesForTemplateDay } from '../../utils/templateProgramme';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -18,23 +18,33 @@ function liveLink(trade: string) { return Platform.OS === 'web' && typeof window
 function printLink(trade: string) { return Platform.OS === 'web' && typeof window !== 'undefined' ? `${window.location.origin}/supervisor?trade=${slug(trade)}&print=1` : `/supervisor?trade=${slug(trade)}&print=1`; }
 
 export default function TradesNoFixScreen() {
-  const { sitePlots, activityDelays, tradeContacts, plotTemplates, siteSetup, setActivityDelay, recordIssue } = useSitePlanner();
+  const { sitePlots, activityDelays, tradeContacts, plotTemplates, siteSetup, isSitePlannerLoaded, setActivityDelay, recordIssue } = useSitePlanner();
   const [tradeId, setTradeId] = useState(tradeContacts[0]?.id ?? '');
-  const [weekText, setWeekText] = useState('1');
+  const [weekText, setWeekText] = useState(() => String(nw(getCurrentProgrammeWeek(siteSetup.programmeStartDate))));
   const [message, setMessage] = useState('');
   const trade = tradeContacts.find((item) => item.id === tradeId)?.trade ?? tradeContacts[0]?.trade ?? 'Trade';
-  const startWeek = nw(Number(weekText) || 1);
+  const startWeek = nw(Number(weekText) || getCurrentProgrammeWeek(siteSetup.programmeStartDate));
   const days = useMemo(() => makeDays(startWeek, siteSetup.programmeStartDate), [startWeek, siteSetup.programmeStartDate]);
   const link = liveLink(trade);
   const pdfUrl = printLink(trade);
 
+  useEffect(() => {
+    if (!isSitePlannerLoaded) return;
+    setWeekText(String(nw(getCurrentProgrammeWeek(siteSetup.programmeStartDate))));
+  }, [isSitePlannerLoaded, siteSetup.programmeStartDate]);
+
   const rows = useMemo(() => sitePlots.map((plot) => {
-    const cells = days.map((day) => day.weekend ? '' : getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates).filter((a) => a.trade === trade).map((a) => a.displayText).join('\n'));
-    const active = days.flatMap((day) => getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates)).find((a) => a.trade === trade);
-    const delay = active ? activityDelays.find((d) => d.plotId === plot.id && d.activityCode === active.code)?.delayDays ?? 0 : 0;
-    const last = cells.reduce((prev, cell, index) => cell ? index : prev, -1);
+    const cells = days.map((day) => getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates, siteSetup)
+      .filter((activity) => activity.trade === trade)
+      .map((activity) => activity.displayText)
+      .join('\n'));
+    const active = days
+      .flatMap((day) => getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates, siteSetup))
+      .find((activity) => activity.trade === trade);
+    const delay = active ? activityDelays.find((item) => item.plotId === plot.id && item.activityCode === active.code)?.delayDays ?? 0 : 0;
+    const last = cells.reduce((previous, cell, index) => cell ? index : previous, -1);
     return { plot, cells, active, delay, last };
-  }).filter((row) => row.cells.some(Boolean)), [sitePlots, days, activityDelays, plotTemplates, trade]);
+  }).filter((row) => row.cells.some(Boolean)), [sitePlots, days, activityDelays, plotTemplates, siteSetup, trade]);
 
   const move = async (row: any, change: number) => {
     if (!row.active) return;
@@ -57,16 +67,16 @@ export default function TradesNoFixScreen() {
   return (
     <AppScreen>
       <View style={styles.header}><Text style={styles.title}>2-Week Trade Programme</Text><Text style={styles.subtitle}>Live trade programme view for supervisors. PDF is only a formal record.</Text></View>
-      <SectionCard title="2-week trade programme" subtitle="The Fix / Stage column has been removed. Supervisors see the live read-only table from their link.">
+      <SectionCard title="2-week trade programme" subtitle="The trade workload uses the same current 2-week window and site calendar as the Main 2 Week Programme.">
         <View style={styles.top}><View style={styles.weekInput}><Text style={styles.label}>Start week</Text><TextInput value={weekText} onChangeText={setWeekText} style={styles.input} keyboardType="number-pad" /></View><View style={styles.summary}><Text style={styles.summaryTitle}>{trade} Programme</Text><Text style={styles.summaryMeta}>WK{String(startWeek).padStart(2, '0')} + WK{String(nw(startWeek + 1)).padStart(2, '0')}</Text></View></View>
         {message ? <Text style={styles.notice}>{message}</Text> : null}
         <ScrollView horizontal showsHorizontalScrollIndicator><View style={styles.chips}>{tradeContacts.map((item) => <Pressable key={item.id} style={[styles.chip, item.id === tradeId && styles.chipActive]} onPress={() => setTradeId(item.id)}><Text style={[styles.chipText, item.id === tradeId && styles.chipTextActive]}>{item.trade}</Text></Pressable>)}</View></ScrollView>
         <ScrollView horizontal showsHorizontalScrollIndicator><View style={styles.table}>
-          <View style={styles.row}><Text style={[styles.head, styles.plot]} /><Text style={[styles.head, styles.trade]} />{[startWeek, nw(startWeek + 1)].map((w) => <Text key={w} style={styles.week}>WK{String(w).padStart(2, '0')}</Text>)}</View>
-          <View style={styles.row}><Text style={[styles.head, styles.plot]}>Plot No</Text><Text style={[styles.head, styles.trade]}>Trade</Text>{days.map((d) => <Text key={d.key} style={[styles.dayHead, d.weekend && styles.weekendHead]}>{d.name}</Text>)}</View>
-          <View style={styles.row}><Text style={[styles.dateBlank, styles.plot]} /><Text style={[styles.dateBlank, styles.trade]} />{days.map((d) => <Text key={`date-${d.key}`} style={[styles.dateHead, d.weekend && styles.weekendDate]}>{d.date}</Text>)}</View>
+          <View style={styles.row}><Text style={[styles.head, styles.plot]} /><Text style={[styles.head, styles.trade]} />{[startWeek, nw(startWeek + 1)].map((week) => <Text key={week} style={styles.week}>WK{String(week).padStart(2, '0')}</Text>)}</View>
+          <View style={styles.row}><Text style={[styles.head, styles.plot]}>Plot No</Text><Text style={[styles.head, styles.trade]}>Trade</Text>{days.map((day) => <Text key={day.key} style={[styles.dayHead, day.weekend && styles.weekendHead]}>{day.name}</Text>)}</View>
+          <View style={styles.row}><Text style={[styles.dateBlank, styles.plot]} /><Text style={[styles.dateBlank, styles.trade]} />{days.map((day) => <Text key={`date-${day.key}`} style={[styles.dateHead, day.weekend && styles.weekendDate]}>{day.date}</Text>)}</View>
           {rows.length === 0 ? <View style={styles.row}><Text style={[styles.cell, styles.empty]}>No planned {trade} activity in this 2-week window.</Text></View> : null}
-          {rows.map((row, ri) => <View key={row.plot.id} style={[styles.row, ri % 2 ? styles.alt : null]}><Text style={[styles.cell, styles.plot]}>{row.plot.plotNo}</Text><Text style={[styles.cell, styles.trade]}>{trade}</Text>{row.cells.map((cell, index) => <View key={`${row.plot.id}-${index}`} style={[styles.dayCell, days[index].weekend && styles.weekendCell, cell && styles.activeCell, index === row.last && styles.finalCell]}><Text style={styles.dayText}>{cell}</Text>{index === row.last ? <View style={styles.moveBtns}><Pressable style={styles.minus} onPress={() => move(row, -1)}><Text style={styles.moveText}>-</Text></Pressable><Pressable style={styles.plus} onPress={() => move(row, 1)}><Text style={styles.moveText}>+</Text></Pressable></View> : null}</View>)}</View>)}
+          {rows.map((row, rowIndex) => <View key={row.plot.id} style={[styles.row, rowIndex % 2 ? styles.alt : null]}><Text style={[styles.cell, styles.plot]}>{row.plot.plotNo}</Text><Text style={[styles.cell, styles.trade]}>{trade}</Text>{row.cells.map((cell, index) => <View key={`${row.plot.id}-${index}`} style={[styles.dayCell, days[index].weekend && styles.weekendCell, cell && styles.activeCell, index === row.last && styles.finalCell]}><Text style={styles.dayText}>{cell}</Text>{index === row.last ? <View style={styles.moveBtns}><Pressable style={styles.minus} onPress={() => move(row, -1)}><Text style={styles.moveText}>-</Text></Pressable><Pressable style={styles.plus} onPress={() => move(row, 1)}><Text style={styles.moveText}>+</Text></Pressable></View> : null}</View>)}</View>)}
         </View></ScrollView>
         <View style={styles.livePanel}><View style={{ flex: 1, minWidth: 220 }}><Text style={styles.liveTitle}>Live Supervisor Programme</Text><Text style={styles.liveText}>Supervisors can use this link to see the live {trade} programme at any time.</Text><Text style={styles.liveLink}>{link}</Text></View><View style={styles.buttons}><Pressable style={styles.primary} onPress={openLive}><Text style={styles.primaryText}>Open Live View</Text></Pressable><Pressable style={styles.secondary} onPress={copyLive}><Text style={styles.secondaryText}>Copy Live Link</Text></Pressable><Pressable style={styles.secondary} onPress={pdf}><Text style={styles.secondaryText}>Generate PDF Record</Text></Pressable></View></View>
       </SectionCard>
