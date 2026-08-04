@@ -4,6 +4,7 @@ import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useProgrammeData } from '../../data/programmeStore';
 import { useSitePlanner } from '../../data/sitePlannerStore';
+import { getProgrammeStartDateValue } from '../../utils/programmeDates';
 
 export default function MoreScreen() {
   const { defects, inspections } = useProgrammeData();
@@ -21,6 +22,7 @@ export default function MoreScreen() {
         <InfoRow label="Default programme" value={`${siteSetup.defaultProgrammeWeeks} weeks`} />
         <InfoRow label="Default stage count" value={`${siteSetup.stageCount}`} />
         <InfoRow label="Working week" value={siteSetup.workingWeek} />
+        <InfoRow label="Week 1 commencement date" value={getProgrammeStartDateValue(siteSetup.programmeStartDate)} />
         <InfoRow label="Templates" value={`${plotTemplates.length}`} />
         <Link href="/site/setup" asChild>
           <Pressable style={styles.primaryButton}>

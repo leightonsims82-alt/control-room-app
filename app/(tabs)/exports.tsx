@@ -55,20 +55,20 @@ export default function ExportsScreen() {
 
   const exportSmPdfPack = () => {
     let opened = false;
-    if (sendMaster) opened = exportMasterProgrammePdf({ siteName: siteSetup.siteName, plots: sitePlots, templates: plotTemplates }) || opened;
-    if (sendMainTwoWeek) opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates }) || opened;
-    if (sendTradeProgrammesToSmTeam) opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates, trades: allTradeNames }) || opened;
+    if (sendMaster) opened = exportMasterProgrammePdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, plots: sitePlots, templates: plotTemplates }) || opened;
+    if (sendMainTwoWeek) opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates }) || opened;
+    if (sendTradeProgrammesToSmTeam) opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates, trades: allTradeNames }) || opened;
     setStatus(opened ? 'PDF export opened — use Save as PDF in the print window' : 'Allow pop-ups to export PDF');
   };
 
   const exportTradePdfPack = () => {
     const trades = tradeNamesWithEmails.length ? tradeNamesWithEmails : allTradeNames;
-    const opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates, trades });
+    const opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates, trades });
     setStatus(opened ? 'Trade PDF export opened — use Save as PDF in the print window' : 'Allow pop-ups to export PDF');
   };
 
   const exportMainPdf = () => {
-    const opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates });
+    const opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates });
     setStatus(opened ? 'Main 2-week PDF export opened' : 'Allow pop-ups to export PDF');
   };
 

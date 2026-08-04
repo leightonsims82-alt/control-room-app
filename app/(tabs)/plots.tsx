@@ -4,6 +4,7 @@ import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { DAY_NAMES, WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
+import { formatProgrammeDate } from '../../utils/programmeDates';
 import { getPlotBreakdownTemplateText, getStage1StartWeekForPlot, getTemplateForPlot } from '../../utils/templateProgramme';
 
 const ALL_TYPES = 'All plot types';
@@ -11,7 +12,7 @@ const DAY_WIDTH = 82;
 const WEEK_WIDTH = DAY_WIDTH * 5;
 
 export default function PlotsScreen() {
-  const { sitePlots, activityDelays, plotTemplates } = useSitePlanner();
+  const { sitePlots, activityDelays, plotTemplates, siteSetup } = useSitePlanner();
   const [selectedTemplateId, setSelectedTemplateId] = useState(ALL_TYPES);
   const filteredPlots = selectedTemplateId === ALL_TYPES ? sitePlots : sitePlots.filter((plot) => plot.templateId === selectedTemplateId);
   const templateFilters = [ALL_TYPES, ...plotTemplates.map((template) => template.id)];
@@ -58,12 +59,12 @@ export default function PlotsScreen() {
                 <Text style={[styles.weekHeaderBlank, styles.templateCell]} />
                 <Text style={[styles.weekHeaderBlank, styles.stageCell]} />
                 <Text style={[styles.weekHeaderBlank, styles.stageCell]} />
-                {WEEK_NUMBERS.map((week) => <Text key={week} style={styles.weekGroup}>WK{String(week).padStart(2, '0')}</Text>)}
+                {WEEK_NUMBERS.map((week) => <Text key={week} style={styles.weekGroup}>WK{String(week).padStart(2, '0')} · {formatProgrammeDate(siteSetup.programmeStartDate, week)}</Text>)}
               </View>
               <View style={styles.tableRow}>
                 <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
                 <Text style={[styles.headerCell, styles.templateCell]}>Type</Text>
-                <Text style={[styles.headerCell, styles.stageCell]}>Stage 9</Text>
+                <Text style={[styles.headerCell, styles.stageCell]}>Plot Completion</Text>
                 <Text style={[styles.headerCell, styles.stageCell]}>Stage 1</Text>
                 {WEEK_NUMBERS.flatMap((week) => DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>{day}</Text>))}
               </View>
@@ -74,7 +75,7 @@ export default function PlotsScreen() {
                   <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                     <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
                     <Text style={[styles.bodyCell, styles.templateCell]}>{template.name}</Text>
-                    <Text style={[styles.bodyCell, styles.stageCell]}>{plot.stage9CompleteWeek}</Text>
+                    <Text style={[styles.bodyCell, styles.stageCell]}>{formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
                     <Text style={[styles.stageStartCell, styles.stageCell]}>{getStage1StartWeekForPlot(plot, plotTemplates)}</Text>
                     {WEEK_NUMBERS.flatMap((week) =>
                       DAY_NAMES.map((_, dayIndex) => {

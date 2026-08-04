@@ -48,7 +48,7 @@ export const DEFAULT_SITE_PROGRAMME_SETUP: SiteProgrammeSetup = {
   workingWeek: '5 days - Monday to Friday',
   includeSaturday: false,
   includeSunday: false,
-  programmeStartDate: '2026-01-05',
+  programmeStartDate: '05/01/2026',
 };
 
 export const STAGE_LABELS: Record<number, string> = {

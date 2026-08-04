@@ -25,7 +25,7 @@ export default function WelcomeScreen() {
 
       <View style={styles.cardGrid}>
         <Feature title="Site details" text="Add the site name, programme defaults and working week." icon="business-outline" />
-        <Feature title="Plots" text="Add plot numbers, house types and handover weeks." icon="home-outline" />
+        <Feature title="Plots" text="Add plot numbers, house types and Plot Completion Dates." icon="home-outline" />
         <Feature title="Trades" text="Manage trade lookaheads, call-offs and recovery notes." icon="briefcase-outline" />
         <Feature title="QA" text="Keep progress notes, photos and issue logs together." icon="shield-checkmark-outline" />
       </View>

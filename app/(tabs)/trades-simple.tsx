@@ -3,6 +3,7 @@ import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
+import { formatProgrammeDate } from '../../utils/programmeDates';
 import { getActivitiesForTemplateDay } from '../../utils/templateProgramme';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -14,22 +15,11 @@ function normaliseWeek(week: number) {
   return ((((Math.round(week) - 1) % 52) + 52) % 52) + 1;
 }
 
-function getShortWeekDate(week: number, dayIndex: number) {
-  const year = new Date().getFullYear();
-  const firstThursday = new Date(year, 0, 4);
-  const firstMonday = new Date(firstThursday);
-  const day = firstThursday.getDay() || 7;
-  firstMonday.setDate(firstThursday.getDate() - day + 1);
-  const target = new Date(firstMonday);
-  target.setDate(firstMonday.getDate() + (week - 1) * 7 + dayIndex);
-  return `${String(target.getDate()).padStart(2, '0')}/${String(target.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function buildDays(startWeek: number) {
+function buildDays(startWeek: number, programmeStartDate: string) {
   return Array.from({ length: 14 }, (_, i) => {
     const week = normaliseWeek(startWeek + Math.floor(i / 7));
     const dayIndex = i % 7;
-    return { key: `${week}-${dayIndex}`, week, day: dayIndex + 1, dayIndex, dayName: DAYS[dayIndex], date: getShortWeekDate(week, dayIndex), weekend: dayIndex >= 5 };
+    return { key: `${week}-${dayIndex}`, week, day: dayIndex + 1, dayIndex, dayName: DAYS[dayIndex], date: formatProgrammeDate(programmeStartDate, week, dayIndex + 1), weekend: dayIndex >= 5 };
   });
 }
 
@@ -43,13 +33,13 @@ function makeLink(trade: string) {
 }
 
 export default function TradesSimpleScreen() {
-  const { sitePlots, activityDelays, tradeContacts, plotTemplates, setActivityDelay, recordIssue } = useSitePlanner();
+  const { sitePlots, activityDelays, tradeContacts, plotTemplates, siteSetup, setActivityDelay, recordIssue } = useSitePlanner();
   const [selectedTradeId, setSelectedTradeId] = useState(tradeContacts[0]?.id ?? '');
   const [startWeekText, setStartWeekText] = useState('1');
   const [message, setMessage] = useState('');
   const activeTrade = tradeContacts.find((trade) => trade.id === selectedTradeId)?.trade ?? tradeContacts[0]?.trade ?? 'Trade';
   const startWeek = normaliseWeek(Number(startWeekText) || 1);
-  const days = useMemo(() => buildDays(startWeek), [startWeek]);
+  const days = useMemo(() => buildDays(startWeek, siteSetup.programmeStartDate), [startWeek, siteSetup.programmeStartDate]);
   const link = makeLink(activeTrade);
 
   const rows = useMemo(() => sitePlots.map((plot) => {

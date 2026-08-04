@@ -1,9 +1,10 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { getEffectiveProgrammeWeeks, TemplateActivity } from '../../utils/templateProgramme';
+import { getProgrammeStartDateValue, normaliseBritishDate, validateWeekOneDate } from '../../utils/programmeDates';
 
 const allowedStages = [1, 2, 4, 5, 6, 7, 8, 9] as const;
 const workingDayChoices = [5, 6, 7] as const;
@@ -54,6 +55,8 @@ export default function SiteSetupScreen() {
   const [selectedTemplateId, setSelectedTemplateId] = useState(plotTemplates[2]?.id ?? plotTemplates[0]?.id ?? 'threeBed');
   const [saved, setSaved] = useState(false);
   const [message, setMessage] = useState('');
+  const [weekOneDate, setWeekOneDate] = useState(getProgrammeStartDateValue(siteSetup.programmeStartDate));
+  const [weekOneDateError, setWeekOneDateError] = useState('');
 
   const plotTypeTemplates = plotTemplates.filter((template) => template.id !== 'timberFrame');
   const selectedPlotTypeTemplate = plotTypeTemplates.find((template) => template.id === selectedTemplateId) ?? plotTypeTemplates[0] ?? plotTemplates[0];
@@ -62,11 +65,26 @@ export default function SiteSetupScreen() {
   const orderedActivities = selectedTemplate ? reorderActivities(selectedTemplate.activities) : [];
   const activeWorkingDays = currentWorkingDays(siteSetup);
 
+  useEffect(() => {
+    setWeekOneDate(getProgrammeStartDateValue(siteSetup.programmeStartDate));
+  }, [siteSetup.programmeStartDate]);
+
   const markChanged = () => setSaved(false);
   const goMain = () => router.replace('/');
   const handleSave = () => {
+    const dateError = validateWeekOneDate(weekOneDate);
+    setWeekOneDateError(dateError);
+    if (dateError) return;
+    updateSiteSetup({ programmeStartDate: normaliseBritishDate(weekOneDate) });
     setSaved(true);
     router.replace('/');
+  };
+
+  const saveWeekOneDate = () => {
+    const dateError = validateWeekOneDate(weekOneDate);
+    setWeekOneDateError(dateError);
+    if (dateError) return;
+    saveSiteSetup({ programmeStartDate: normaliseBritishDate(weekOneDate) });
   };
 
   const saveSiteSetup = (changes: Partial<typeof siteSetup>) => {
@@ -141,10 +159,10 @@ export default function SiteSetupScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Site programme defaults</Text>
-        <Text style={styles.helpText}>The programme start date drives the real date headers in the 2-week and trade programmes. Use YYYY-MM-DD.</Text>
+        <Text style={styles.helpText}>Enter the Monday when programme Week 1 begins. This required date drives all programme headings.</Text>
         <View style={styles.formGrid}>
           <Field label="Site name"><TextInput value={siteSetup.siteName} onChangeText={(siteName) => saveSiteSetup({ siteName })} style={styles.input} /></Field>
-          <Field label="Programme start date"><TextInput value={siteSetup.programmeStartDate} onChangeText={(programmeStartDate) => saveSiteSetup({ programmeStartDate })} placeholder="2026-01-05" style={styles.input} /></Field>
+          <Field label="Week 1 commencement date"><TextInput value={weekOneDate} onChangeText={(value) => { setWeekOneDate(value); setWeekOneDateError(''); markChanged(); }} onBlur={saveWeekOneDate} placeholder="DD/MM/YYYY" style={[styles.input, weekOneDateError ? styles.inputError : null]} keyboardType="numbers-and-punctuation" /><Text style={weekOneDateError ? styles.errorText : styles.helpText}>{weekOneDateError || 'Required · Monday · DD/MM/YYYY'}</Text></Field>
           <Field label="Default programme weeks"><TextInput value={String(siteSetup.defaultProgrammeWeeks)} onChangeText={(value) => saveSiteSetup({ defaultProgrammeWeeks: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} /></Field>
           <Field label="Default stage count"><TextInput value={String(siteSetup.stageCount)} onChangeText={(value) => saveSiteSetup({ stageCount: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} /></Field>
           <Field label="Working week">
@@ -197,6 +215,8 @@ const styles = StyleSheet.create({
   field: { gap: 8, minWidth: 150, flex: 1 },
   label: { color: '#475569', fontSize: 13, fontWeight: '900' },
   input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', backgroundColor: '#ffffff', fontWeight: '800' },
+  inputError: { borderColor: '#dc2626' },
+  errorText: { color: '#dc2626', fontSize: 12, fontWeight: '800' },
   optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   smallChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: '#ffffff' },
   smallChipActive: { backgroundColor: '#173b5f', borderColor: '#173b5f' },

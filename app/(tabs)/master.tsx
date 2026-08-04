@@ -4,6 +4,7 @@ import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { SitePlotInput, useSitePlanner } from '../../data/sitePlannerStore';
 import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber, WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
+import { formatProgrammeDate, getProgrammeWeekForDate, validatePlotCompletionDate, validateWeekOneDate } from '../../utils/programmeDates';
 import {
   getHouseTypeLabel,
   getPlotBuildOrder,
@@ -19,11 +20,12 @@ import {
 type ResetMode = 'all' | 'single';
 
 export default function MasterProgrammeScreen() {
-  const { sitePlots, plotTemplates, upsertSitePlot, bulkUpsertSitePlots, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
+  const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, bulkUpsertSitePlots, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
   const [plotNo, setPlotNo] = useState('');
   const [buildOrder, setBuildOrder] = useState('');
-  const [preHandoverWeek, setPreHandoverWeek] = useState('');
+  const [plotCompletionDate, setPlotCompletionDate] = useState('');
+  const [plotDateError, setPlotDateError] = useState('');
   const [templateId, setTemplateId] = useState(plotTemplates[2]?.id ?? 'threeBed');
   const [bulkText, setBulkText] = useState('');
   const [resetMode, setResetMode] = useState<ResetMode>('single');
@@ -36,7 +38,7 @@ export default function MasterProgrammeScreen() {
   const selectedHoldPlot = sortedPlots.find((plot) => plot.id === holdPlotId) ?? sortedPlots[0];
   const nextPlotHint = String(sitePlots.length + 1);
   const nextBuildOrderHint = String(sitePlots.length + 1);
-  const nextPreHandoverHint = String((sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.stage9CompleteWeek)) : 22) + 1);
+  const nextCompletionHint = formatProgrammeDate(siteSetup.programmeStartDate, (sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.stage9CompleteWeek)) : 22) + 1);
 
   useEffect(() => {
     if (!selectedResetPlotId && sortedPlots[0]?.id) setSelectedResetPlotId(sortedPlots[0].id);
@@ -60,8 +62,10 @@ export default function MasterProgrammeScreen() {
   };
 
   const savePlot = async () => {
-    const parsedWeek = Number(preHandoverWeek);
-    if (!plotNo.trim() || !Number.isFinite(parsedWeek) || parsedWeek <= 0) return;
+    const dateError = validatePlotCompletionDate(siteSetup.programmeStartDate, plotCompletionDate);
+    setPlotDateError(dateError);
+    const parsedWeek = getProgrammeWeekForDate(siteSetup.programmeStartDate, plotCompletionDate);
+    if (!plotNo.trim() || dateError || !parsedWeek) return;
     await upsertSitePlot({
       plotNo,
       buildOrder: Number(buildOrder) || sitePlots.length + 1,
@@ -70,15 +74,20 @@ export default function MasterProgrammeScreen() {
     });
     setPlotNo('');
     setBuildOrder('');
-    setPreHandoverWeek('');
+    setPlotCompletionDate('');
+    setPlotDateError('');
     setClearConfirm(false);
   };
 
   const importBulkPlots = async () => {
-    const inputs = parseBulkPlotText(bulkText, findTemplateId);
+    const weekOneError = validateWeekOneDate(siteSetup.programmeStartDate);
+    if (weekOneError) { setPlotDateError(weekOneError); return; }
+    const inputs = parseBulkPlotText(bulkText, findTemplateId, siteSetup.programmeStartDate);
+    if (!inputs.length) { setPlotDateError('No valid rows found. Use DD/MM/YYYY completion dates on or after Week 1.'); return; }
     if (!inputs.length) return;
     await bulkUpsertSitePlots(inputs);
     setBulkText('');
+    setPlotDateError('');
     setClearConfirm(false);
   };
 
@@ -149,8 +158,8 @@ export default function MasterProgrammeScreen() {
             <TextInput value={plotNo} onChangeText={setPlotNo} style={styles.input} placeholder={`e.g. ${nextPlotHint}`} />
           </View>
           <View style={styles.inputWrapSmall}>
-            <Text style={styles.label}>Pre-handover week</Text>
-            <TextInput value={preHandoverWeek} onChangeText={setPreHandoverWeek} style={styles.input} keyboardType="number-pad" placeholder={`e.g. ${nextPreHandoverHint}`} />
+            <Text style={styles.label}>Plot Completion Date</Text>
+            <TextInput value={plotCompletionDate} onChangeText={(value) => { setPlotCompletionDate(value); setPlotDateError(''); }} style={[styles.input, plotDateError ? styles.inputError : null]} keyboardType="numbers-and-punctuation" placeholder={`e.g. ${nextCompletionHint}`} />
           </View>
           <View style={styles.inputWrapWide}>
             <Text style={styles.label}>House type</Text>
@@ -171,18 +180,19 @@ export default function MasterProgrammeScreen() {
             <Text style={styles.saveButtonText}>Save Plot</Text>
           </Pressable>
         </View>
+        {plotDateError ? <Text style={styles.errorText}>{plotDateError}</Text> : null}
       </SectionCard>
 
-      <SectionCard title="Bulk plot entry" subtitle="Paste multiple plots at once: Build Order, Plot No, House Type Code, Pre-Handover Week. Plot numbers do not need to be in sequence.">
+      <SectionCard title="Bulk plot entry" subtitle="Paste multiple plots at once: Build Order, Plot No, House Type Code, Plot Completion Date. Plot numbers do not need to be in sequence.">
         <TextInput
           value={bulkText}
           onChangeText={setBulkText}
           multiline
-          placeholder={'1, 24, HT-A, 33\n2, 18, HT-B, 34\n3, 31, 3B, 35\n4, 12, 4B, 36'}
+          placeholder={'1, 24, HT-A, 16/03/2026\n2, 18, HT-B, 23/03/2026'}
           style={styles.bulkInput}
         />
         <View style={styles.bulkFooter}>
-          <Text style={styles.bulkHelp}>Format: build order, plot no, house type/code, pre-handover week. Commas or tabs both work.</Text>
+          <Text style={styles.bulkHelp}>Format: build order, plot no, house type/code, Plot Completion Date (DD/MM/YYYY). Commas or tabs both work.</Text>
           <Pressable style={styles.saveButton} onPress={importBulkPlots}>
             <Text style={styles.saveButtonText}>Import Plots</Text>
           </Pressable>
@@ -270,9 +280,9 @@ export default function MasterProgrammeScreen() {
               <Text style={[styles.headerCell, styles.templateCell]}>Type</Text>
               <Text style={[styles.headerCell, styles.holdCell]}>Hold</Text>
               <Text style={[styles.headerCell, styles.weekInputCell]}>Start</Text>
-              <Text style={[styles.headerCell, styles.weekInputCell]}>Pre-H/O</Text>
+              <Text style={[styles.headerCell, styles.completionCell]}>Plot Completion</Text>
               {WEEK_NUMBERS.map((week) => (
-                <Text key={week} style={styles.weekHeader}>WK{String(week).padStart(2, '0')}</Text>
+                <Text key={week} style={styles.weekHeader}>{`WK${String(week).padStart(2, '0')}\n${formatProgrammeDate(siteSetup.programmeStartDate, week)}`}</Text>
               ))}
               <Text style={[styles.headerCell, styles.actionCell]}>Action</Text>
             </View>
@@ -292,7 +302,7 @@ export default function MasterProgrammeScreen() {
                   <Text style={[styles.bodyCell, styles.templateCell]}>{getHouseTypeLabel(template)}</Text>
                   <Text style={[styles.holdBodyCell, styles.holdCell, plot.holdStage ? styles.holdBodyCellActive : null]}>{getPlotHoldLabel(plot)}</Text>
                   <Text style={[styles.stageStartBody, styles.weekInputCell]}>WK{String(getStage1StartWeekForPlot(plot, plotTemplates)).padStart(2, '0')}</Text>
-                  <Text style={[styles.weekInputBody, styles.weekInputCell]}>WK{String(plot.stage9CompleteWeek).padStart(2, '0')}</Text>
+                  <Text style={[styles.weekInputBody, styles.completionCell]}>{formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
                   {WEEK_NUMBERS.map((week) => {
                     const stage = getStageNumberForPlotWeek(plot, week, plotTemplates);
                     const heldStageCell = String(stage).includes('H');
@@ -325,17 +335,17 @@ export default function MasterProgrammeScreen() {
   );
 }
 
-function parseBulkPlotText(text: string, findTemplateId: (houseTypeText: string) => string): SitePlotInput[] {
+function parseBulkPlotText(text: string, findTemplateId: (houseTypeText: string) => string, weekOneDate: string): SitePlotInput[] {
   return text
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => line.split(/[\t,]+/).map((part) => part.trim()))
-    .map(([buildOrder, plotNo, houseType, preHandoverWeek]) => ({
+    .map(([buildOrder, plotNo, houseType, completionDate]) => ({
       buildOrder: Number(buildOrder),
       plotNo: plotNo || '',
       templateId: findTemplateId(houseType || ''),
-      stage9CompleteWeek: Number(preHandoverWeek),
+      stage9CompleteWeek: getProgrammeWeekForDate(weekOneDate, completionDate || '') ?? 0,
     }))
     .filter((item) => item.plotNo && Number.isFinite(item.stage9CompleteWeek) && item.stage9CompleteWeek > 0);
 }
@@ -349,6 +359,8 @@ const styles = StyleSheet.create({
   inputWrapWide: { gap: 6, minWidth: 260, flex: 2 },
   label: { color: '#334155', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
   input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', fontWeight: '800' },
+  inputError: { borderColor: '#dc2626' },
+  errorText: { color: '#dc2626', fontSize: 12, fontWeight: '800' },
   bulkInput: { minHeight: 130, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, color: '#0f172a', fontWeight: '800', textAlignVertical: 'top' },
   bulkFooter: { flexDirection: 'row', gap: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' },
   bulkHelp: { flex: 1, minWidth: 280, color: '#64748b', fontSize: 12, lineHeight: 18 },
@@ -394,6 +406,7 @@ const styles = StyleSheet.create({
   templateCell: { width: 118 },
   holdCell: { width: 96 },
   weekInputCell: { width: 104 },
+  completionCell: { width: 132 },
   actionCell: { width: 86 },
   weekHeader: { width: 58, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },

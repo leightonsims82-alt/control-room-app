@@ -4,9 +4,9 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
+import { formatProgrammeDate, getCurrentProgrammeWeek } from '../../utils/programmeDates';
 import { getActivitiesForTemplateDay, getTemplateForPlot, isProgrammeWorkingDay, normaliseProgrammeWeek, orderedActivities, SiteProgrammeSetup, TemplateActivity, TemplateSitePlot } from '../../utils/templateProgramme';
 
-const PROGRAMME_START_DATE = new Date(2026, 6, 6);
 const PROGRAMME_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const DAY_WIDTH = 98;
 const PLOT_WIDTH = 82;
@@ -16,9 +16,6 @@ const WEEK_WIDTH = DAY_WIDTH * 7;
 type ProgrammeRow = { plot: TemplateSitePlot; dailyActivities: TemplateActivity[][] };
 
 function formatWeekLabel(week: number) { return `WK${String(normaliseProgrammeWeek(week)).padStart(2, '0')}`; }
-function getProgrammeDateFromIndex(dayIndexFromStart: number) { const date = new Date(PROGRAMME_START_DATE); date.setDate(PROGRAMME_START_DATE.getDate() + dayIndexFromStart); return date; }
-function getCurrentProgrammeWeek() { const today = new Date(); const days = Math.floor((today.getTime() - PROGRAMME_START_DATE.getTime()) / (1000 * 60 * 60 * 24)); return normaliseProgrammeWeek(Math.floor(days / 7) + 1); }
-function formatShortDate(date: Date) { return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); }
 function plotNoSortValue(plotNo: string) { const parsed = Number(plotNo.replace(/[^0-9.]/g, '')); return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER; }
 
 function getProgrammeDayFromAbsoluteIndex(absoluteDayIndex: number) {
@@ -43,12 +40,12 @@ function buildTwoWeekWindow(startWeek: number, dayOffset: number, siteSetup: Sit
     const week = normaliseProgrammeWeek(Math.floor(absoluteDayIndex / 7) + 1);
     const dayIndex = ((absoluteDayIndex % 7) + 7) % 7;
     const day = dayIndex + 1;
-    return { key: `${absoluteDayIndex}-${columnIndex}`, absoluteDayIndex, week, dayIndex, day, dayName: PROGRAMME_DAYS[dayIndex], date: getProgrammeDateFromIndex(absoluteDayIndex), nonWorking: !isProgrammeWorkingDay(day, siteSetup) };
+    return { key: `${absoluteDayIndex}-${columnIndex}`, absoluteDayIndex, week, dayIndex, day, dayName: PROGRAMME_DAYS[dayIndex], date: formatProgrammeDate(siteSetup.programmeStartDate, week, day), nonWorking: !isProgrammeWorkingDay(day, siteSetup) };
   });
 }
 
 function formatDateRange(windowDays: ReturnType<typeof buildTwoWeekWindow>) {
-  return `${formatShortDate(windowDays[0].date)} - ${formatShortDate(windowDays[windowDays.length - 1].date)}`;
+  return `${windowDays[0].date} - ${windowDays[windowDays.length - 1].date}`;
 }
 
 function simplifyActivity(text: string) {
@@ -75,7 +72,7 @@ function simplifyActivity(text: string) {
 
 export default function TwoWeekProgrammeScreen() {
   const { sitePlots, activityDelays, plotTemplates, siteSetup, setActivityDelay, updatePlotTemplate } = useSitePlanner();
-  const [startWeek, setStartWeek] = useState(getCurrentProgrammeWeek());
+  const [startWeek, setStartWeek] = useState(() => normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate)));
   const [viewDayOffset, setViewDayOffset] = useState(0);
   const [moveMessage, setMoveMessage] = useState('');
   const windowDays = useMemo(() => buildTwoWeekWindow(startWeek, viewDayOffset, siteSetup), [startWeek, viewDayOffset, siteSetup]);
@@ -127,7 +124,7 @@ export default function TwoWeekProgrammeScreen() {
     setMoveMessage(`${current.displayText} pulled back 1 working day to overlap with ${previous.displayText}`);
   };
 
-  const resetWindow = () => { setStartWeek(getCurrentProgrammeWeek()); setViewDayOffset(0); setMoveMessage(''); };
+  const resetWindow = () => { setStartWeek(normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate))); setViewDayOffset(0); setMoveMessage(''); };
 
   return (
     <AppScreen>
@@ -163,7 +160,7 @@ export default function TwoWeekProgrammeScreen() {
         <View style={styles.emptyCard}>
           <Ionicons name="add-circle-outline" size={34} color="#2563eb" />
           <Text style={styles.emptyTitle}>No plots added yet</Text>
-          <Text style={styles.emptyText}>Add plot numbers, plot types and handover weeks, then return here to view the full 2 Week Programme.</Text>
+          <Text style={styles.emptyText}>Add plot numbers, plot types and Plot Completion Dates, then return here to view the full 2 Week Programme.</Text>
           <Link href="/master" asChild><Pressable style={styles.emptyButton}><Text style={styles.emptyButtonText}>Go to Master</Text></Pressable></Link>
         </View>
       ) : (
@@ -178,7 +175,7 @@ export default function TwoWeekProgrammeScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator>
               <View style={styles.tableWrap}>
                 <View style={styles.weekHeaderRow}><Text style={[styles.weekHeaderBlank, styles.plotCell]} /><Text style={[styles.weekHeaderBlank, styles.typeCell]} />{weekGroups.map((week, index) => <Text key={`${week}-${index}`} style={styles.weekGroup}>{formatWeekLabel(week)}</Text>)}</View>
-                <View style={styles.dateHeaderRow}><Text style={[styles.headerCell, styles.plotCell]}>Plot</Text><Text style={[styles.headerCell, styles.typeCell]}>Type</Text>{windowDays.map((item) => <View key={item.key} style={[styles.dayHeader, item.nonWorking ? styles.weekendHeader : null]}><Text style={styles.dayHeaderName}>{item.dayName}</Text><Text style={styles.dayHeaderDate}>{formatShortDate(item.date)}</Text></View>)}</View>
+                <View style={styles.dateHeaderRow}><Text style={[styles.headerCell, styles.plotCell]}>Plot</Text><Text style={[styles.headerCell, styles.typeCell]}>Type</Text>{windowDays.map((item) => <View key={item.key} style={[styles.dayHeader, item.nonWorking ? styles.weekendHeader : null]}><Text style={styles.dayHeaderName}>{item.dayName}</Text><Text style={styles.dayHeaderDate}>{item.date}</Text></View>)}</View>
                 {programmeRows.map((row, rowIndex) => {
                   const template = getTemplateForPlot(row.plot, plotTemplates);
                   return <View key={row.plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}><Text style={[styles.bodyCell, styles.plotCell]}>{row.plot.plotNo}</Text><Text style={[styles.bodyCell, styles.typeCell]}>{template.name}</Text>{row.dailyActivities.map((activities, index) => { const item = windowDays[index]; return <View key={`${row.plot.id}-${item.key}`} style={[styles.dayCell, item.nonWorking ? styles.weekendCell : null, activities.length ? styles.activeDayCell : null]}>{activities.map((activity) => { const isFirstDay = !activityExistsOnAdjacentWorkingDay(row.plot, activity.code, item.absoluteDayIndex, -1); const isLastDay = !activityExistsOnAdjacentWorkingDay(row.plot, activity.code, item.absoluteDayIndex, 1); return <View key={`${activity.code}-${index}`} style={styles.activityBlock}><Text style={styles.dayCellText}>{simplifyActivity(activity.displayText || activity.code)}</Text><View style={styles.activityControls}>{isFirstDay ? <Pressable style={styles.pullBackButton} onPress={() => pullFixBack(row.plot, activity)}><Text style={styles.controlText}>←</Text></Pressable> : null}{isLastDay ? <><Pressable style={styles.fixBackButton} onPress={() => moveFixDuration(row.plot, activity, -1)}><Text style={styles.controlText}>-</Text></Pressable><Pressable style={styles.fixForwardButton} onPress={() => moveFixDuration(row.plot, activity, 1)}><Text style={styles.controlText}>+</Text></Pressable></> : null}</View></View>; })}</View>; })}</View>;

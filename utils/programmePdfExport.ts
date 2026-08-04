@@ -1,4 +1,5 @@
 import { ActivityDelay, WEEK_NUMBERS } from './siteProgrammeEngine';
+import { formatProgrammeDate } from './programmeDates';
 import {
   getActivitiesForTemplateDay,
   getMilestoneForPlotWeek,
@@ -9,7 +10,6 @@ import {
   TemplateSitePlot,
 } from './templateProgramme';
 
-const PROGRAMME_START_DATE = new Date(2026, 6, 6);
 const PROGRAMME_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
 function escapeHtml(value: string | number | undefined | null) {
@@ -21,17 +21,7 @@ function escapeHtml(value: string | number | undefined | null) {
     .replace(/'/g, '&#039;');
 }
 
-function formatDate(date: Date) {
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-}
-
-function getProgrammeDateFromIndex(dayIndexFromStart: number) {
-  const date = new Date(PROGRAMME_START_DATE);
-  date.setDate(PROGRAMME_START_DATE.getDate() + dayIndexFromStart);
-  return date;
-}
-
-function buildTwoWeekWindow(startWeek: number) {
+function buildTwoWeekWindow(startWeek: number, programmeStartDate: string) {
   const baseIndex = (normaliseProgrammeWeek(startWeek) - 1) * 7;
   return Array.from({ length: 14 }, (_, columnIndex) => {
     const absoluteDayIndex = baseIndex + columnIndex;
@@ -43,7 +33,7 @@ function buildTwoWeekWindow(startWeek: number) {
       day: dayIndex + 1,
       dayIndex,
       dayName: PROGRAMME_DAYS[dayIndex],
-      date: getProgrammeDateFromIndex(absoluteDayIndex),
+      date: formatProgrammeDate(programmeStartDate, week, dayIndex + 1),
       weekend: dayIndex >= 5,
     };
   });
@@ -97,13 +87,13 @@ function cellActivities(plot: TemplateSitePlot, week: number, day: number, delay
     .join('<br/>');
 }
 
-export function exportMainTwoWeekPdf(input: { siteName: string; startWeek: number; plots: TemplateSitePlot[]; delays: ActivityDelay[]; templates: PlotTemplate[] }) {
-  const windowDays = buildTwoWeekWindow(input.startWeek);
+export function exportMainTwoWeekPdf(input: { siteName: string; programmeStartDate: string; startWeek: number; plots: TemplateSitePlot[]; delays: ActivityDelay[]; templates: PlotTemplate[] }) {
+  const windowDays = buildTwoWeekWindow(input.startWeek, input.programmeStartDate);
   const weekOne = windowDays[0].week;
   const weekTwo = windowDays[7].week;
-  const dateRange = `${formatDate(windowDays[0].date)} - ${formatDate(windowDays[13].date)}`;
+  const dateRange = `${windowDays[0].date} - ${windowDays[13].date}`;
   const headerWeeks = `<tr><th style="width:70px"></th><th style="width:90px"></th><th colspan="7">WK${String(weekOne).padStart(2, '0')}</th><th colspan="7">WK${String(weekTwo).padStart(2, '0')}</th></tr>`;
-  const headerDays = `<tr><th>Plot</th><th>House Type</th>${windowDays.map((item) => `<th>${item.dayName}<br/><span class="small">${formatDate(item.date)}</span></th>`).join('')}</tr>`;
+  const headerDays = `<tr><th>Plot</th><th>House Type</th>${windowDays.map((item) => `<th>${item.dayName}<br/><span class="small">${item.date}</span></th>`).join('')}</tr>`;
   const rows = input.plots.map((plot) => {
     const template = getTemplateForPlot(plot, input.templates);
     const cells = windowDays.map((item) => {
@@ -120,13 +110,13 @@ export function exportMainTwoWeekPdf(input: { siteName: string; startWeek: numbe
   );
 }
 
-export function exportTradeProgrammesPdf(input: { siteName: string; startWeek: number; plots: TemplateSitePlot[]; delays: ActivityDelay[]; templates: PlotTemplate[]; trades: string[] }) {
-  const windowDays = buildTwoWeekWindow(input.startWeek);
+export function exportTradeProgrammesPdf(input: { siteName: string; programmeStartDate: string; startWeek: number; plots: TemplateSitePlot[]; delays: ActivityDelay[]; templates: PlotTemplate[]; trades: string[] }) {
+  const windowDays = buildTwoWeekWindow(input.startWeek, input.programmeStartDate);
   const weekOne = windowDays[0].week;
   const weekTwo = windowDays[7].week;
-  const dateRange = `${formatDate(windowDays[0].date)} - ${formatDate(windowDays[13].date)}`;
+  const dateRange = `${windowDays[0].date} - ${windowDays[13].date}`;
   const headerWeeks = `<tr><th style="width:70px"></th><th style="width:90px"></th><th colspan="7">WK${String(weekOne).padStart(2, '0')}</th><th colspan="7">WK${String(weekTwo).padStart(2, '0')}</th></tr>`;
-  const headerDays = `<tr><th>Plot</th><th>Fix / Stage</th>${windowDays.map((item) => `<th>${item.dayName}<br/><span class="small">${formatDate(item.date)}</span></th>`).join('')}</tr>`;
+  const headerDays = `<tr><th>Plot</th><th>Fix / Stage</th>${windowDays.map((item) => `<th>${item.dayName}<br/><span class="small">${item.date}</span></th>`).join('')}</tr>`;
 
   const sections = input.trades.map((trade, index) => {
     const rows = input.plots.map((plot) => {
@@ -147,15 +137,15 @@ export function exportTradeProgrammesPdf(input: { siteName: string; startWeek: n
   return openPrintablePdf(`${input.siteName} Trade Programmes WK${weekOne}`, sections || `<h1>${escapeHtml(input.siteName)} - Trade Programmes</h1><p>No trade activity found for this 2-week window.</p>`);
 }
 
-export function exportMasterProgrammePdf(input: { siteName: string; plots: TemplateSitePlot[]; templates: PlotTemplate[] }) {
-  const header = `<tr><th style="width:55px">Plot</th><th style="width:80px">House</th><th style="width:45px">S9</th><th style="width:45px">S1</th>${WEEK_NUMBERS.map((week) => `<th>WK${String(week).padStart(2, '0')}</th>`).join('')}</tr>`;
+export function exportMasterProgrammePdf(input: { siteName: string; programmeStartDate: string; plots: TemplateSitePlot[]; templates: PlotTemplate[] }) {
+  const header = `<tr><th style="width:55px">Plot</th><th style="width:80px">House</th><th style="width:85px">Plot Completion</th><th style="width:45px">Start</th>${WEEK_NUMBERS.map((week) => `<th>WK${String(week).padStart(2, '0')}<br/><span class="small">${formatProgrammeDate(input.programmeStartDate, week)}</span></th>`).join('')}</tr>`;
   const rows = input.plots.map((plot) => {
     const template = getTemplateForPlot(plot, input.templates);
     const weeks = WEEK_NUMBERS.map((week) => `<td>${escapeHtml(getMilestoneForPlotWeek(plot, week, input.templates))}</td>`).join('');
-    return `<tr><td>${escapeHtml(plot.plotNo)}</td><td>${escapeHtml(template.name)}</td><td>${escapeHtml(plot.stage9CompleteWeek)}</td><td>${escapeHtml(getStage1StartWeekForPlot(plot, input.templates))}</td>${weeks}</tr>`;
+    return `<tr><td>${escapeHtml(plot.plotNo)}</td><td>${escapeHtml(template.name)}</td><td>${escapeHtml(formatProgrammeDate(input.programmeStartDate, plot.stage9CompleteWeek))}</td><td>WK${escapeHtml(getStage1StartWeekForPlot(plot, input.templates))}</td>${weeks}</tr>`;
   }).join('');
   return openPrintablePdf(
     `${input.siteName} Master Programme`,
-    `<h1>${escapeHtml(input.siteName)} - Master Programme</h1><div class="meta">Master milestone programme. Stage 9 and Stage 1 shown at left.</div><table>${header}${rows}</table><div class="footer">Generated by Programme Buddy</div>`,
+    `<h1>${escapeHtml(input.siteName)} - Master Programme</h1><div class="meta">Master milestone programme with Plot Completion Date and programme start week shown at left.</div><table>${header}${rows}</table><div class="footer">Generated by Programme Buddy</div>`,
   );
 }

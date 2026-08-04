@@ -3,6 +3,7 @@ import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
+import { formatProgrammeDate } from '../../utils/programmeDates';
 import { getActivitiesForTemplateDay } from '../../utils/templateProgramme';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -11,24 +12,19 @@ const LEFT_W = 184;
 const WEEK_W = DAY_W * 7;
 
 function nw(w: number) { return ((((Math.round(w) - 1) % 52) + 52) % 52) + 1; }
-function wkDate(week: number, day: number) {
-  const d = new Date(new Date().getFullYear(), 0, 4);
-  d.setDate(d.getDate() - ((d.getDay() || 7) - 1) + (week - 1) * 7 + day);
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-function makeDays(start: number) { return Array.from({ length: 14 }, (_, i) => ({ key: `${i}`, week: nw(start + Math.floor(i / 7)), day: (i % 7) + 1, name: DAYS[i % 7], date: wkDate(nw(start + Math.floor(i / 7)), i % 7), weekend: i % 7 >= 5 })); }
+function makeDays(start: number, programmeStartDate: string) { return Array.from({ length: 14 }, (_, i) => ({ key: `${i}`, week: nw(start + Math.floor(i / 7)), day: (i % 7) + 1, name: DAYS[i % 7], date: formatProgrammeDate(programmeStartDate, nw(start + Math.floor(i / 7)), (i % 7) + 1), weekend: i % 7 >= 5 })); }
 function slug(t: string) { return t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
 function liveLink(trade: string) { return Platform.OS === 'web' && typeof window !== 'undefined' ? `${window.location.origin}/supervisor?trade=${slug(trade)}` : `/supervisor?trade=${slug(trade)}`; }
 function printLink(trade: string) { return Platform.OS === 'web' && typeof window !== 'undefined' ? `${window.location.origin}/supervisor?trade=${slug(trade)}&print=1` : `/supervisor?trade=${slug(trade)}&print=1`; }
 
 export default function TradesNoFixScreen() {
-  const { sitePlots, activityDelays, tradeContacts, plotTemplates, setActivityDelay, recordIssue } = useSitePlanner();
+  const { sitePlots, activityDelays, tradeContacts, plotTemplates, siteSetup, setActivityDelay, recordIssue } = useSitePlanner();
   const [tradeId, setTradeId] = useState(tradeContacts[0]?.id ?? '');
   const [weekText, setWeekText] = useState('1');
   const [message, setMessage] = useState('');
   const trade = tradeContacts.find((item) => item.id === tradeId)?.trade ?? tradeContacts[0]?.trade ?? 'Trade';
   const startWeek = nw(Number(weekText) || 1);
-  const days = useMemo(() => makeDays(startWeek), [startWeek]);
+  const days = useMemo(() => makeDays(startWeek, siteSetup.programmeStartDate), [startWeek, siteSetup.programmeStartDate]);
   const link = liveLink(trade);
   const pdfUrl = printLink(trade);
 

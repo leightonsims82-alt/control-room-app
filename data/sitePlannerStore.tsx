@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 import { INSPECTION_RESULTS_KEY, INSPECTION_STORY_KEY } from '../utils/inspectionRecords';
+import { getProgrammeStartDateValue } from '../utils/programmeDates';
 import { ActivityDelay, ProgrammeStageNumber, TRADE_ORDER } from '../utils/siteProgrammeEngine';
 import {
   ActivityMove,
@@ -270,7 +271,9 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           setIssueLogs(storedIssueLogs);
           setProgrammeNotes(storedNotes);
           setPlotTemplates(mergeDefaultTemplates(storedTemplates));
-          setSiteSetupState({ ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup });
+          const migratedSiteSetup = { ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup, programmeStartDate: getProgrammeStartDateValue(storedSiteSetup.programmeStartDate) };
+          setSiteSetupState(migratedSiteSetup);
+          await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(migratedSiteSetup));
         }
       } catch (error) {
         console.warn('Unable to load site planner data', error);

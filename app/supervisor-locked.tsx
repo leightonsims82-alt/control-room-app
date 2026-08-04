@@ -3,9 +3,9 @@ import { useEffect, useMemo } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../components/AppScreen';
 import { useSitePlanner } from '../data/sitePlannerStore';
+import { formatProgrammeDate, getCurrentProgrammeWeek } from '../utils/programmeDates';
 import { getActivitiesForTemplateDay, normaliseProgrammeWeek } from '../utils/templateProgramme';
 
-const PROGRAMME_START_DATE = new Date(2026, 6, 6);
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const SCREEN_DAY_WIDTH = 82;
 const PRINT_DAY_WIDTH = 56;
@@ -14,23 +14,7 @@ const SCREEN_TRADE_WIDTH = 110;
 const PRINT_PLOT_WIDTH = 46;
 const PRINT_TRADE_WIDTH = 76;
 
-function getCurrentProgrammeWeek() {
-  const today = new Date();
-  const days = Math.floor((today.getTime() - PROGRAMME_START_DATE.getTime()) / (1000 * 60 * 60 * 24));
-  return normaliseProgrammeWeek(Math.floor(days / 7) + 1);
-}
-
-function formatShortDate(date: Date) {
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
-}
-
-function getProgrammeDate(dayIndexFromStart: number) {
-  const date = new Date(PROGRAMME_START_DATE);
-  date.setDate(PROGRAMME_START_DATE.getDate() + dayIndexFromStart);
-  return date;
-}
-
-function buildTwoWeekWindow(startWeek: number) {
+function buildTwoWeekWindow(startWeek: number, programmeStartDate: string) {
   const baseIndex = (normaliseProgrammeWeek(startWeek) - 1) * 7;
   return Array.from({ length: 14 }, (_, index) => {
     const absoluteDayIndex = baseIndex + index;
@@ -41,7 +25,7 @@ function buildTwoWeekWindow(startWeek: number) {
       day: dayIndex + 1,
       dayIndex,
       dayName: DAYS[dayIndex],
-      date: getProgrammeDate(absoluteDayIndex),
+      date: formatProgrammeDate(programmeStartDate, normaliseProgrammeWeek(Math.floor(absoluteDayIndex / 7) + 1), dayIndex + 1),
       weekend: dayIndex >= 5,
     };
   });
@@ -69,12 +53,12 @@ function shortActivity(text: string) {
 
 export default function SupervisorLockedView() {
   const params = useLocalSearchParams<{ trade?: string; print?: string }>();
-  const { sitePlots, activityDelays, plotTemplates, tradeContacts, issueLogs } = useSitePlanner();
+  const { sitePlots, activityDelays, plotTemplates, tradeContacts, issueLogs, siteSetup } = useSitePlanner();
   const requestedTrade = Array.isArray(params.trade) ? params.trade[0] : params.trade;
   const printMode = String(Array.isArray(params.print) ? params.print[0] : params.print ?? '') === '1';
   const lockedTrade = tradeContacts.find((trade) => slug(trade.trade) === slug(String(requestedTrade ?? '')))?.trade ?? tradeContacts[0]?.trade ?? 'Trade';
-  const startWeek = getCurrentProgrammeWeek();
-  const days = useMemo(() => buildTwoWeekWindow(startWeek), [startWeek]);
+  const startWeek = normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate));
+  const days = useMemo(() => buildTwoWeekWindow(startWeek, siteSetup.programmeStartDate), [startWeek, siteSetup.programmeStartDate]);
   const weekGroups = [days[0]?.week ?? startWeek, days[7]?.week ?? normaliseProgrammeWeek(startWeek + 1)];
   const latestIssue = issueLogs[0];
   const dayWidth = printMode ? PRINT_DAY_WIDTH : SCREEN_DAY_WIDTH;
@@ -159,7 +143,7 @@ export default function SupervisorLockedView() {
             <View style={styles.tableRow}>
               <Text style={[styles.dateBlankCell, { width: plotWidth }, printMode ? styles.printDateCell : null]} />
               <Text style={[styles.dateBlankCell, { width: tradeWidth }, printMode ? styles.printDateCell : null]} />
-              {days.map((item) => <Text key={`date-${item.key}`} style={[styles.dateHeaderCell, { width: dayWidth }, item.weekend ? styles.weekendDateCell : null, printMode ? styles.printDateCell : null]}>{formatShortDate(item.date)}</Text>)}
+              {days.map((item) => <Text key={`date-${item.key}`} style={[styles.dateHeaderCell, { width: dayWidth }, item.weekend ? styles.weekendDateCell : null, printMode ? styles.printDateCell : null]}>{item.date}</Text>)}
             </View>
             {rows.map((row, rowIndex) => (
               <View key={row.key} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
