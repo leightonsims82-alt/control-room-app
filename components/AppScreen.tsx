@@ -1,11 +1,13 @@
-import { ReactNode } from 'react';
 import { router, usePathname } from 'expo-router';
+import { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MasterPlotDeleteControl } from './MasterPlotDeleteControl';
 
 export function AppScreen({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const showBackButton = pathname !== '/';
+  const showMasterDeleteControl = pathname === '/master';
 
   const goBack = () => {
     if (router.canGoBack()) {
@@ -27,6 +29,7 @@ export function AppScreen({ children }: { children: ReactNode }) {
           {children}
         </View>
       </ScrollView>
+      {showMasterDeleteControl ? <MasterPlotDeleteControl /> : null}
     </SafeAreaView>
   );
 }
