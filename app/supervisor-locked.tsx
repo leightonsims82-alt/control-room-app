@@ -19,13 +19,14 @@ function buildTwoWeekWindow(startWeek: number, programmeStartDate: string) {
   return Array.from({ length: 14 }, (_, index) => {
     const absoluteDayIndex = baseIndex + index;
     const dayIndex = ((absoluteDayIndex % 7) + 7) % 7;
+    const week = normaliseProgrammeWeek(Math.floor(absoluteDayIndex / 7) + 1);
     return {
       key: `${absoluteDayIndex}-${index}`,
-      week: normaliseProgrammeWeek(Math.floor(absoluteDayIndex / 7) + 1),
+      week,
       day: dayIndex + 1,
       dayIndex,
       dayName: DAYS[dayIndex],
-      date: formatProgrammeDate(programmeStartDate, normaliseProgrammeWeek(Math.floor(absoluteDayIndex / 7) + 1), dayIndex + 1),
+      date: formatProgrammeDate(programmeStartDate, week, dayIndex + 1),
       weekend: dayIndex >= 5,
     };
   });
@@ -59,7 +60,7 @@ export default function SupervisorLockedView() {
   const lockedTrade = tradeContacts.find((trade) => slug(trade.trade) === slug(String(requestedTrade ?? '')))?.trade ?? tradeContacts[0]?.trade ?? 'Trade';
   const startWeek = normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate));
   const days = useMemo(() => buildTwoWeekWindow(startWeek, siteSetup.programmeStartDate), [startWeek, siteSetup.programmeStartDate]);
-  const weekGroups = [days[0]?.week ?? startWeek, days[7]?.week ?? normaliseProgrammeWeek(startWeek + 1)];
+  const dateRange = `${days[0]?.date ?? ''} - ${days[13]?.date ?? ''}`;
   const latestIssue = issueLogs[0];
   const dayWidth = printMode ? PRINT_DAY_WIDTH : SCREEN_DAY_WIDTH;
   const plotWidth = printMode ? PRINT_PLOT_WIDTH : SCREEN_PLOT_WIDTH;
@@ -90,23 +91,20 @@ export default function SupervisorLockedView() {
 
   const rows = useMemo(() => {
     return sitePlots.map((plot) => {
-      const cells = days.map((day) => {
-        if (day.weekend) return '';
-        return getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates)
-          .filter((activity) => activity.trade.toLowerCase() === lockedTrade.toLowerCase())
-          .map((activity) => shortActivity(activity.displayText || activity.code))
-          .join('\n');
-      });
+      const cells = days.map((day) => getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates, siteSetup)
+        .filter((activity) => activity.trade.toLowerCase() === lockedTrade.toLowerCase())
+        .map((activity) => shortActivity(activity.displayText || activity.code))
+        .join('\n'));
       return { key: plot.id, plotNo: plot.plotNo, cells };
     }).filter((row) => row.cells.some(Boolean));
-  }, [sitePlots, days, activityDelays, plotTemplates, lockedTrade]);
+  }, [sitePlots, days, activityDelays, plotTemplates, siteSetup, lockedTrade]);
 
   return (
     <AppScreen>
       <View style={[styles.header, printMode ? styles.printHeader : null]}>
         <Text style={[styles.kicker, printMode ? styles.printKicker : null]}>{printMode ? 'PDF record' : 'Live supervisor app'}</Text>
         <Text style={[styles.title, printMode ? styles.printTitle : null]}>{lockedTrade} Programme</Text>
-        <Text style={[styles.subtitle, printMode ? styles.printSubtitle : null]}>{printMode ? `WK${String(weekGroups[0]).padStart(2, '0')} + WK${String(weekGroups[1]).padStart(2, '0')} formal PDF record.` : 'Read-only live view for your allocated trade only.'}</Text>
+        <Text style={[styles.subtitle, printMode ? styles.printSubtitle : null]}>{printMode ? `Week 1 + Week 2 formal PDF record, ${dateRange}.` : `Read-only Week 1 and Week 2 lookahead for ${dateRange}.`}</Text>
       </View>
 
       {!printMode ? (
@@ -121,19 +119,20 @@ export default function SupervisorLockedView() {
         <View style={styles.summaryRow}>
           <MiniStat label="Rows" value={rows.length} />
           <MiniStat label="Allocated trade" value={lockedTrade} />
-          <MiniStat label="Mode" value="Read-only" />
+          <MiniStat label="Window" value="Week 1 + Week 2" />
         </View>
       ) : null}
 
       <View style={[styles.card, printMode ? styles.printCard : null]}>
         <Text style={[styles.cardTitle, printMode ? styles.printCardTitle : null]}>{lockedTrade} programme table</Text>
-        {rows.length === 0 ? <Text style={styles.emptyText}>No planned {lockedTrade} activity in the current 2-week window.</Text> : null}
+        {rows.length === 0 ? <Text style={styles.emptyText}>No planned {lockedTrade} activity in the current Week 1 and Week 2 lookahead.</Text> : null}
         <ScrollView horizontal={!printMode} showsHorizontalScrollIndicator={!printMode}>
           <View style={[styles.tableWrap, { width: tableWidth, minWidth: tableWidth }]}>
             <View style={styles.tableRow}>
               <Text style={[styles.tableHeader, { width: plotWidth }, printMode ? styles.printHeaderCell : null]} />
               <Text style={[styles.tableHeader, { width: tradeWidth }, printMode ? styles.printHeaderCell : null]} />
-              {weekGroups.map((week, index) => <Text key={`${week}-${index}`} style={[styles.weekGroupHeader, { width: weekWidth }, printMode ? styles.printHeaderCell : null]}>WK{String(week).padStart(2, '0')}</Text>)}
+              <Text style={[styles.weekGroupHeader, { width: weekWidth }, printMode ? styles.printHeaderCell : null]}>Week 1</Text>
+              <Text style={[styles.weekGroupHeader, { width: weekWidth }, printMode ? styles.printHeaderCell : null]}>Week 2</Text>
             </View>
             <View style={styles.tableRow}>
               <Text style={[styles.tableHeader, { width: plotWidth }, printMode ? styles.printHeaderCell : null]}>Plot No</Text>
