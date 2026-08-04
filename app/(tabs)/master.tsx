@@ -13,17 +13,21 @@ import {
   removePlotMetadata,
   savePlotMetadata,
 } from '../../utils/plotMetadata';
-import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber } from '../../utils/siteProgrammeEngine';
 import { formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, validatePlotCompletionDate } from '../../utils/programmeDates';
 import {
+  ConfiguredProgrammeStage,
+  getConfiguredStageForRelativeWeek,
+  readStageConfiguration,
+} from '../../utils/stageConfiguration';
+import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber } from '../../utils/siteProgrammeEngine';
+import {
   getHouseTypeLabel,
+  getLinearStage1StartWeekForPlot,
   getPlotBuildOrder,
   getPlotHoldDetail,
   getPlotHoldLabel,
   getSortedSitePlots,
   getStage1StartWeekForPlot,
-  getStageLabelForNumber,
-  getStageNumberForPlotWeek,
   getTemplateById,
   getTemplateForPlot,
 } from '../../utils/templateProgramme';
@@ -36,6 +40,7 @@ export default function MasterProgrammeScreen() {
   const bedroomTemplates = plotTemplates.filter((template) => template.id !== 'timberFrame' && template.constructionMethod !== 'timberFrame');
   const currentProgrammeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
   const visibleWeeks = Array.from({ length: 23 }, (_, index) => currentProgrammeWeek + index);
+  const initialStageCount = Math.max(1, siteSetup.stageCount || 9);
   const [plotNo, setPlotNo] = useState('');
   const [houseTypeName, setHouseTypeName] = useState('');
   const [plotCompletionDate, setPlotCompletionDate] = useState('');
@@ -43,6 +48,9 @@ export default function MasterProgrammeScreen() {
   const [buildRoute, setBuildRoute] = useState<PlotBuildRoute>('Traditional');
   const [templateId, setTemplateId] = useState(bedroomTemplates[2]?.id ?? bedroomTemplates[0]?.id ?? 'threeBed');
   const [plotMetadata, setPlotMetadata] = useState<PlotMetadataMap>({});
+  const [stageDefinitions, setStageDefinitions] = useState<ConfiguredProgrammeStage[]>(
+    PROGRAMME_STAGE_SEQUENCE.slice(0, initialStageCount).map((stage) => ({ ...stage })),
+  );
   const [resetMode, setResetMode] = useState<ResetMode>('single');
   const [selectedResetPlotId, setSelectedResetPlotId] = useState('');
   const [clearConfirm, setClearConfirm] = useState(false);
@@ -59,6 +67,15 @@ export default function MasterProgrammeScreen() {
   }, []);
 
   useEffect(() => {
+    readStageConfiguration(siteSetup.stageCount)
+      .then(setStageDefinitions)
+      .catch(() => {
+        const count = Math.max(1, siteSetup.stageCount || 9);
+        setStageDefinitions(PROGRAMME_STAGE_SEQUENCE.slice(0, count).map((stage) => ({ ...stage })));
+      });
+  }, [siteSetup.stageCount]);
+
+  useEffect(() => {
     if (!selectedResetPlotId && sortedPlots[0]?.id) setSelectedResetPlotId(sortedPlots[0].id);
     if (!holdPlotId && sortedPlots[0]?.id) {
       setHoldPlotId(sortedPlots[0].id);
@@ -66,6 +83,15 @@ export default function MasterProgrammeScreen() {
       setHoldReason(sortedPlots[0].holdReason ?? '');
     }
   }, [holdPlotId, selectedResetPlotId, sortedPlots]);
+
+  const getStageDisplayForWeek = (plot: (typeof sitePlots)[number], week: number) => {
+    const relativeWeek = week - getLinearStage1StartWeekForPlot(plot, plotTemplates, siteSetup) + 1;
+    const configuredStage = getConfiguredStageForRelativeWeek(stageDefinitions, relativeWeek);
+    const stage = configuredStage?.stage;
+    if (!stage) return '';
+    if (!plot.holdStage || stage < plot.holdStage) return stage;
+    return stage === plot.holdStage ? `${stage}H` : `H${plot.holdStage}`;
+  };
 
   const savePlot = async () => {
     const dateError = validatePlotCompletionDate(siteSetup.programmeStartDate, plotCompletionDate);
@@ -231,10 +257,11 @@ export default function MasterProgrammeScreen() {
           <Text style={styles.holdStatus}>{selectedHoldPlot ? getPlotHoldDetail(selectedHoldPlot) : 'No plot selected.'}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.stageChips}>
-              {PROGRAMME_STAGE_SEQUENCE.map((stage) => {
-                const active = holdStage === stage.stage;
+              {stageDefinitions.map((stage) => {
+                const stageNumber = stage.stage as ProgrammeStageNumber;
+                const active = holdStage === stageNumber;
                 return (
-                  <Pressable key={stage.stage} style={[styles.stageChip, active ? styles.stageChipActive : null]} onPress={() => setHoldStage(stage.stage)}>
+                  <Pressable key={stage.stage} style={[styles.stageChip, active ? styles.stageChipActive : null]} onPress={() => setHoldStage(stageNumber)}>
                     <Text style={[styles.stageChipNumber, active ? styles.stageChipTextActive : null]}>Stage {stage.stage}</Text>
                     <Text style={[styles.stageChipLabel, active ? styles.stageChipTextActive : null]}>{stage.label}</Text>
                   </Pressable>
@@ -289,7 +316,7 @@ export default function MasterProgrammeScreen() {
         </Pressable>
       </SectionCard>
 
-      <SectionCard title="Master stage-number matrix" subtitle="The first column is the current programme week. Plots remain listed in the sequence they were added.">
+      <SectionCard title="Master stage-number matrix" subtitle={`The first column is the current programme week. This programme uses ${stageDefinitions.length} stages.`}>
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.tableRow}>
@@ -327,10 +354,10 @@ export default function MasterProgrammeScreen() {
                   <Text style={[styles.bodyCell, styles.houseTypeCell]}>{metadata?.houseTypeName || '-'}</Text>
                   <Text style={[styles.bodyCell, styles.templateCell]}>{getHouseTypeLabel(sizeTemplate ?? programmeTemplate)}</Text>
                   <Text style={[styles.holdBodyCell, styles.holdCell, plot.holdStage ? styles.holdBodyCellActive : null]}>{getPlotHoldLabel(plot)}</Text>
-                  <Text style={[styles.stageStartBody, styles.weekInputCell]}>WK{String(getStage1StartWeekForPlot(plot, plotTemplates)).padStart(2, '0')}</Text>
+                  <Text style={[styles.stageStartBody, styles.weekInputCell]}>WK{String(getStage1StartWeekForPlot(plot, plotTemplates, siteSetup)).padStart(2, '0')}</Text>
                   <Text style={[styles.weekInputBody, styles.completionCell]}>{formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
                   {visibleWeeks.map((week) => {
-                    const stage = getStageNumberForPlotWeek(plot, week, plotTemplates);
+                    const stage = getStageDisplayForWeek(plot, week);
                     const heldStageCell = String(stage).includes('H');
                     return <Text key={week} style={[styles.weekCell, stage ? styles.activeWeekCell : null, heldStageCell ? styles.heldWeekCell : null]}>{stage}</Text>;
                   })}
@@ -344,17 +371,20 @@ export default function MasterProgrammeScreen() {
         </ScrollView>
       </SectionCard>
 
-      <SectionCard title="Stage key" subtitle="This is the key behind the number-only cells. Held plots show 5H at the held stage and H5 for future weeks.">
+      <SectionCard title="Stage key" subtitle={`Showing the ${stageDefinitions.length} stages configured in Site Setup.`}>
         <View style={styles.stageKeyGrid}>
-          {PROGRAMME_STAGE_SEQUENCE.map((stage) => (
-            <View key={stage.stage} style={styles.stageKeyItem}>
-              <Text style={styles.stageKeyNumber}>{stage.stage}</Text>
-              <View style={styles.stageKeyTextWrap}>
-                <Text style={styles.stageKeyLabel}>{getStageLabelForNumber(stage.stage)}</Text>
-                <Text style={styles.stageKeyMeta}>{stage.durationWeeks} week{stage.durationWeeks === 1 ? '' : 's'}</Text>
+          {stageDefinitions.map((stage) => {
+            const durationWeeks = Math.max(1, stage.finishWeek - stage.startWeek + 1);
+            return (
+              <View key={stage.stage} style={styles.stageKeyItem}>
+                <Text style={styles.stageKeyNumber}>{stage.stage}</Text>
+                <View style={styles.stageKeyTextWrap}>
+                  <Text style={styles.stageKeyLabel}>{stage.label}</Text>
+                  <Text style={styles.stageKeyMeta}>{durationWeeks} week{durationWeeks === 1 ? '' : 's'}</Text>
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </SectionCard>
     </AppScreen>
