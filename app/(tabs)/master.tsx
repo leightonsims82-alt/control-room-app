@@ -248,7 +248,7 @@ export default function MasterProgrammeScreen() {
 
             {sortedPlots.length === 0 ? (
               <View style={styles.emptyMatrixRow}>
-                <Text style={styles.emptyMatrixText}>No plots saved. Add a plot above or paste your plot schedule into Bulk Plot Entry.</Text>
+                <Text style={styles.emptyMatrixText}>No plots saved. Add a plot using the Plot Input section above.</Text>
               </View>
             ) : null}
 
