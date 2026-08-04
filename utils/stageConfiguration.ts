@@ -16,6 +16,10 @@ function clampStageCount(value: number) {
   return Math.min(MAX_PROGRAMME_STAGES, Math.max(1, Math.round(value)));
 }
 
+function hasValidRequestedCount(value?: number) {
+  return Number.isFinite(value) && Number(value) > 0;
+}
+
 function defaultStage(stage: number, previous?: ConfiguredProgrammeStage): ConfiguredProgrammeStage {
   const standard = PROGRAMME_STAGE_SEQUENCE.find((item) => item.stage === stage);
   if (standard) return { ...standard };
@@ -25,7 +29,7 @@ function defaultStage(stage: number, previous?: ConfiguredProgrammeStage): Confi
 
 export function normaliseStageConfiguration(input: ConfiguredProgrammeStage[], requestedCount?: number) {
   const source = Array.isArray(input) ? input : [];
-  const count = clampStageCount(requestedCount ?? source.length ?? PROGRAMME_STAGE_SEQUENCE.length);
+  const count = clampStageCount(hasValidRequestedCount(requestedCount) ? Number(requestedCount) : source.length || PROGRAMME_STAGE_SEQUENCE.length);
   const normalised: ConfiguredProgrammeStage[] = [];
 
   for (let index = 0; index < count; index += 1) {
@@ -45,17 +49,18 @@ export function normaliseStageConfiguration(input: ConfiguredProgrammeStage[], r
   return normalised;
 }
 
-export async function readStageConfiguration(fallbackCount?: number) {
+export async function readStageConfiguration(configuredCount?: number) {
   const stored = await AsyncStorage.getItem(STAGE_CONFIGURATION_KEY);
+  const requestedCount = hasValidRequestedCount(configuredCount) ? Number(configuredCount) : undefined;
+
   if (!stored) {
-    const initialCount = Math.max(Number(fallbackCount) || 0, PROGRAMME_STAGE_SEQUENCE.length);
-    const initial = normaliseStageConfiguration(PROGRAMME_STAGE_SEQUENCE, initialCount);
+    const initial = normaliseStageConfiguration(PROGRAMME_STAGE_SEQUENCE, requestedCount ?? PROGRAMME_STAGE_SEQUENCE.length);
     await AsyncStorage.setItem(STAGE_CONFIGURATION_KEY, JSON.stringify(initial));
     return initial;
   }
 
   const parsed = JSON.parse(stored) as ConfiguredProgrammeStage[];
-  const normalised = normaliseStageConfiguration(parsed, parsed.length || fallbackCount);
+  const normalised = normaliseStageConfiguration(parsed, requestedCount ?? parsed.length);
   await AsyncStorage.setItem(STAGE_CONFIGURATION_KEY, JSON.stringify(normalised));
   return normalised;
 }
