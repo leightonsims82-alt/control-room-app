@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
+import { ProgrammeDatePicker } from '../../components/ProgrammeDatePicker';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber, WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
@@ -23,7 +24,6 @@ export default function MasterProgrammeScreen() {
   const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
   const [plotNo, setPlotNo] = useState('');
-  const [buildOrder, setBuildOrder] = useState('');
   const [plotCompletionDate, setPlotCompletionDate] = useState('');
   const [plotDateError, setPlotDateError] = useState('');
   const [templateId, setTemplateId] = useState(plotTemplates[2]?.id ?? 'threeBed');
@@ -36,7 +36,6 @@ export default function MasterProgrammeScreen() {
   const selectedResetPlot = sortedPlots.find((plot) => plot.id === selectedResetPlotId) ?? sortedPlots[0];
   const selectedHoldPlot = sortedPlots.find((plot) => plot.id === holdPlotId) ?? sortedPlots[0];
   const nextPlotHint = String(sitePlots.length + 1);
-  const nextBuildOrderHint = String(sitePlots.length + 1);
   const nextCompletionHint = formatProgrammeDate(siteSetup.programmeStartDate, (sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.stage9CompleteWeek)) : 22) + 1);
 
   useEffect(() => {
@@ -53,14 +52,15 @@ export default function MasterProgrammeScreen() {
     setPlotDateError(dateError);
     const parsedWeek = getProgrammeWeekForDate(siteSetup.programmeStartDate, plotCompletionDate);
     if (!plotNo.trim() || dateError || !parsedWeek) return;
+    const existingPlot = sitePlots.find((plot) => plot.plotNo.toLowerCase() === plotNo.trim().toLowerCase());
+    const nextBuildOrder = sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.buildOrder ?? 0)) + 1 : 1;
     await upsertSitePlot({
       plotNo,
-      buildOrder: Number(buildOrder) || sitePlots.length + 1,
+      buildOrder: existingPlot?.buildOrder ?? nextBuildOrder,
       stage9CompleteWeek: parsedWeek,
       templateId,
     });
     setPlotNo('');
-    setBuildOrder('');
     setPlotCompletionDate('');
     setPlotDateError('');
     setClearConfirm(false);
@@ -119,22 +119,25 @@ export default function MasterProgrammeScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Master 23 Week Programme</Text>
-        <Text style={styles.subtitle}>Excel-style stage matrix ordered by build sequence, not plot number. Stage numbers only in the cells.</Text>
+        <Text style={styles.subtitle}>Plots stay in the order you add them. Stage numbers are shown in the programme cells.</Text>
       </View>
 
-      <SectionCard title="Plot input" subtitle="Enter the build order as well as the plot number. This stops the programme assuming plots are built numerically.">
+      <SectionCard title="Plot input" subtitle="Add each plot in its intended build sequence. The app records that order automatically.">
         <View style={styles.formRow}>
-          <View style={styles.inputWrapSmall}>
-            <Text style={styles.label}>Build Order</Text>
-            <TextInput value={buildOrder} onChangeText={setBuildOrder} style={styles.input} keyboardType="number-pad" placeholder={`e.g. ${nextBuildOrderHint}`} />
-          </View>
           <View style={styles.inputWrapSmall}>
             <Text style={styles.label}>Plot No</Text>
             <TextInput value={plotNo} onChangeText={setPlotNo} style={styles.input} placeholder={`e.g. ${nextPlotHint}`} />
           </View>
           <View style={styles.inputWrapSmall}>
             <Text style={styles.label}>Plot Completion Date</Text>
-            <TextInput value={plotCompletionDate} onChangeText={(value) => { setPlotCompletionDate(value); setPlotDateError(''); }} style={[styles.input, plotDateError ? styles.inputError : null]} keyboardType="numbers-and-punctuation" placeholder={`e.g. ${nextCompletionHint}`} />
+            <ProgrammeDatePicker
+              value={plotCompletionDate}
+              onChange={(value) => { setPlotCompletionDate(value); setPlotDateError(''); }}
+              placeholder={`Select date, e.g. ${nextCompletionHint}`}
+              initialDate={nextCompletionHint}
+              minimumDate={siteSetup.programmeStartDate}
+              error={Boolean(plotDateError)}
+            />
           </View>
           <View style={styles.inputWrapWide}>
             <Text style={styles.label}>House type</Text>
@@ -230,11 +233,11 @@ export default function MasterProgrammeScreen() {
         </Pressable>
       </SectionCard>
 
-      <SectionCard title="Master stage-number matrix" subtitle="Sorted by Build Order. Held plots show H in the week cells and future-stage trade activities are hidden until released.">
+      <SectionCard title="Master stage-number matrix" subtitle="Plots are listed in the sequence they were added. Held plots show H in the week cells and future-stage trade activities are hidden until released.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.tableRow}>
-              <Text style={[styles.headerCell, styles.buildCell]}>Build</Text>
+              <Text style={[styles.headerCell, styles.buildCell]}>Seq</Text>
               <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
               <Text style={[styles.headerCell, styles.templateCell]}>Type</Text>
               <Text style={[styles.headerCell, styles.holdCell]}>Hold</Text>
@@ -299,11 +302,10 @@ const styles = StyleSheet.create({
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
   subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
   formRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
-  inputWrapSmall: { gap: 6, minWidth: 140, flex: 1 },
+  inputWrapSmall: { gap: 6, minWidth: 180, flex: 1 },
   inputWrapWide: { gap: 6, minWidth: 260, flex: 2 },
   label: { color: '#334155', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
   input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', fontWeight: '800' },
-  inputError: { borderColor: '#dc2626' },
   errorText: { color: '#dc2626', fontSize: 12, fontWeight: '800' },
   saveButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
   saveButtonText: { color: '#ffffff', fontWeight: '900' },
@@ -342,20 +344,20 @@ const styles = StyleSheet.create({
   tableRow: { flexDirection: 'row', minHeight: 38, alignItems: 'stretch' },
   altRow: { backgroundColor: '#f8fbff' },
   headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
-  buildCell: { width: 76 },
+  buildCell: { width: 62 },
   plotCell: { width: 90 },
   templateCell: { width: 118 },
   holdCell: { width: 96 },
   weekInputCell: { width: 104 },
   completionCell: { width: 132 },
   actionCell: { width: 86 },
-  weekHeader: { width: 58, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  weekHeader: { width: 70, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 10, lineHeight: 14, padding: 6, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
   holdBodyCell: { color: '#64748b', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
   holdBodyCellActive: { backgroundColor: '#fee2e2', color: '#991b1b' },
   weekInputBody: { backgroundColor: '#fff4cc', color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
   stageStartBody: { backgroundColor: '#e3f3d8', color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
-  weekCell: { width: 58, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
+  weekCell: { width: 70, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
   activeWeekCell: { backgroundColor: '#dff0ff' },
   heldWeekCell: { backgroundColor: '#fee2e2', color: '#991b1b' },
   emptyMatrixRow: { width: 1080, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#f8fafc', padding: 18 },
