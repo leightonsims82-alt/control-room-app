@@ -107,16 +107,16 @@ export default function NewPlotScreen() {
         </Field>
 
         <Field label="Number of Bedrooms">
-          <OptionRow values={bedrooms} value={bedroomSize} onChange={setBedroomSize} />
+          <OptionRow values={bedrooms} value={bedroomSize} onChange={(value) => setBedroomSize(value)} />
         </Field>
 
         <Field label="Build Type">
-          <OptionRow values={buildTypes} value={buildType} onChange={setBuildType} />
+          <OptionRow values={buildTypes} value={buildType} onChange={(value) => setBuildType(value)} />
           <Text style={styles.helpText}>This controls whether traditional, timber frame or steel frame checklists are used.</Text>
         </Field>
 
         <Field label="Schedule From">
-          <OptionRow values={['forward', 'reverse']} value={mode} onChange={setMode} labels={{ forward: 'Start Date', reverse: 'Completion Date' }} />
+          <OptionRow values={['forward', 'reverse'] as const} value={mode} onChange={(value) => setMode(value)} labels={{ forward: 'Start Date', reverse: 'Completion Date' }} />
           <Text style={styles.helpText}>{mode === 'forward' ? 'Set a start date, the programme will run forward.' : 'Set a completion date, the programme will work backwards.'}</Text>
         </Field>
 

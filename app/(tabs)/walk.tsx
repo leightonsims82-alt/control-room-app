@@ -112,7 +112,7 @@ export default function WalkScreen() {
       </View>
 
       <SectionCard title="Site Notes" subtitle={`Walk date: ${walkDate}`}>
-        <TextInput style={[styles.input, styles.siteNotes]} defaultValue={noteText} placeholder="General site notes and actions" multiline onBlur={(event) => saveWalkNotes(event.nativeEvent.text)} />
+        <TextInput style={[styles.input, styles.siteNotes]} defaultValue={noteText} placeholder="General site notes and actions" multiline onBlur={(event: any) => saveWalkNotes(event.nativeEvent.text)} />
       </SectionCard>
 
       <SectionCard title="Plots in build" subtitle={`Walk date: ${walkDate}`}>
@@ -148,8 +148,8 @@ export default function WalkScreen() {
                 </Pressable>
               </View>
 
-              <TextInput style={[styles.input, styles.notes]} defaultValue={item.issueNotes} placeholder="Plot-specific issue or action" multiline onBlur={(event) => saveItem(plot.id, stage?.id, { issueNotes: event.nativeEvent.text, plotStageId: stage?.id })} />
-              <TextInput style={styles.input} defaultValue={item.actionOwner} placeholder="Action owner or trade" onBlur={(event) => saveItem(plot.id, stage?.id, { actionOwner: event.nativeEvent.text, plotStageId: stage?.id })} />
+              <TextInput style={[styles.input, styles.notes]} defaultValue={item.issueNotes} placeholder="Plot-specific issue or action" multiline onBlur={(event: any) => saveItem(plot.id, stage?.id, { issueNotes: event.nativeEvent.text, plotStageId: stage?.id })} />
+              <TextInput style={styles.input} defaultValue={item.actionOwner} placeholder="Action owner or trade" onBlur={(event: any) => saveItem(plot.id, stage?.id, { actionOwner: event.nativeEvent.text, plotStageId: stage?.id })} />
             </View>
           );
         })}

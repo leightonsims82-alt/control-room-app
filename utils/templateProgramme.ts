@@ -1,8 +1,15 @@
-import { ActivityDelay, BUILD_SEQUENCE, ProgrammeActivity, SitePlot, TRADE_ORDER } from './siteProgrammeEngine';
+import { ActivityDelay, BUILD_SEQUENCE, getStageNumberForRelativeWeek, ProgrammeActivity, ProgrammeStageNumber, PROGRAMME_STAGE_SEQUENCE, SitePlot, TRADE_ORDER } from './siteProgrammeEngine';
 
 export type TemplateSitePlot = SitePlot & {
   templateId?: string;
+  buildOrder?: number;
+  holdStage?: ProgrammeStageNumber;
+  holdReason?: string;
+  holdUpdatedAt?: string;
 };
+
+export type ConstructionMethod = 'traditional' | 'timberFrame' | 'hybrid' | 'projectSpecific';
+export type ActivityMove = { id: string; plotId: string; activityCode: string; deltaDays: number; updatedAt: string };
 
 export type OverlapStartFrom = 'start' | 'finish';
 
@@ -16,6 +23,8 @@ export type TemplateActivity = ProgrammeActivity & {
 export type PlotTemplate = {
   id: string;
   name: string;
+  houseTypeCode?: string;
+  constructionMethod?: ConstructionMethod;
   description: string;
   programmeWeeks: number;
   stageCount: number;
@@ -29,6 +38,7 @@ export type SiteProgrammeSetup = {
   workingWeek: string;
   includeSaturday: boolean;
   includeSunday: boolean;
+  programmeStartDate?: string;
 };
 
 export const DEFAULT_SITE_PROGRAMME_SETUP: SiteProgrammeSetup = {
@@ -178,6 +188,19 @@ export const DEFAULT_PLOT_TEMPLATES: PlotTemplate[] = [
 
 export const DEFAULT_TEMPLATE_PLOTS: TemplateSitePlot[] = [];
 
+export function isProgrammeStageNumber(value: unknown): value is ProgrammeStageNumber {
+  return PROGRAMME_STAGE_SEQUENCE.some((item) => item.stage === Number(value));
+}
+export function getPlotHoldLabel(plot: TemplateSitePlot) { return plot.holdStage ? `Stage ${plot.holdStage}` : 'Not held'; }
+export function getPlotHoldDetail(plot: TemplateSitePlot) { return plot.holdStage ? `Held at Stage ${plot.holdStage}${plot.holdReason?.trim() ? `: ${plot.holdReason.trim()}` : ''}` : 'Plot is not currently held.'; }
+export function getPlotBuildOrder(plot: TemplateSitePlot, fallbackIndex = 0) { return Number.isFinite(plot.buildOrder) && Number(plot.buildOrder) > 0 ? Number(plot.buildOrder) : fallbackIndex + 1; }
+export function getSortedSitePlots(plots: TemplateSitePlot[]) { return plots.slice().sort((a, b) => getPlotBuildOrder(a, 9999) - getPlotBuildOrder(b, 9999) || a.plotNo.localeCompare(b.plotNo, undefined, { numeric: true })); }
+export function getHouseTypeLabel(template: PlotTemplate) { return template.houseTypeCode?.trim() || template.name; }
+export function createHouseTypeTemplate(input: { name: string; houseTypeCode: string; baseTemplate?: PlotTemplate }): PlotTemplate {
+  const base = input.baseTemplate ?? DEFAULT_PLOT_TEMPLATES[0];
+  return { ...base, id: `custom-${input.houseTypeCode.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`, name: input.name, houseTypeCode: input.houseTypeCode, activities: base.activities.map((activity) => ({ ...activity })) };
+}
+
 export function getTemplateForPlot(plot: TemplateSitePlot, templates: PlotTemplate[]) {
   return templates.find((template) => template.id === plot.templateId) ?? templates.find((template) => template.id === 'threeBed') ?? templates[0];
 }
@@ -228,6 +251,15 @@ export function getLinearStage1StartWeekForPlot(plot: TemplateSitePlot, template
 export function getStage1StartWeekForPlot(plot: TemplateSitePlot, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
   return normaliseProgrammeWeek(getLinearStage1StartWeekForPlot(plot, templates, setup));
 }
+
+export function getStageNumberForPlotWeek(plot: TemplateSitePlot, week: number, templates: PlotTemplate[]) {
+  const relativeWeek = week - getStage1StartWeekForPlot(plot, templates) + 1;
+  if (relativeWeek < 1 || relativeWeek > 23) return '';
+  const stage = getStageNumberForRelativeWeek(relativeWeek);
+  if (!plot.holdStage || !stage || stage < plot.holdStage) return stage;
+  return stage === plot.holdStage ? `${stage}H` : `H${plot.holdStage}`;
+}
+export function getStageLabelForNumber(stage: ProgrammeStageNumber) { return PROGRAMME_STAGE_SEQUENCE.find((item) => item.stage === stage)?.label ?? `Stage ${stage}`; }
 
 export function getMilestoneForPlotWeek(plot: TemplateSitePlot, week: number, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
   const template = getTemplateForPlot(plot, templates);

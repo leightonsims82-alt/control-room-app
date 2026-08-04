@@ -2,10 +2,27 @@ export type DayName = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
 
 export type SitePlot = { id: string; plotNo: string; stage9CompleteWeek: number };
 export type ActivityDelay = { plotId: string; activityCode: string; delayDays: number };
-export type ProgrammeActivity = { order: number; code: string; trade: string; displayText: string; durationDays: number; relativeWeek: number; relativeDay: number; stage: 1 | 2 | 4 | 5 | 6 | 7 | 8 | 9 };
+export type ProgrammeStageNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+export type ProgrammeActivity = { order: number; code: string; trade: string; displayText: string; durationDays: number; relativeWeek: number; relativeDay: number; stage: ProgrammeStageNumber };
 
 export const DAY_NAMES: DayName[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 export const WEEK_NUMBERS = Array.from({ length: 52 }, (_, index) => index + 1);
+export const PROGRAMME_STAGE_SEQUENCE: { stage: ProgrammeStageNumber; label: string; durationWeeks: number; startWeek: number; finishWeek: number }[] = [
+  { stage: 1, label: 'Foundations', durationWeeks: 2, startWeek: 1, finishWeek: 2 },
+  { stage: 2, label: 'Slab / oversite', durationWeeks: 6, startWeek: 3, finishWeek: 8 },
+  { stage: 3, label: 'Superstructure incl. roof framing', durationWeeks: 4, startWeek: 9, finishWeek: 12 },
+  { stage: 4, label: 'Roof covering', durationWeeks: 2, startWeek: 13, finishWeek: 14 },
+  { stage: 5, label: 'Pre-plaster', durationWeeks: 2, startWeek: 15, finishWeek: 16 },
+  { stage: 6, label: 'Drylinings', durationWeeks: 2, startWeek: 17, finishWeek: 18 },
+  { stage: 7, label: '2nd fix', durationWeeks: 2, startWeek: 19, finishWeek: 20 },
+  { stage: 8, label: 'Patching', durationWeeks: 1, startWeek: 21, finishWeek: 21 },
+  { stage: 9, label: 'Finals', durationWeeks: 1, startWeek: 22, finishWeek: 22 },
+  { stage: 10, label: 'Flooring', durationWeeks: 1, startWeek: 23, finishWeek: 23 },
+  { stage: 11, label: 'Final decoration / pre-handover', durationWeeks: 1, startWeek: 23, finishWeek: 23 },
+];
+export function getStageNumberForRelativeWeek(week: number): ProgrammeStageNumber | '' {
+  return PROGRAMME_STAGE_SEQUENCE.find((item) => week >= item.startWeek && week <= item.finishWeek)?.stage ?? '';
+}
 export function dayIndexFromWeekDay(week: number, day: number) { return (week - 1) * 5 + day; }
 
 export const DEFAULT_SITE_PLOTS: SitePlot[] = [

@@ -125,7 +125,7 @@ function ChecklistRow({
               style={styles.input}
               placeholder={`Measured value (${item.tolerance.unit})`}
               defaultValue={item.measuredValue}
-              onBlur={(event) => update(inspectionId, item.id, { measuredValue: event.nativeEvent.text })}
+              onBlur={(event: any) => update(inspectionId, item.id, { measuredValue: event.nativeEvent.text })}
             />
           ) : null}
         </View>
@@ -138,8 +138,8 @@ function ChecklistRow({
           </Pressable>
         ))}
       </View>
-      <TextInput style={styles.input} placeholder="Description" defaultValue={item.description} onBlur={(event) => update(inspectionId, item.id, { description: event.nativeEvent.text })} />
-      <TextInput style={styles.input} placeholder="Image or photo reference" defaultValue={item.imageUri} onBlur={(event) => update(inspectionId, item.id, { imageUri: event.nativeEvent.text })} />
+      <TextInput style={styles.input} placeholder="Description" defaultValue={item.description} onBlur={(event: any) => update(inspectionId, item.id, { description: event.nativeEvent.text })} />
+      <TextInput style={styles.input} placeholder="Image or photo reference" defaultValue={item.imageUri} onBlur={(event: any) => update(inspectionId, item.id, { imageUri: event.nativeEvent.text })} />
       <View style={styles.fixedRow}>
         <Text style={styles.fixedLabel}>Fixed?</Text>
         {answers.map((answer) => (
@@ -148,7 +148,7 @@ function ChecklistRow({
           </Pressable>
         ))}
       </View>
-      <TextInput style={styles.input} placeholder="Fixed image or close-out photo reference" defaultValue={item.fixedImageUri} onBlur={(event) => update(inspectionId, item.id, { fixedImageUri: event.nativeEvent.text })} />
+      <TextInput style={styles.input} placeholder="Fixed image or close-out photo reference" defaultValue={item.fixedImageUri} onBlur={(event: any) => update(inspectionId, item.id, { fixedImageUri: event.nativeEvent.text })} />
     </View>
   );
 }

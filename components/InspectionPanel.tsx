@@ -8,8 +8,11 @@ const statusConfig: Record<InspectionStatus, { icon: keyof typeof Ionicons.glyph
   'Not applicable': { icon: 'remove-circle-outline', color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0' },
   'Ready for inspection': { icon: 'time-outline', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
   Pending: { icon: 'hourglass-outline', color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+  'Inspection in progress': { icon: 'search-outline', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
   Passed: { icon: 'checkmark-circle-outline', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
   'Issues noted': { icon: 'alert-circle-outline', color: '#f97316', bg: '#fff7ed', border: '#fed7aa' },
+  'Failed awaiting close out': { icon: 'close-circle-outline', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+  'Verified complete': { icon: 'checkmark-done-circle-outline', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
   Blocked: { icon: 'shield-outline', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
 };
 
