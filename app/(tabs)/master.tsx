@@ -4,6 +4,15 @@ import { AppScreen } from '../../components/AppScreen';
 import { ProgrammeDatePicker } from '../../components/ProgrammeDatePicker';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
+import {
+  clearPlotMetadata,
+  getPlotMetadataKey,
+  PlotBuildRoute,
+  PlotMetadataMap,
+  readPlotMetadata,
+  removePlotMetadata,
+  savePlotMetadata,
+} from '../../utils/plotMetadata';
 import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber } from '../../utils/siteProgrammeEngine';
 import { formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, validatePlotCompletionDate } from '../../utils/programmeDates';
 import {
@@ -15,11 +24,11 @@ import {
   getStage1StartWeekForPlot,
   getStageLabelForNumber,
   getStageNumberForPlotWeek,
+  getTemplateById,
   getTemplateForPlot,
 } from '../../utils/templateProgramme';
 
 type ResetMode = 'all' | 'single';
-type BuildRoute = 'Traditional' | 'Timber Frame';
 
 export default function MasterProgrammeScreen() {
   const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
@@ -28,10 +37,12 @@ export default function MasterProgrammeScreen() {
   const currentProgrammeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
   const visibleWeeks = Array.from({ length: 23 }, (_, index) => currentProgrammeWeek + index);
   const [plotNo, setPlotNo] = useState('');
+  const [houseTypeName, setHouseTypeName] = useState('');
   const [plotCompletionDate, setPlotCompletionDate] = useState('');
   const [plotDateError, setPlotDateError] = useState('');
-  const [buildRoute, setBuildRoute] = useState<BuildRoute>('Traditional');
+  const [buildRoute, setBuildRoute] = useState<PlotBuildRoute>('Traditional');
   const [templateId, setTemplateId] = useState(bedroomTemplates[2]?.id ?? bedroomTemplates[0]?.id ?? 'threeBed');
+  const [plotMetadata, setPlotMetadata] = useState<PlotMetadataMap>({});
   const [resetMode, setResetMode] = useState<ResetMode>('single');
   const [selectedResetPlotId, setSelectedResetPlotId] = useState('');
   const [clearConfirm, setClearConfirm] = useState(false);
@@ -42,6 +53,10 @@ export default function MasterProgrammeScreen() {
   const selectedHoldPlot = sortedPlots.find((plot) => plot.id === holdPlotId) ?? sortedPlots[0];
   const nextPlotHint = String(sitePlots.length + 1);
   const nextCompletionHint = formatProgrammeDate(siteSetup.programmeStartDate, (sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.stage9CompleteWeek)) : 22) + 1);
+
+  useEffect(() => {
+    readPlotMetadata().then(setPlotMetadata).catch(() => setPlotMetadata({}));
+  }, []);
 
   useEffect(() => {
     if (!selectedResetPlotId && sortedPlots[0]?.id) setSelectedResetPlotId(sortedPlots[0].id);
@@ -56,16 +71,25 @@ export default function MasterProgrammeScreen() {
     const dateError = validatePlotCompletionDate(siteSetup.programmeStartDate, plotCompletionDate);
     setPlotDateError(dateError);
     const parsedWeek = getProgrammeWeekForDate(siteSetup.programmeStartDate, plotCompletionDate);
-    if (!plotNo.trim() || dateError || !parsedWeek) return;
-    const existingPlot = sitePlots.find((plot) => plot.plotNo.toLowerCase() === plotNo.trim().toLowerCase());
+    const cleanedPlotNo = plotNo.trim();
+    if (!cleanedPlotNo || dateError || !parsedWeek) return;
+    const existingPlot = sitePlots.find((plot) => plot.plotNo.toLowerCase() === cleanedPlotNo.toLowerCase());
     const nextBuildOrder = sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.buildOrder ?? 0)) + 1 : 1;
     await upsertSitePlot({
-      plotNo,
+      plotNo: cleanedPlotNo,
       buildOrder: existingPlot?.buildOrder ?? nextBuildOrder,
       stage9CompleteWeek: parsedWeek,
       templateId: buildRoute === 'Timber Frame' ? 'timberFrame' : templateId,
     });
+    const nextMetadata = await savePlotMetadata({
+      plotNo: cleanedPlotNo,
+      houseTypeName,
+      bedroomTemplateId: templateId,
+      buildRoute,
+    });
+    setPlotMetadata(nextMetadata);
     setPlotNo('');
+    setHouseTypeName('');
     setPlotCompletionDate('');
     setPlotDateError('');
     setClearConfirm(false);
@@ -88,9 +112,11 @@ export default function MasterProgrammeScreen() {
       return;
     }
     if (resetMode === 'all') {
-      await clearSitePlotData();
+      await Promise.all([clearSitePlotData(), clearPlotMetadata()]);
+      setPlotMetadata({});
     } else if (selectedResetPlot) {
       await removeSitePlot(selectedResetPlot.id);
+      setPlotMetadata(await removePlotMetadata(selectedResetPlot.plotNo));
     }
     setClearConfirm(false);
   };
@@ -127,7 +153,7 @@ export default function MasterProgrammeScreen() {
         <Text style={styles.subtitle}>The programme starts at the current week and shows the following 22 weeks.</Text>
       </View>
 
-      <SectionCard title="Plot input" subtitle="Add each plot in its intended build sequence. Choose the build route separately from the house type.">
+      <SectionCard title="Plot input" subtitle="Add each plot in sequence. Build route, house type and property size are recorded separately.">
         <View style={styles.formRow}>
           <View style={styles.inputWrapSmall}>
             <Text style={styles.label}>Plot No</Text>
@@ -145,9 +171,9 @@ export default function MasterProgrammeScreen() {
             />
           </View>
           <View style={styles.inputWrapRoute}>
-            <Text style={styles.label}>Build route</Text>
+            <Text style={styles.label}>Build Route</Text>
             <View style={styles.routeChips}>
-              {(['Traditional', 'Timber Frame'] as BuildRoute[]).map((route) => {
+              {(['Traditional', 'Timber Frame'] as PlotBuildRoute[]).map((route) => {
                 const active = route === buildRoute;
                 return (
                   <Pressable key={route} style={[styles.routeChip, active ? styles.routeChipActive : null]} onPress={() => setBuildRoute(route)}>
@@ -157,8 +183,20 @@ export default function MasterProgrammeScreen() {
               })}
             </View>
           </View>
+        </View>
+
+        <View style={styles.formRow}>
+          <View style={styles.houseTypeWrap}>
+            <Text style={styles.label}>House Type</Text>
+            <TextInput
+              value={houseTypeName}
+              onChangeText={setHouseTypeName}
+              style={styles.input}
+              placeholder="Enter house type, e.g. Houghton"
+            />
+          </View>
           <View style={styles.inputWrapWide}>
-            <Text style={styles.label}>House type</Text>
+            <Text style={styles.label}>Property Size</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.templateChips}>
                 {bedroomTemplates.map((template) => {
@@ -257,7 +295,9 @@ export default function MasterProgrammeScreen() {
             <View style={styles.tableRow}>
               <Text style={[styles.headerCell, styles.buildCell]}>Seq</Text>
               <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
-              <Text style={[styles.headerCell, styles.templateCell]}>Type</Text>
+              <Text style={[styles.headerCell, styles.routeCell]}>Route</Text>
+              <Text style={[styles.headerCell, styles.houseTypeCell]}>House Type</Text>
+              <Text style={[styles.headerCell, styles.templateCell]}>Size</Text>
               <Text style={[styles.headerCell, styles.holdCell]}>Hold</Text>
               <Text style={[styles.headerCell, styles.weekInputCell]}>Start</Text>
               <Text style={[styles.headerCell, styles.completionCell]}>Plot Completion</Text>
@@ -274,12 +314,18 @@ export default function MasterProgrammeScreen() {
             ) : null}
 
             {sortedPlots.map((plot, rowIndex) => {
-              const template = getTemplateForPlot(plot, plotTemplates);
+              const metadata = plotMetadata[getPlotMetadataKey(plot.plotNo)];
+              const route = metadata?.buildRoute ?? (plot.templateId === 'timberFrame' ? 'Timber Frame' : 'Traditional');
+              const sizeTemplateId = metadata?.bedroomTemplateId ?? (plot.templateId === 'timberFrame' ? 'threeBed' : plot.templateId);
+              const sizeTemplate = getTemplateById(sizeTemplateId, bedroomTemplates);
+              const programmeTemplate = getTemplateForPlot(plot, plotTemplates);
               return (
                 <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                   <Text style={[styles.bodyCell, styles.buildCell]}>{getPlotBuildOrder(plot, rowIndex)}</Text>
                   <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
-                  <Text style={[styles.bodyCell, styles.templateCell]}>{getHouseTypeLabel(template)}</Text>
+                  <Text style={[styles.bodyCell, styles.routeCell]}>{route}</Text>
+                  <Text style={[styles.bodyCell, styles.houseTypeCell]}>{metadata?.houseTypeName || '-'}</Text>
+                  <Text style={[styles.bodyCell, styles.templateCell]}>{getHouseTypeLabel(sizeTemplate ?? programmeTemplate)}</Text>
                   <Text style={[styles.holdBodyCell, styles.holdCell, plot.holdStage ? styles.holdBodyCellActive : null]}>{getPlotHoldLabel(plot)}</Text>
                   <Text style={[styles.stageStartBody, styles.weekInputCell]}>WK{String(getStage1StartWeekForPlot(plot, plotTemplates)).padStart(2, '0')}</Text>
                   <Text style={[styles.weekInputBody, styles.completionCell]}>{formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
@@ -322,7 +368,8 @@ const styles = StyleSheet.create({
   formRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
   inputWrapSmall: { gap: 6, minWidth: 180, flex: 1 },
   inputWrapRoute: { gap: 6, minWidth: 230, flex: 1 },
-  inputWrapWide: { gap: 6, minWidth: 260, flex: 2 },
+  houseTypeWrap: { gap: 6, minWidth: 260, flex: 2 },
+  inputWrapWide: { gap: 6, minWidth: 320, flex: 2 },
   label: { color: '#334155', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
   input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', fontWeight: '800' },
   errorText: { color: '#dc2626', fontSize: 12, fontWeight: '800' },
@@ -370,6 +417,8 @@ const styles = StyleSheet.create({
   headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   buildCell: { width: 62 },
   plotCell: { width: 90 },
+  routeCell: { width: 118 },
+  houseTypeCell: { width: 160 },
   templateCell: { width: 118 },
   holdCell: { width: 96 },
   weekInputCell: { width: 104 },
@@ -384,7 +433,7 @@ const styles = StyleSheet.create({
   weekCell: { width: 70, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
   activeWeekCell: { backgroundColor: '#dff0ff' },
   heldWeekCell: { backgroundColor: '#fee2e2', color: '#991b1b' },
-  emptyMatrixRow: { width: 1080, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#f8fafc', padding: 18 },
+  emptyMatrixRow: { width: 1420, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#f8fafc', padding: 18 },
   emptyMatrixText: { color: '#64748b', fontWeight: '800' },
   removeButton: { width: 86, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#c8d7e6' },
   removeButtonText: { color: '#2563eb', fontSize: 12, fontWeight: '900' },
