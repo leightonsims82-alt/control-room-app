@@ -19,14 +19,17 @@ import {
 } from '../../utils/templateProgramme';
 
 type ResetMode = 'all' | 'single';
+type BuildRoute = 'Traditional' | 'Timber Frame';
 
 export default function MasterProgrammeScreen() {
   const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
+  const bedroomTemplates = plotTemplates.filter((template) => template.id !== 'timberFrame' && template.constructionMethod !== 'timberFrame');
   const [plotNo, setPlotNo] = useState('');
   const [plotCompletionDate, setPlotCompletionDate] = useState('');
   const [plotDateError, setPlotDateError] = useState('');
-  const [templateId, setTemplateId] = useState(plotTemplates[2]?.id ?? 'threeBed');
+  const [buildRoute, setBuildRoute] = useState<BuildRoute>('Traditional');
+  const [templateId, setTemplateId] = useState(bedroomTemplates[2]?.id ?? bedroomTemplates[0]?.id ?? 'threeBed');
   const [resetMode, setResetMode] = useState<ResetMode>('single');
   const [selectedResetPlotId, setSelectedResetPlotId] = useState('');
   const [clearConfirm, setClearConfirm] = useState(false);
@@ -58,7 +61,7 @@ export default function MasterProgrammeScreen() {
       plotNo,
       buildOrder: existingPlot?.buildOrder ?? nextBuildOrder,
       stage9CompleteWeek: parsedWeek,
-      templateId,
+      templateId: buildRoute === 'Timber Frame' ? 'timberFrame' : templateId,
     });
     setPlotNo('');
     setPlotCompletionDate('');
@@ -122,7 +125,7 @@ export default function MasterProgrammeScreen() {
         <Text style={styles.subtitle}>Plots stay in the order you add them. Stage numbers are shown in the programme cells.</Text>
       </View>
 
-      <SectionCard title="Plot input" subtitle="Add each plot in its intended build sequence. The app records that order automatically.">
+      <SectionCard title="Plot input" subtitle="Add each plot in its intended build sequence. Choose the build route separately from the house type.">
         <View style={styles.formRow}>
           <View style={styles.inputWrapSmall}>
             <Text style={styles.label}>Plot No</Text>
@@ -139,11 +142,24 @@ export default function MasterProgrammeScreen() {
               error={Boolean(plotDateError)}
             />
           </View>
+          <View style={styles.inputWrapRoute}>
+            <Text style={styles.label}>Build route</Text>
+            <View style={styles.routeChips}>
+              {(['Traditional', 'Timber Frame'] as BuildRoute[]).map((route) => {
+                const active = route === buildRoute;
+                return (
+                  <Pressable key={route} style={[styles.routeChip, active ? styles.routeChipActive : null]} onPress={() => setBuildRoute(route)}>
+                    <Text style={[styles.routeChipText, active ? styles.routeChipTextActive : null]}>{route}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
           <View style={styles.inputWrapWide}>
             <Text style={styles.label}>House type</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.templateChips}>
-                {plotTemplates.map((template) => {
+                {bedroomTemplates.map((template) => {
                   const active = template.id === templateId;
                   return (
                     <Pressable key={template.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => setTemplateId(template.id)}>
@@ -303,12 +319,18 @@ const styles = StyleSheet.create({
   subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
   formRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
   inputWrapSmall: { gap: 6, minWidth: 180, flex: 1 },
+  inputWrapRoute: { gap: 6, minWidth: 230, flex: 1 },
   inputWrapWide: { gap: 6, minWidth: 260, flex: 2 },
   label: { color: '#334155', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
   input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', fontWeight: '800' },
   errorText: { color: '#dc2626', fontSize: 12, fontWeight: '800' },
   saveButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
   saveButtonText: { color: '#ffffff', fontWeight: '900' },
+  routeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  routeChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: '#ffffff' },
+  routeChipActive: { backgroundColor: '#173b5f', borderColor: '#173b5f' },
+  routeChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
+  routeChipTextActive: { color: '#ffffff' },
   buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   disabledButton: { backgroundColor: '#cbd5e1' },
   releaseButton: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
