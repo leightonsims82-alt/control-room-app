@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
-import { SitePlotInput, useSitePlanner } from '../../data/sitePlannerStore';
+import { useSitePlanner } from '../../data/sitePlannerStore';
 import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber, WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
-import { formatProgrammeDate, getProgrammeWeekForDate, validatePlotCompletionDate, validateWeekOneDate } from '../../utils/programmeDates';
+import { formatProgrammeDate, getProgrammeWeekForDate, validatePlotCompletionDate } from '../../utils/programmeDates';
 import {
   getHouseTypeLabel,
   getPlotBuildOrder,
@@ -20,14 +20,13 @@ import {
 type ResetMode = 'all' | 'single';
 
 export default function MasterProgrammeScreen() {
-  const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, bulkUpsertSitePlots, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
+  const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
   const [plotNo, setPlotNo] = useState('');
   const [buildOrder, setBuildOrder] = useState('');
   const [plotCompletionDate, setPlotCompletionDate] = useState('');
   const [plotDateError, setPlotDateError] = useState('');
   const [templateId, setTemplateId] = useState(plotTemplates[2]?.id ?? 'threeBed');
-  const [bulkText, setBulkText] = useState('');
   const [resetMode, setResetMode] = useState<ResetMode>('single');
   const [selectedResetPlotId, setSelectedResetPlotId] = useState('');
   const [clearConfirm, setClearConfirm] = useState(false);
@@ -49,18 +48,6 @@ export default function MasterProgrammeScreen() {
     }
   }, [holdPlotId, selectedResetPlotId, sortedPlots]);
 
-  const findTemplateId = (houseTypeText: string) => {
-    const clean = houseTypeText.trim().toLowerCase();
-    if (!clean) return templateId;
-    const matched = plotTemplates.find((template) =>
-      template.id.toLowerCase() === clean ||
-      template.name.toLowerCase() === clean ||
-      template.houseTypeCode.toLowerCase() === clean ||
-      getHouseTypeLabel(template).toLowerCase() === clean,
-    );
-    return matched?.id ?? templateId;
-  };
-
   const savePlot = async () => {
     const dateError = validatePlotCompletionDate(siteSetup.programmeStartDate, plotCompletionDate);
     setPlotDateError(dateError);
@@ -75,18 +62,6 @@ export default function MasterProgrammeScreen() {
     setPlotNo('');
     setBuildOrder('');
     setPlotCompletionDate('');
-    setPlotDateError('');
-    setClearConfirm(false);
-  };
-
-  const importBulkPlots = async () => {
-    const weekOneError = validateWeekOneDate(siteSetup.programmeStartDate);
-    if (weekOneError) { setPlotDateError(weekOneError); return; }
-    const inputs = parseBulkPlotText(bulkText, findTemplateId, siteSetup.programmeStartDate);
-    if (!inputs.length) { setPlotDateError('No valid rows found. Use DD/MM/YYYY completion dates on or after Week 1.'); return; }
-    if (!inputs.length) return;
-    await bulkUpsertSitePlots(inputs);
-    setBulkText('');
     setPlotDateError('');
     setClearConfirm(false);
   };
@@ -181,22 +156,6 @@ export default function MasterProgrammeScreen() {
           </Pressable>
         </View>
         {plotDateError ? <Text style={styles.errorText}>{plotDateError}</Text> : null}
-      </SectionCard>
-
-      <SectionCard title="Bulk plot entry" subtitle="Paste multiple plots at once: Build Order, Plot No, House Type Code, Plot Completion Date. Plot numbers do not need to be in sequence.">
-        <TextInput
-          value={bulkText}
-          onChangeText={setBulkText}
-          multiline
-          placeholder={'1, 24, HT-A, 16/03/2026\n2, 18, HT-B, 23/03/2026'}
-          style={styles.bulkInput}
-        />
-        <View style={styles.bulkFooter}>
-          <Text style={styles.bulkHelp}>Format: build order, plot no, house type/code, Plot Completion Date (DD/MM/YYYY). Commas or tabs both work.</Text>
-          <Pressable style={styles.saveButton} onPress={importBulkPlots}>
-            <Text style={styles.saveButtonText}>Import Plots</Text>
-          </Pressable>
-        </View>
       </SectionCard>
 
       <SectionCard title="Hold plot at stage" subtitle="Use this when a plot has stopped and should not progress into later stages until released.">
@@ -335,21 +294,6 @@ export default function MasterProgrammeScreen() {
   );
 }
 
-function parseBulkPlotText(text: string, findTemplateId: (houseTypeText: string) => string, weekOneDate: string): SitePlotInput[] {
-  return text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => line.split(/[\t,]+/).map((part) => part.trim()))
-    .map(([buildOrder, plotNo, houseType, completionDate]) => ({
-      buildOrder: Number(buildOrder),
-      plotNo: plotNo || '',
-      templateId: findTemplateId(houseType || ''),
-      stage9CompleteWeek: getProgrammeWeekForDate(weekOneDate, completionDate || '') ?? 0,
-    }))
-    .filter((item) => item.plotNo && Number.isFinite(item.stage9CompleteWeek) && item.stage9CompleteWeek > 0);
-}
-
 const styles = StyleSheet.create({
   header: { gap: 4 },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
@@ -361,9 +305,6 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', fontWeight: '800' },
   inputError: { borderColor: '#dc2626' },
   errorText: { color: '#dc2626', fontSize: 12, fontWeight: '800' },
-  bulkInput: { minHeight: 130, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, color: '#0f172a', fontWeight: '800', textAlignVertical: 'top' },
-  bulkFooter: { flexDirection: 'row', gap: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' },
-  bulkHelp: { flex: 1, minWidth: 280, color: '#64748b', fontSize: 12, lineHeight: 18 },
   saveButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
   saveButtonText: { color: '#ffffff', fontWeight: '900' },
   buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },

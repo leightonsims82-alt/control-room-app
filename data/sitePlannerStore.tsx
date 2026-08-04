@@ -98,7 +98,6 @@ type SitePlannerStore = {
   siteSetup: SiteProgrammeSetup;
   isSitePlannerLoaded: boolean;
   upsertSitePlot: (input: SitePlotInput) => Promise<void>;
-  bulkUpsertSitePlots: (inputs: SitePlotInput[]) => Promise<void>;
   removeSitePlot: (plotId: string) => Promise<void>;
   clearSitePlotData: () => Promise<void>;
   resetPlotData: () => Promise<void>;
@@ -293,12 +292,6 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
     await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(nextPlots));
   };
 
-  const bulkUpsertSitePlots = async (inputs: SitePlotInput[]) => {
-    const nextPlots = applyPlotInputs(sitePlots, inputs);
-    setSitePlots(nextPlots);
-    await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(nextPlots));
-  };
-
   const removeSitePlot = async (plotId: string) => {
     const nextPlots = sitePlots.filter((plot) => plot.id !== plotId);
     const nextDelays = activityDelays.filter((delay) => delay.plotId !== plotId);
@@ -468,7 +461,6 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       siteSetup,
       isSitePlannerLoaded,
       upsertSitePlot,
-      bulkUpsertSitePlots,
       removeSitePlot,
       clearSitePlotData,
       resetPlotData: clearSitePlotData,
