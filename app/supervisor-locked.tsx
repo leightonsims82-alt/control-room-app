@@ -58,7 +58,9 @@ export default function SupervisorLockedView() {
   const requestedTrade = Array.isArray(params.trade) ? params.trade[0] : params.trade;
   const printMode = String(Array.isArray(params.print) ? params.print[0] : params.print ?? '') === '1';
   const lockedTrade = tradeContacts.find((trade) => slug(trade.trade) === slug(String(requestedTrade ?? '')))?.trade ?? tradeContacts[0]?.trade ?? 'Trade';
-  const startWeek = normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate));
+
+  // Week 1 is the next full programme week. Week 2 is the week after.
+  const startWeek = normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate) + 1);
   const days = useMemo(() => buildTwoWeekWindow(startWeek, siteSetup.programmeStartDate), [startWeek, siteSetup.programmeStartDate]);
   const dateRange = `${days[0]?.date ?? ''} - ${days[13]?.date ?? ''}`;
   const latestIssue = issueLogs[0];
@@ -125,7 +127,7 @@ export default function SupervisorLockedView() {
 
       <View style={[styles.card, printMode ? styles.printCard : null]}>
         <Text style={[styles.cardTitle, printMode ? styles.printCardTitle : null]}>{lockedTrade} programme table</Text>
-        {rows.length === 0 ? <Text style={styles.emptyText}>No planned {lockedTrade} activity in the current Week 1 and Week 2 lookahead.</Text> : null}
+        {rows.length === 0 ? <Text style={styles.emptyText}>No planned {lockedTrade} activity in the next Week 1 and Week 2 lookahead.</Text> : null}
         <ScrollView horizontal={!printMode} showsHorizontalScrollIndicator={!printMode}>
           <View style={[styles.tableWrap, { width: tableWidth, minWidth: tableWidth }]}>
             <View style={styles.tableRow}>
