@@ -4,8 +4,8 @@ import { AppScreen } from '../../components/AppScreen';
 import { ProgrammeDatePicker } from '../../components/ProgrammeDatePicker';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
-import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber, WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
-import { formatProgrammeDate, getProgrammeWeekForDate, validatePlotCompletionDate } from '../../utils/programmeDates';
+import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber } from '../../utils/siteProgrammeEngine';
+import { formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, validatePlotCompletionDate } from '../../utils/programmeDates';
 import {
   getHouseTypeLabel,
   getPlotBuildOrder,
@@ -25,6 +25,8 @@ export default function MasterProgrammeScreen() {
   const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
   const bedroomTemplates = plotTemplates.filter((template) => template.id !== 'timberFrame' && template.constructionMethod !== 'timberFrame');
+  const currentProgrammeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
+  const visibleWeeks = Array.from({ length: 23 }, (_, index) => currentProgrammeWeek + index);
   const [plotNo, setPlotNo] = useState('');
   const [plotCompletionDate, setPlotCompletionDate] = useState('');
   const [plotDateError, setPlotDateError] = useState('');
@@ -122,7 +124,7 @@ export default function MasterProgrammeScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>Master 23 Week Programme</Text>
-        <Text style={styles.subtitle}>Plots stay in the order you add them. Stage numbers are shown in the programme cells.</Text>
+        <Text style={styles.subtitle}>The programme starts at the current week and shows the following 22 weeks.</Text>
       </View>
 
       <SectionCard title="Plot input" subtitle="Add each plot in its intended build sequence. Choose the build route separately from the house type.">
@@ -249,7 +251,7 @@ export default function MasterProgrammeScreen() {
         </Pressable>
       </SectionCard>
 
-      <SectionCard title="Master stage-number matrix" subtitle="Plots are listed in the sequence they were added. Held plots show H in the week cells and future-stage trade activities are hidden until released.">
+      <SectionCard title="Master stage-number matrix" subtitle="The first column is the current programme week. Plots remain listed in the sequence they were added.">
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.tableRow}>
@@ -259,7 +261,7 @@ export default function MasterProgrammeScreen() {
               <Text style={[styles.headerCell, styles.holdCell]}>Hold</Text>
               <Text style={[styles.headerCell, styles.weekInputCell]}>Start</Text>
               <Text style={[styles.headerCell, styles.completionCell]}>Plot Completion</Text>
-              {WEEK_NUMBERS.map((week) => (
+              {visibleWeeks.map((week) => (
                 <Text key={week} style={styles.weekHeader}>{`WK${String(week).padStart(2, '0')}\n${formatProgrammeDate(siteSetup.programmeStartDate, week)}`}</Text>
               ))}
               <Text style={[styles.headerCell, styles.actionCell]}>Action</Text>
@@ -281,7 +283,7 @@ export default function MasterProgrammeScreen() {
                   <Text style={[styles.holdBodyCell, styles.holdCell, plot.holdStage ? styles.holdBodyCellActive : null]}>{getPlotHoldLabel(plot)}</Text>
                   <Text style={[styles.stageStartBody, styles.weekInputCell]}>WK{String(getStage1StartWeekForPlot(plot, plotTemplates)).padStart(2, '0')}</Text>
                   <Text style={[styles.weekInputBody, styles.completionCell]}>{formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
-                  {WEEK_NUMBERS.map((week) => {
+                  {visibleWeeks.map((week) => {
                     const stage = getStageNumberForPlotWeek(plot, week, plotTemplates);
                     const heldStageCell = String(stage).includes('H');
                     return <Text key={week} style={[styles.weekCell, stage ? styles.activeWeekCell : null, heldStageCell ? styles.heldWeekCell : null]}>{stage}</Text>;
