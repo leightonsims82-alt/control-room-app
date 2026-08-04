@@ -5,11 +5,17 @@ import { AppScreen } from '../../components/AppScreen';
 import { ProgrammeDatePicker } from '../../components/ProgrammeDatePicker';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { getProgrammeStartDateValue, normaliseBritishDate, validateWeekOneDate } from '../../utils/programmeDates';
+import {
+  ConfiguredProgrammeStage,
+  MAX_PROGRAMME_STAGES,
+  readStageConfiguration,
+  resizeStageConfiguration,
+  saveStageConfiguration,
+} from '../../utils/stageConfiguration';
+import { PROGRAMME_STAGE_SEQUENCE } from '../../utils/siteProgrammeEngine';
 import { getEffectiveProgrammeWeeks, TemplateActivity } from '../../utils/templateProgramme';
 
-const allowedStages = [1, 2, 4, 5, 6, 7, 8, 9] as const;
 const workingDayChoices = [5, 6, 7] as const;
-type AllowedStage = typeof allowedStages[number];
 type WorkingDays = typeof workingDayChoices[number];
 type BuildRoute = 'Traditional' | 'Timber Frame';
 
@@ -17,9 +23,10 @@ function cleanCode(value: string) {
   return value.trim().replace(/\s+/g, ' ');
 }
 
-function toStage(value: string): AllowedStage {
-  const parsed = Number(value);
-  return allowedStages.includes(parsed as AllowedStage) ? parsed as AllowedStage : 6;
+function toStage(value: string, stageCount: number): TemplateActivity['stage'] {
+  const parsed = Math.round(Number(value));
+  const safeStage = Number.isFinite(parsed) ? Math.min(Math.max(1, parsed), Math.max(1, stageCount)) : 1;
+  return safeStage as TemplateActivity['stage'];
 }
 
 function reorderActivities(activities: TemplateActivity[]) {
@@ -58,6 +65,8 @@ export default function SiteSetupScreen() {
   const [message, setMessage] = useState('');
   const [weekOneDate, setWeekOneDate] = useState(getProgrammeStartDateValue(siteSetup.programmeStartDate));
   const [weekOneDateError, setWeekOneDateError] = useState('');
+  const [stageDefinitions, setStageDefinitions] = useState<ConfiguredProgrammeStage[]>(PROGRAMME_STAGE_SEQUENCE.map((stage) => ({ ...stage })));
+  const [stageCountInput, setStageCountInput] = useState(String(Math.max(siteSetup.stageCount || 0, PROGRAMME_STAGE_SEQUENCE.length)));
 
   const plotTypeTemplates = plotTemplates.filter((template) => template.id !== 'timberFrame');
   const selectedPlotTypeTemplate = plotTypeTemplates.find((template) => template.id === selectedTemplateId) ?? plotTypeTemplates[0] ?? plotTemplates[0];
@@ -70,6 +79,16 @@ export default function SiteSetupScreen() {
     setWeekOneDate(getProgrammeStartDateValue(siteSetup.programmeStartDate));
   }, [siteSetup.programmeStartDate]);
 
+  useEffect(() => {
+    readStageConfiguration(siteSetup.stageCount)
+      .then((stages) => {
+        setStageDefinitions(stages);
+        setStageCountInput(String(stages.length));
+        if (siteSetup.stageCount !== stages.length) updateSiteSetup({ stageCount: stages.length });
+      })
+      .catch(() => undefined);
+  }, []);
+
   const markChanged = () => setSaved(false);
   const goMain = () => router.replace('/');
 
@@ -77,7 +96,7 @@ export default function SiteSetupScreen() {
     const dateError = validateWeekOneDate(weekOneDate);
     setWeekOneDateError(dateError);
     if (dateError) return;
-    updateSiteSetup({ programmeStartDate: normaliseBritishDate(weekOneDate) });
+    updateSiteSetup({ programmeStartDate: normaliseBritishDate(weekOneDate), stageCount: stageDefinitions.length });
     setSaved(true);
     router.replace('/');
   };
@@ -91,6 +110,38 @@ export default function SiteSetupScreen() {
     setWeekOneDate(value);
     setWeekOneDateError('');
     saveSiteSetup({ programmeStartDate: normaliseBritishDate(value) });
+  };
+
+  const changeStageCount = async (requestedCount: number) => {
+    const nextCount = Math.min(MAX_PROGRAMME_STAGES, Math.max(1, Math.round(requestedCount || 1)));
+    const nextStages = resizeStageConfiguration(stageDefinitions, nextCount);
+    setStageDefinitions(nextStages);
+    setStageCountInput(String(nextCount));
+    markChanged();
+    await Promise.all([saveStageConfiguration(nextStages), updateSiteSetup({ stageCount: nextCount })]);
+    setMessage(`Programme now uses ${nextCount} stage${nextCount === 1 ? '' : 's'}.`);
+  };
+
+  const applyStageCountInput = () => {
+    changeStageCount(Number(stageCountInput) || stageDefinitions.length);
+  };
+
+  const updateStageDefinition = async (stageNo: number, changes: Partial<ConfiguredProgrammeStage>) => {
+    const nextStages = stageDefinitions.map((stage) => {
+      if (stage.stage !== stageNo) return stage;
+      const startWeek = Math.max(1, Math.round(Number(changes.startWeek ?? stage.startWeek) || 1));
+      const finishWeek = Math.max(startWeek, Math.round(Number(changes.finishWeek ?? stage.finishWeek) || startWeek));
+      return {
+        ...stage,
+        ...changes,
+        label: changes.label !== undefined ? changes.label : stage.label,
+        startWeek,
+        finishWeek,
+      };
+    });
+    setStageDefinitions(nextStages);
+    markChanged();
+    await saveStageConfiguration(nextStages);
   };
 
   const savePlotTemplate = (template: typeof selectedTemplate) => {
@@ -107,7 +158,7 @@ export default function SiteSetupScreen() {
         ? activity
         : { ...activity, ...changes, code: changes.code ? cleanCode(String(changes.code)) : activity.code, overlapAllowed: activity.overlapAllowed ?? false },
     );
-    updatePlotTemplate({ ...selectedTemplate, activities: reorderActivities(nextActivities) });
+    updatePlotTemplate({ ...selectedTemplate, stageCount: stageDefinitions.length, activities: reorderActivities(nextActivities) });
   };
 
   const updateDuration = (templateId: string, activityCode: string, durationDays: number) => {
@@ -155,7 +206,7 @@ export default function SiteSetupScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>Site Setup</Text>
         <Text style={styles.title}>Programme & Plot Templates</Text>
-        <Text style={styles.subtitle}>Edit the build route, working week and plot type sequence directly in the table.</Text>
+        <Text style={styles.subtitle}>Set the site calendar, stage structure, build routes and activity sequences.</Text>
       </View>
 
       <View style={styles.card}>
@@ -168,12 +219,45 @@ export default function SiteSetupScreen() {
             <Text style={weekOneDateError ? styles.errorText : styles.helpText}>{weekOneDateError || 'Required · Select a Monday'}</Text>
           </Field>
           <Field label="Default programme weeks"><TextInput value={String(siteSetup.defaultProgrammeWeeks)} onChangeText={(value) => saveSiteSetup({ defaultProgrammeWeeks: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} /></Field>
-          <Field label="Default stage count"><TextInput value={String(siteSetup.stageCount)} onChangeText={(value) => saveSiteSetup({ stageCount: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} /></Field>
           <Field label="Working week">
             <View style={styles.optionRow}>{workingDayChoices.map((days) => { const active = days === activeWorkingDays; return <Pressable key={days} style={[styles.smallChip, active ? styles.smallChipActive : null]} onPress={() => saveSiteSetup(workingWeekChanges(days))}><Text style={[styles.smallChipText, active ? styles.smallChipTextActive : null]}>{days} days</Text></Pressable>; })}</View>
             <Text style={styles.helpText}>{workingWeekLabel(activeWorkingDays)}</Text>
           </Field>
         </View>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.cardHeadingRow}>
+          <View style={styles.headingTextWrap}>
+            <Text style={styles.cardTitle}>Programme stages</Text>
+            <Text style={styles.helpText}>Choose how many stages your developer uses, rename each stage and set where it sits in the plot programme.</Text>
+          </View>
+          <View style={styles.stageCountControls}>
+            <Pressable style={styles.countButton} onPress={() => changeStageCount(stageDefinitions.length - 1)}><Text style={styles.countButtonText}>−</Text></Pressable>
+            <View style={styles.stageCountField}><Text style={styles.stageCountLabel}>Number of stages</Text><TextInput value={stageCountInput} onChangeText={setStageCountInput} onEndEditing={applyStageCountInput} keyboardType="number-pad" style={styles.stageCountInput} /></View>
+            <Pressable style={styles.countButton} onPress={() => changeStageCount(stageDefinitions.length + 1)}><Text style={styles.countButtonText}>+</Text></Pressable>
+          </View>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View style={styles.stageTable}>
+            <View style={styles.stageTableRow}>
+              <Text style={[styles.stageHeaderCell, styles.stageNumberColumn]}>Stage</Text>
+              <Text style={[styles.stageHeaderCell, styles.stageNameColumn]}>Stage name</Text>
+              <Text style={[styles.stageHeaderCell, styles.stageWeekColumn]}>Start week</Text>
+              <Text style={[styles.stageHeaderCell, styles.stageWeekColumn]}>Finish week</Text>
+            </View>
+            {stageDefinitions.map((stage, index) => (
+              <View key={stage.stage} style={[styles.stageTableRow, index % 2 ? styles.altRow : null]}>
+                <Text style={[styles.stageBodyCell, styles.stageNumberColumn]}>{stage.stage}</Text>
+                <TextInput value={stage.label} onChangeText={(label) => updateStageDefinition(stage.stage, { label })} style={[styles.stageInput, styles.stageNameColumn]} placeholder={`Stage ${stage.stage}`} />
+                <TextInput value={String(stage.startWeek)} onChangeText={(value) => updateStageDefinition(stage.stage, { startWeek: Number(value) || 1 })} keyboardType="number-pad" style={[styles.stageInput, styles.stageWeekColumn]} />
+                <TextInput value={String(stage.finishWeek)} onChangeText={(value) => updateStageDefinition(stage.stage, { finishWeek: Number(value) || stage.startWeek })} keyboardType="number-pad" style={[styles.stageInput, styles.stageWeekColumn]} />
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+        <Text style={styles.helpText}>Activities can be assigned to any stage from 1 to {stageDefinitions.length}. New stages are added after the current final stage and can then be repositioned by changing their start and finish weeks.</Text>
       </View>
 
       <View style={styles.warningCard}>
@@ -182,13 +266,13 @@ export default function SiteSetupScreen() {
       </View>
 
       <View style={styles.card}>
-        <View style={styles.cardHeadingRow}><View><Text style={styles.cardTitle}>Build route and plot type templates</Text><Text style={styles.helpText}>Select Traditional or Timber Frame, then choose the bedroom size underneath.</Text></View>{message ? <Text style={styles.message}>{message}</Text> : null}</View>
+        <View style={styles.cardHeadingRow}><View><Text style={styles.cardTitle}>Build route and property size templates</Text><Text style={styles.helpText}>Select Traditional or Timber Frame, then choose the property size underneath.</Text></View>{message ? <Text style={styles.message}>{message}</Text> : null}</View>
         <View style={styles.routeChips}>{(['Traditional', 'Timber Frame'] as BuildRoute[]).map((route) => { const active = route === selectedBuildRoute; return <Pressable key={route} style={[styles.routeChip, active ? styles.routeChipActive : null]} onPress={() => { setSelectedBuildRoute(route); setMessage(`${route} route selected.`); }}><Text style={[styles.routeChipText, active ? styles.routeChipTextActive : null]}>{route}</Text></Pressable>; })}</View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}><View style={styles.templateChips}>{plotTypeTemplates.map((template) => { const active = template.id === selectedTemplateId; return <Pressable key={template.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => { setSelectedTemplateId(template.id); setMessage(''); }}><Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>{template.name}</Text></Pressable>; })}</View></ScrollView>
 
         {selectedTemplate ? <View style={styles.templatePanel}>
-          <View style={styles.formGrid}><Field label="Template name"><TextInput value={selectedTemplate.name} onChangeText={(name) => savePlotTemplate({ ...selectedTemplate, name })} style={styles.input} /></Field><Field label="Build route"><TextInput value={selectedBuildRoute} editable={false} style={styles.input} /></Field><Field label="Target weeks"><TextInput value={String(selectedTemplate.programmeWeeks)} onChangeText={(value) => savePlotTemplate({ ...selectedTemplate, programmeWeeks: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} /></Field><Field label="Stage count"><TextInput value={String(selectedTemplate.stageCount)} onChangeText={(value) => savePlotTemplate({ ...selectedTemplate, stageCount: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} /></Field><View style={styles.summaryBox}><Text style={styles.summaryLabel}>Calculated weeks</Text><Text style={styles.summaryValue}>{getEffectiveProgrammeWeeks(selectedTemplate, siteSetup)}</Text></View></View>
-          <ScrollView horizontal showsHorizontalScrollIndicator><View><View style={styles.tableRow}><Text style={[styles.headerCell, styles.addCell]}>Add</Text><Text style={[styles.headerCell, styles.moveCell]}>Move</Text><Text style={[styles.headerCell, styles.orderCell]}>Seq</Text><Text style={[styles.headerCell, styles.taskCell]}>Task</Text><Text style={[styles.headerCell, styles.tradeCell]}>Trade</Text><Text style={[styles.headerCell, styles.displayCell]}>Display</Text><Text style={[styles.headerCell, styles.stageCell]}>Stage</Text><Text style={[styles.headerCell, styles.durationCell]}>Days</Text><Text style={[styles.headerCell, styles.removeCell]}>Remove</Text></View>{orderedActivities.map((activity, index) => <View key={`${activity.order}-${activity.code}`} style={[styles.tableRow, index % 2 ? styles.altRow : null]}><Pressable style={styles.addButton} onPress={() => addFixAfter(activity)}><Text style={styles.addButtonText}>+</Text></Pressable><View style={styles.moveButtons}><Pressable style={styles.moveButton} onPress={() => moveFix(activity, -1)}><Text style={styles.moveButtonText}>↑</Text></Pressable><Pressable style={styles.moveButton} onPress={() => moveFix(activity, 1)}><Text style={styles.moveButtonText}>↓</Text></Pressable></View><Text style={[styles.bodyCell, styles.orderCell]}>{activity.order}</Text><TextInput defaultValue={activity.code} onEndEditing={(event) => updateActivity(activity.code, { code: event.nativeEvent.text })} style={[styles.bodyInput, styles.taskCell]} /><TextInput defaultValue={activity.trade} onEndEditing={(event) => updateActivity(activity.code, { trade: event.nativeEvent.text })} style={[styles.bodyInput, styles.tradeCell]} /><TextInput defaultValue={activity.displayText} onEndEditing={(event) => updateActivity(activity.code, { displayText: event.nativeEvent.text })} style={[styles.bodyInput, styles.displayCell]} /><TextInput defaultValue={String(activity.stage)} keyboardType="number-pad" onEndEditing={(event) => updateActivity(activity.code, { stage: toStage(event.nativeEvent.text) })} style={[styles.bodyInput, styles.stageCell]} /><TextInput defaultValue={String(activity.durationDays)} keyboardType="number-pad" onEndEditing={(event) => updateDuration(selectedTemplate.id, activity.code, Number(event.nativeEvent.text) || 0)} style={[styles.durationInput, styles.durationCell]} /><Pressable style={styles.removeButton} onPress={() => removeFix(activity)}><Text style={styles.removeButtonText}>-</Text></Pressable></View>)}</View></ScrollView>
+          <View style={styles.formGrid}><Field label="Template name"><TextInput value={selectedTemplate.name} onChangeText={(name) => savePlotTemplate({ ...selectedTemplate, name })} style={styles.input} /></Field><Field label="Build route"><TextInput value={selectedBuildRoute} editable={false} style={styles.input} /></Field><Field label="Target weeks"><TextInput value={String(selectedTemplate.programmeWeeks)} onChangeText={(value) => savePlotTemplate({ ...selectedTemplate, programmeWeeks: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} /></Field><Field label="Available stages"><TextInput value={String(stageDefinitions.length)} editable={false} style={styles.input} /></Field><View style={styles.summaryBox}><Text style={styles.summaryLabel}>Calculated weeks</Text><Text style={styles.summaryValue}>{getEffectiveProgrammeWeeks(selectedTemplate, siteSetup)}</Text></View></View>
+          <ScrollView horizontal showsHorizontalScrollIndicator><View><View style={styles.tableRow}><Text style={[styles.headerCell, styles.addCell]}>Add</Text><Text style={[styles.headerCell, styles.moveCell]}>Move</Text><Text style={[styles.headerCell, styles.orderCell]}>Seq</Text><Text style={[styles.headerCell, styles.taskCell]}>Task</Text><Text style={[styles.headerCell, styles.tradeCell]}>Trade</Text><Text style={[styles.headerCell, styles.displayCell]}>Display</Text><Text style={[styles.headerCell, styles.stageCell]}>Stage</Text><Text style={[styles.headerCell, styles.durationCell]}>Days</Text><Text style={[styles.headerCell, styles.removeCell]}>Remove</Text></View>{orderedActivities.map((activity, index) => <View key={`${activity.order}-${activity.code}`} style={[styles.tableRow, index % 2 ? styles.altRow : null]}><Pressable style={styles.addButton} onPress={() => addFixAfter(activity)}><Text style={styles.addButtonText}>+</Text></Pressable><View style={styles.moveButtons}><Pressable style={styles.moveButton} onPress={() => moveFix(activity, -1)}><Text style={styles.moveButtonText}>↑</Text></Pressable><Pressable style={styles.moveButton} onPress={() => moveFix(activity, 1)}><Text style={styles.moveButtonText}>↓</Text></Pressable></View><Text style={[styles.bodyCell, styles.orderCell]}>{activity.order}</Text><TextInput defaultValue={activity.code} onEndEditing={(event) => updateActivity(activity.code, { code: event.nativeEvent.text })} style={[styles.bodyInput, styles.taskCell]} /><TextInput defaultValue={activity.trade} onEndEditing={(event) => updateActivity(activity.code, { trade: event.nativeEvent.text })} style={[styles.bodyInput, styles.tradeCell]} /><TextInput defaultValue={activity.displayText} onEndEditing={(event) => updateActivity(activity.code, { displayText: event.nativeEvent.text })} style={[styles.bodyInput, styles.displayCell]} /><TextInput defaultValue={String(activity.stage)} keyboardType="number-pad" onEndEditing={(event) => updateActivity(activity.code, { stage: toStage(event.nativeEvent.text, stageDefinitions.length) })} style={[styles.bodyInput, styles.stageCell]} /><TextInput defaultValue={String(activity.durationDays)} keyboardType="number-pad" onEndEditing={(event) => updateDuration(selectedTemplate.id, activity.code, Number(event.nativeEvent.text) || 0)} style={[styles.durationInput, styles.durationCell]} /><Pressable style={styles.removeButton} onPress={() => removeFix(activity)}><Text style={styles.removeButtonText}>-</Text></Pressable></View>)}</View></ScrollView>
         </View> : null}
         <Pressable style={[styles.primaryButton, saved ? styles.savedButton : null]} onPress={handleSave}><Text style={styles.primaryButtonText}>{saved ? 'Saved' : 'Save'}</Text></Pressable>
       </View>
@@ -207,6 +291,7 @@ const styles = StyleSheet.create({
   subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
   card: { backgroundColor: '#ffffff', borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', padding: 18, gap: 16 },
   cardHeadingRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' },
+  headingTextWrap: { flex: 1, minWidth: 260 },
   warningCard: { backgroundColor: '#fff7ed', borderRadius: 18, borderWidth: 1, borderColor: '#fed7aa', padding: 18, gap: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' },
   warningTextWrap: { flex: 1, minWidth: 240 },
   warningTitle: { color: '#9a3412', fontSize: 18, fontWeight: '900' },
@@ -241,6 +326,20 @@ const styles = StyleSheet.create({
   templateChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
   templateChipTextActive: { color: '#ffffff' },
   templatePanel: { gap: 14 },
+  stageCountControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  countButton: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#173b5f' },
+  countButtonText: { color: '#ffffff', fontWeight: '900', fontSize: 22 },
+  stageCountField: { gap: 3, alignItems: 'center' },
+  stageCountLabel: { color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  stageCountInput: { width: 86, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, textAlign: 'center', color: '#0f172a', backgroundColor: '#ffffff', fontWeight: '900' },
+  stageTable: { minWidth: 640 },
+  stageTableRow: { flexDirection: 'row', alignItems: 'stretch' },
+  stageHeaderCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 10, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  stageBodyCell: { color: '#0f172a', fontWeight: '900', padding: 10, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center' },
+  stageInput: { color: '#0f172a', fontWeight: '800', padding: 10, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff' },
+  stageNumberColumn: { width: 80 },
+  stageNameColumn: { width: 340 },
+  stageWeekColumn: { width: 110, textAlign: 'center' },
   tableRow: { flexDirection: 'row', alignItems: 'stretch' },
   altRow: { backgroundColor: '#f8fafc' },
   headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
