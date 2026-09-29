@@ -24,6 +24,16 @@
       "name": "SiteProg",
       "shortName": "SiteProg"
     },
-    "plugins": ["expo-router"]
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SiteProg uses your photos to attach site evidence.",
+          "cameraPermission": "SiteProg uses your camera to capture site evidence.",
+          "microphonePermission": false
+        }
+      ]
+    ]
   }
 }

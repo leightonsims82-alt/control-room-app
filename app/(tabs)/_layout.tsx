@@ -98,6 +98,8 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="download-outline" color={color} size={22} />,
         }}
       />
+      <Tabs.Screen name="walk" options={{ href: null }} />
+      <Tabs.Screen name="dabs" options={{ href: null }} />
       <Tabs.Screen name="plots" options={{ href: null }} />
       <Tabs.Screen name="more" options={{ href: null }} />
       <Tabs.Screen name="trades-nofix" options={{ href: null }} />

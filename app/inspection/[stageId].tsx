@@ -2,6 +2,7 @@ import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
+import { PhotoCaptureField } from '../../components/PhotoCaptureField';
 import { SectionCard } from '../../components/SectionCard';
 import { UpdateInspectionItemInput, useProgrammeData } from '../../data/programmeStore';
 import { ChecklistAnswer, InspectionChecklistItem } from '../../types/models';
@@ -138,8 +139,20 @@ function ChecklistRow({
           </Pressable>
         ))}
       </View>
-      <TextInput style={styles.input} placeholder="Description" defaultValue={item.description} onBlur={(event: any) => update(inspectionId, item.id, { description: event.nativeEvent.text })} />
-      <TextInput style={styles.input} placeholder="Image or photo reference" defaultValue={item.imageUri} onBlur={(event: any) => update(inspectionId, item.id, { imageUri: event.nativeEvent.text })} />
+
+      <TextInput
+        style={styles.input}
+        placeholder="Observation / defect description"
+        defaultValue={item.description}
+        onBlur={(event: any) => update(inspectionId, item.id, { description: event.nativeEvent.text })}
+      />
+
+      <PhotoCaptureField
+        label="Inspection evidence"
+        value={item.imageUri}
+        onChange={(uri) => update(inspectionId, item.id, { imageUri: uri })}
+      />
+
       <View style={styles.fixedRow}>
         <Text style={styles.fixedLabel}>Fixed?</Text>
         {answers.map((answer) => (
@@ -148,7 +161,13 @@ function ChecklistRow({
           </Pressable>
         ))}
       </View>
-      <TextInput style={styles.input} placeholder="Fixed image or close-out photo reference" defaultValue={item.fixedImageUri} onBlur={(event: any) => update(inspectionId, item.id, { fixedImageUri: event.nativeEvent.text })} />
+
+      <PhotoCaptureField
+        label="Close-out evidence"
+        value={item.fixedImageUri}
+        onChange={(uri) => update(inspectionId, item.id, { fixedImageUri: uri })}
+        compact
+      />
     </View>
   );
 }
