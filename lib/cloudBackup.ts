@@ -20,6 +20,7 @@ const BACKUP_KEYS = [
   'siteprog:8am-walk:v1',
   'siteprog:8am-walk-notes:v1',
   'siteprog:dabs-standalone-meetings:v1',
+  'siteprog:feedback:v1',
 ];
 
 async function currentUserId() {
@@ -36,7 +37,7 @@ export async function backupProgrammeData() {
   const values = await AsyncStorage.multiGet(BACKUP_KEYS);
   const snapshot = Object.fromEntries(values.filter(([, value]) => value !== null));
   const { error } = await supabase
-    .from('app_backups')
+    .from('siteprog_backups')
     .upsert(
       {
         user_id: userId,
@@ -53,7 +54,7 @@ export async function restoreProgrammeData() {
   if (!supabase) throw new Error('Supabase is not configured.');
   const userId = await currentUserId();
   const { data, error } = await supabase
-    .from('app_backups')
+    .from('siteprog_backups')
     .select('snapshot, updated_at')
     .eq('user_id', userId)
     .single();
@@ -73,7 +74,7 @@ export async function getBackupStatus() {
   const { data } = await supabase.auth.getUser();
   if (!data.user) return { configured: true, signedIn: false as const };
   const { data: backup } = await supabase
-    .from('app_backups')
+    .from('siteprog_backups')
     .select('updated_at')
     .eq('user_id', data.user.id)
     .maybeSingle();
