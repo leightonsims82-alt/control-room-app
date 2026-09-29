@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { siteprogTheme } from '../theme/siteprogTheme';
 
 export function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
@@ -15,23 +16,27 @@ export function SectionCard({ title, subtitle, children }: { title: string; subt
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
+    backgroundColor: siteprogTheme.colors.card,
+    borderRadius: siteprogTheme.radius.card,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: siteprogTheme.colors.border,
     padding: 18,
     gap: 12,
+    shadowColor: '#0B1736',
+    shadowOpacity: 0.035,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   header: {
     gap: 3,
   },
   title: {
-    color: '#0f172a',
+    color: siteprogTheme.colors.text,
     fontSize: 18,
     fontWeight: '900',
   },
   subtitle: {
-    color: '#64748b',
+    color: siteprogTheme.colors.muted,
     fontSize: 13,
   },
 });
