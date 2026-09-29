@@ -1,0 +1,25 @@
+export const siteprogTheme = {
+  colors: {
+    navy: '#0B1736',
+    navySoft: '#14264F',
+    blue: '#5B6CFF',
+    blueDark: '#4656D9',
+    blueSoft: '#EEF1FF',
+    page: '#F6F7FB',
+    card: '#FFFFFF',
+    border: '#E4E8F0',
+    text: '#182033',
+    muted: '#667085',
+    success: '#16A36A',
+    successSoft: '#EAF8F2',
+    warning: '#D97706',
+    warningSoft: '#FFF7E6',
+    danger: '#D92D20',
+    dangerSoft: '#FFF0EF',
+  },
+  radius: {
+    card: 16,
+    panel: 20,
+    pill: 999,
+  },
+};
