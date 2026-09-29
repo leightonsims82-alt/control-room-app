@@ -26,9 +26,9 @@ export async function createCloudProject(input: {
   siteManagerName?: string;
   siteManagerEmail?: string;
 }) {
-  if (!supabase) throw new Error('Supabase is not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.');
+  if (!supabase) throw new Error('Supabase is not configured.');
   const { data, error } = await supabase
-    .from('projects')
+    .from('siteprog_projects')
     .insert({
       name: input.name,
       client: input.client ?? null,
@@ -86,11 +86,11 @@ export async function pushProgrammeSnapshot(projectId: string, snapshot: Omit<Cl
   }));
 
   await Promise.all([
-    plots.length ? supabase.from('plots').upsert(plots, { onConflict: 'project_id,local_plot_id' }) : Promise.resolve({ error: null }),
-    trades.length ? supabase.from('trade_contacts').upsert(trades, { onConflict: 'project_id,local_trade_id' }) : Promise.resolve({ error: null }),
-    delays.length ? supabase.from('activity_delays').upsert(delays, { onConflict: 'project_id,plot_id,activity_code' }) : Promise.resolve({ error: null }),
-    templates.length ? supabase.from('plot_templates').upsert(templates, { onConflict: 'project_id,local_template_id' }) : Promise.resolve({ error: null }),
-    issues.length ? supabase.from('issue_logs').upsert(issues, { onConflict: 'project_id,local_issue_id' }) : Promise.resolve({ error: null }),
+    plots.length ? supabase.from('siteprog_plots').upsert(plots, { onConflict: 'project_id,local_plot_id' }) : Promise.resolve({ error: null }),
+    trades.length ? supabase.from('siteprog_trade_contacts').upsert(trades, { onConflict: 'project_id,local_trade_id' }) : Promise.resolve({ error: null }),
+    delays.length ? supabase.from('siteprog_activity_delays').upsert(delays, { onConflict: 'project_id,plot_id,activity_code' }) : Promise.resolve({ error: null }),
+    templates.length ? supabase.from('siteprog_plot_templates').upsert(templates, { onConflict: 'project_id,local_template_id' }) : Promise.resolve({ error: null }),
+    issues.length ? supabase.from('siteprog_issue_logs').upsert(issues, { onConflict: 'project_id,local_issue_id' }) : Promise.resolve({ error: null }),
   ]).then((results) => {
     const failed = results.find((result: any) => result?.error);
     if (failed?.error) throw failed.error;
@@ -100,7 +100,7 @@ export async function pushProgrammeSnapshot(projectId: string, snapshot: Omit<Cl
 export async function getSupervisorAccess(projectId: string) {
   if (!supabase) throw new Error('Supabase is not configured.');
   const { data, error } = await supabase
-    .from('trade_contacts')
+    .from('siteprog_trade_contacts')
     .select('trade, contractor, supervisor_name, supervisor_email, supervisor_phone, access_token, active')
     .eq('project_id', projectId)
     .eq('active', true)
