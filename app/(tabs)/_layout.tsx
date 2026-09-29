@@ -102,8 +102,6 @@ export default function TabLayout() {
       <Tabs.Screen name="dabs" options={{ href: null }} />
       <Tabs.Screen name="plots" options={{ href: null }} />
       <Tabs.Screen name="more" options={{ href: null }} />
-      <Tabs.Screen name="trades-nofix" options={{ href: null }} />
-      <Tabs.Screen name="trades-simple" options={{ href: null }} />
     </Tabs>
   );
 }
