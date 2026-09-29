@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { useProgrammeData } from '../../data/programmeStore';
 import { useSitePlanner } from '../../data/sitePlannerStore';
+import { siteprogTheme } from '../../theme/siteprogTheme';
 
 export default function DashboardScreen() {
   const { plotProgrammes, plotStages, inspections, defects, dabsBriefings } = useProgrammeData();
@@ -37,7 +38,7 @@ export default function DashboardScreen() {
     <AppScreen>
       <View style={styles.hero}>
         <View style={styles.heroCopy}>
-          <Text style={styles.kicker}>Site control</Text>
+          <Text style={styles.kicker}>Dashboard</Text>
           <Text style={styles.title}>{siteSetup.siteName || 'Programme Buddy'}</Text>
           <Text style={styles.subtitle}>
             Programme, quality, trade actions and daily control in one live dashboard.
@@ -125,7 +126,7 @@ export default function DashboardScreen() {
       </View>
 
       <View style={styles.footerPanel}>
-        <View>
+        <View style={{ flex: 1, minWidth: 240 }}>
           <Text style={styles.footerTitle}>Latest programme issue</Text>
           <Text style={styles.footerText}>
             {latestIssue
@@ -158,7 +159,7 @@ function QuickLink({ href, icon, title, text }: { href: string; icon: keyof type
   return (
     <Link href={href as never} asChild>
       <Pressable style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}>
-        <View style={styles.quickIcon}><Ionicons name={icon} size={23} color="#2563eb" /></View>
+        <View style={styles.quickIcon}><Ionicons name={icon} size={23} color={siteprogTheme.colors.blue} /></View>
         <Text style={styles.quickTitle}>{title}</Text>
         <Text style={styles.quickText}>{text}</Text>
         <Text style={styles.quickOpen}>Open →</Text>
@@ -170,12 +171,12 @@ function QuickLink({ href, icon, title, text }: { href: string; icon: keyof type
 type Tone = 'blue' | 'green' | 'red' | 'amber' | 'slate' | 'violet';
 
 const toneStyles: Record<Tone, { card: object; text: { color: string } }> = {
-  blue: { card: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }, text: { color: '#1d4ed8' } },
-  green: { card: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }, text: { color: '#166534' } },
-  red: { card: { backgroundColor: '#fff7f7', borderColor: '#fecaca' }, text: { color: '#b91c1c' } },
-  amber: { card: { backgroundColor: '#fffbeb', borderColor: '#fde68a' }, text: { color: '#b45309' } },
-  slate: { card: { backgroundColor: '#f8fafc', borderColor: '#cbd5e1' }, text: { color: '#334155' } },
-  violet: { card: { backgroundColor: '#f5f3ff', borderColor: '#ddd6fe' }, text: { color: '#6d28d9' } },
+  blue: { card: { backgroundColor: siteprogTheme.colors.blueSoft, borderColor: '#D8DEFF' }, text: { color: siteprogTheme.colors.blueDark } },
+  green: { card: { backgroundColor: siteprogTheme.colors.successSoft, borderColor: '#BFEBD8' }, text: { color: '#087A52' } },
+  red: { card: { backgroundColor: siteprogTheme.colors.dangerSoft, borderColor: '#F5C6C2' }, text: { color: siteprogTheme.colors.danger } },
+  amber: { card: { backgroundColor: siteprogTheme.colors.warningSoft, borderColor: '#F6D69A' }, text: { color: siteprogTheme.colors.warning } },
+  slate: { card: { backgroundColor: '#F1F3F7', borderColor: '#D7DCE5' }, text: { color: '#344054' } },
+  violet: { card: { backgroundColor: '#F3F0FF', borderColor: '#DCD4FF' }, text: { color: '#6941C6' } },
 };
 
 function StatusPill({ text, tone }: { text: string; tone: Tone }) {
@@ -187,43 +188,43 @@ function StatusPill({ text, tone }: { text: string; tone: Tone }) {
 }
 
 const styles = StyleSheet.create({
-  hero: { backgroundColor: '#0f172a', borderRadius: 26, padding: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
+  hero: { backgroundColor: siteprogTheme.colors.navy, borderRadius: 18, padding: 22, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', borderWidth: 1, borderColor: siteprogTheme.colors.navySoft },
   heroCopy: { flex: 1, minWidth: 240 },
-  kicker: { color: '#93c5fd', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.8 },
-  title: { color: '#ffffff', fontSize: 32, fontWeight: '900', marginTop: 4 },
-  subtitle: { color: '#cbd5e1', fontSize: 15, lineHeight: 22, marginTop: 6, maxWidth: 760 },
-  setupButton: { backgroundColor: '#2563eb', borderRadius: 999, paddingHorizontal: 15, paddingVertical: 11, flexDirection: 'row', gap: 7, alignItems: 'center' },
+  kicker: { color: '#AAB6DA', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.9 },
+  title: { color: '#ffffff', fontSize: 30, fontWeight: '900', marginTop: 4 },
+  subtitle: { color: '#D6DDF0', fontSize: 14, lineHeight: 21, marginTop: 5, maxWidth: 760 },
+  setupButton: { backgroundColor: siteprogTheme.colors.blue, borderRadius: siteprogTheme.radius.pill, paddingHorizontal: 15, paddingVertical: 11, flexDirection: 'row', gap: 7, alignItems: 'center' },
   setupButtonText: { color: '#ffffff', fontWeight: '900', fontSize: 12 },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  statCard: { flex: 1, minWidth: 135, borderWidth: 1, borderRadius: 18, padding: 14, gap: 3 },
+  statCard: { flex: 1, minWidth: 135, borderWidth: 1, borderRadius: 14, padding: 14, gap: 3 },
   statValue: { fontSize: 25, fontWeight: '900', marginTop: 3 },
-  statLabel: { color: '#64748b', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
-  section: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 22, padding: 16, gap: 12 },
+  statLabel: { color: siteprogTheme.colors.muted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  section: { backgroundColor: siteprogTheme.colors.card, borderWidth: 1, borderColor: siteprogTheme.colors.border, borderRadius: 16, padding: 16, gap: 12 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
-  sectionEyebrow: { color: '#2563eb', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
-  sectionTitle: { color: '#0f172a', fontSize: 20, fontWeight: '900', marginTop: 2 },
+  sectionEyebrow: { color: siteprogTheme.colors.blue, fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  sectionTitle: { color: siteprogTheme.colors.text, fontSize: 19, fontWeight: '900', marginTop: 2 },
   quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  quickCard: { flex: 1, minWidth: 190, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 17, padding: 14, gap: 5 },
-  quickIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  quickTitle: { color: '#0f172a', fontWeight: '900', fontSize: 15 },
-  quickText: { color: '#64748b', fontSize: 12, lineHeight: 18 },
-  quickOpen: { color: '#2563eb', fontWeight: '900', fontSize: 12, marginTop: 2 },
+  quickCard: { flex: 1, minWidth: 190, backgroundColor: '#FBFCFF', borderWidth: 1, borderColor: siteprogTheme.colors.border, borderRadius: 14, padding: 14, gap: 5 },
+  quickIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: siteprogTheme.colors.blueSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  quickTitle: { color: siteprogTheme.colors.text, fontWeight: '900', fontSize: 15 },
+  quickText: { color: siteprogTheme.colors.muted, fontSize: 12, lineHeight: 18 },
+  quickOpen: { color: siteprogTheme.colors.blueDark, fontWeight: '900', fontSize: 12, marginTop: 2 },
   pressed: { opacity: 0.75, transform: [{ scale: 0.995 }] },
   twoColumn: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  panel: { flex: 1, minWidth: 310, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 22, padding: 16, gap: 8 },
+  panel: { flex: 1, minWidth: 310, backgroundColor: siteprogTheme.colors.card, borderWidth: 1, borderColor: siteprogTheme.colors.border, borderRadius: 16, padding: 16, gap: 8 },
   panelHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
-  panelTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
-  linkText: { color: '#2563eb', fontWeight: '900', fontSize: 12 },
-  row: { borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  panelTitle: { color: siteprogTheme.colors.text, fontSize: 18, fontWeight: '900' },
+  linkText: { color: siteprogTheme.colors.blueDark, fontWeight: '900', fontSize: 12 },
+  row: { borderTopWidth: 1, borderTopColor: '#EEF0F4', paddingTop: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
   rowMain: { flex: 1 },
-  rowTitle: { color: '#0f172a', fontWeight: '900', fontSize: 13 },
-  rowMeta: { color: '#64748b', fontSize: 11, fontWeight: '700', marginTop: 2, lineHeight: 16 },
-  statusPill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 6 },
+  rowTitle: { color: siteprogTheme.colors.text, fontWeight: '900', fontSize: 13 },
+  rowMeta: { color: siteprogTheme.colors.muted, fontSize: 11, fontWeight: '700', marginTop: 2, lineHeight: 16 },
+  statusPill: { borderWidth: 1, borderRadius: siteprogTheme.radius.pill, paddingHorizontal: 9, paddingVertical: 6 },
   statusText: { fontSize: 10, fontWeight: '900' },
-  emptyText: { color: '#64748b', fontSize: 13, lineHeight: 19 },
-  footerPanel: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 20, padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' },
-  footerTitle: { color: '#0f172a', fontWeight: '900', fontSize: 16 },
-  footerText: { color: '#64748b', fontSize: 12, lineHeight: 18, marginTop: 3, maxWidth: 760 },
-  darkButton: { backgroundColor: '#0f172a', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  emptyText: { color: siteprogTheme.colors.muted, fontSize: 13, lineHeight: 19 },
+  footerPanel: { backgroundColor: siteprogTheme.colors.card, borderWidth: 1, borderColor: siteprogTheme.colors.border, borderRadius: 16, padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' },
+  footerTitle: { color: siteprogTheme.colors.text, fontWeight: '900', fontSize: 16 },
+  footerText: { color: siteprogTheme.colors.muted, fontSize: 12, lineHeight: 18, marginTop: 3, maxWidth: 760 },
+  darkButton: { backgroundColor: siteprogTheme.colors.navy, borderRadius: siteprogTheme.radius.pill, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 7 },
   darkButtonText: { color: '#ffffff', fontSize: 12, fontWeight: '900' },
 });
