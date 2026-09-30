@@ -14,7 +14,7 @@ export default function MoreScreen() {
     <AppScreen>
       <View style={styles.header}>
         <Text style={styles.title}>More</Text>
-        <Text style={styles.subtitle}>Settings, templates and build information</Text>
+        <Text style={styles.subtitle}>Settings, handover control and build information</Text>
       </View>
 
       <SectionCard title="Site Setup" subtitle="Programme defaults and plot type templates">
@@ -24,11 +24,10 @@ export default function MoreScreen() {
         <InfoRow label="Working week" value={siteSetup.workingWeek} />
         <InfoRow label="Week 1 commencement date" value={getProgrammeStartDateValue(siteSetup.programmeStartDate)} />
         <InfoRow label="Templates" value={`${plotTemplates.length}`} />
-        <Link href="/site/setup" asChild>
-          <Pressable style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>Open Site Setup</Text>
-          </Pressable>
-        </Link>
+        <View style={styles.buttonRow}>
+          <Link href="/site/setup" asChild><Pressable style={styles.primaryButton}><Text style={styles.primaryButtonText}>Open Site Setup</Text></Pressable></Link>
+          <Link href="/handover" asChild><Pressable style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>Open Handover</Text></Pressable></Link>
+        </View>
       </SectionCard>
 
       <SectionCard title="Build Status" subtitle="Current programme app state">
@@ -41,19 +40,16 @@ export default function MoreScreen() {
         <InfoRow label="Trade actions" value={`${defects.length}`} />
       </SectionCard>
 
-      <SectionCard title="Modules now added" subtitle="Current site control layer">
-        <Text style={styles.item}>Configurable site setup: programme weeks, stage count and working week</Text>
-        <Text style={styles.item}>Plot type templates for apartments, 2 bed, 3 bed, 4 bed and 5 bed homes</Text>
-        <Text style={styles.item}>Editable task durations by template</Text>
-        <Text style={styles.item}>Plot setup assigns each plot to a template</Text>
-        <Text style={styles.item}>Daily plot breakdown and 2-week trade programme use the selected template</Text>
-      </SectionCard>
-
-      <SectionCard title="Next Modules" subtitle="Planned build sequence">
-        <Text style={styles.item}>Plot-specific task duration overrides</Text>
-        <Text style={styles.item}>Editable task names and activity order</Text>
-        <Text style={styles.item}>Backend email job for true scheduled issue</Text>
-        <Text style={styles.item}>PDF / Excel export for issued programmes</Text>
+      <SectionCard title="Live control modules" subtitle="Base44 ideas now carried into the VS Code build">
+        <Text style={styles.item}>Plot setup with house type, build method and forward/reverse programme generation</Text>
+        <Text style={styles.item}>Master programme date control without extra +/- controls</Text>
+        <Text style={styles.item}>Interactive 2-week programme with activity movement controls</Text>
+        <Text style={styles.item}>Expanded plot breakdown with programme health, next 14 days and QA blockers</Text>
+        <Text style={styles.item}>Trade supervisor setup and trade-filtered live 2-week programmes</Text>
+        <Text style={styles.item}>QA inspection evidence, action close-out and verification workflow</Text>
+        <Text style={styles.item}>8am mobile site walk for live plots, labour and blockers</Text>
+        <Text style={styles.item}>Plot handover readiness checklist with QA, services, documents and cleaning</Text>
+        <Text style={styles.item}>Dashboard programme intelligence for overdue stages, aged actions and inspection risks</Text>
       </SectionCard>
     </AppScreen>
   );
@@ -76,6 +72,9 @@ const styles = StyleSheet.create({
   label: { color: '#64748b', fontWeight: '700' },
   value: { color: '#0f172a', fontWeight: '900' },
   item: { color: '#0f172a', fontWeight: '700', borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
-  primaryButton: { alignSelf: 'flex-start', backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginTop: 4 },
+  buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  primaryButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
   primaryButtonText: { color: '#ffffff', fontWeight: '900', fontSize: 13 },
+  secondaryButton: { backgroundColor: '#eff6ff', borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 14, paddingVertical: 10 },
+  secondaryButtonText: { color: '#1d4ed8', fontWeight: '900', fontSize: 13 },
 });
