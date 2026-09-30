@@ -7,8 +7,12 @@ import { useProgrammeData } from '../../data/programmeStore';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { siteprogTheme } from '../../theme/siteprogTheme';
 
+function dateOnly(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
 export default function DashboardScreen() {
-  const { plotProgrammes, plotStages, inspections, defects, dabsBriefings } = useProgrammeData();
+  const { plotProgrammes, plotStages, inspections, defects } = useProgrammeData();
   const { sitePlots, tradeContacts, issueLogs, siteSetup } = useSitePlanner();
 
   const metrics = useMemo(() => {
@@ -19,8 +23,47 @@ export default function DashboardScreen() {
     const inspectionIssues = inspections.filter((inspection) =>
       ['Issues noted', 'Failed awaiting close out', 'Blocked'].includes(inspection.status),
     );
-    const today = new Date().toISOString().slice(0, 10);
-    const dabsToday = dabsBriefings.find((item) => item.briefingDate === today);
+    const today = dateOnly(new Date());
+    const horizon = new Date();
+    horizon.setDate(horizon.getDate() + 28);
+    const horizonDate = dateOnly(horizon);
+    const behindStages = plotStages.filter((stage) => stage.status !== 'Complete' && stage.endDate < today);
+    const plotsBehind = new Set(behindStages.map((stage) => stage.plotProgrammeId));
+    const holds = plotProgrammes.filter((plot) => plot.holdStatus === 'On hold').length
+      + sitePlots.filter((plot) => Boolean(plot.holdStage)).length;
+    const handoversDue = plotProgrammes.filter((plot) => plot.endDate >= today && plot.endDate <= horizonDate);
+    const sevenDaysAgo = Date.now() - (7 * 86400000);
+    const overdueActions = openActions.filter((action) => new Date(action.createdAt).getTime() < sevenDaysAgo);
+
+    const risks = [
+      ...behindStages.slice(0, 4).map((stage) => {
+        const plot = plotProgrammes.find((item) => item.id === stage.plotProgrammeId);
+        return {
+          id: `behind-${stage.id}`,
+          title: `${plot?.plotName ?? 'Plot'} is behind programme`,
+          text: `${stage.stageName} was due to finish ${stage.endDate}.`,
+          tone: 'red' as Tone,
+        };
+      }),
+      ...inspectionIssues.slice(0, 3).map((inspection) => {
+        const plot = plotProgrammes.find((item) => item.id === inspection.plotProgrammeId);
+        return {
+          id: `inspection-${inspection.id}`,
+          title: `${plot?.plotName ?? 'Plot'} has an inspection issue`,
+          text: `${inspection.templateName} · ${inspection.status}.`,
+          tone: 'amber' as Tone,
+        };
+      }),
+      ...overdueActions.slice(0, 3).map((action) => {
+        const plot = plotProgrammes.find((item) => item.id === action.plotProgrammeId);
+        return {
+          id: `action-${action.id}`,
+          title: `${plot?.plotName ?? 'Plot'} · ${action.trade}`,
+          text: `Trade action open for more than 7 days: ${action.description}`,
+          tone: 'red' as Tone,
+        };
+      }),
+    ].slice(0, 6);
 
     return {
       totalPlots,
@@ -28,9 +71,13 @@ export default function DashboardScreen() {
       openActions,
       verification,
       inspectionIssues,
-      dabsToday,
+      plotsBehind: plotsBehind.size,
+      holds,
+      handoversDue,
+      overdueActions,
+      risks,
     };
-  }, [sitePlots, plotProgrammes, plotStages, defects, inspections, dabsBriefings]);
+  }, [sitePlots, plotProgrammes, plotStages, defects, inspections]);
 
   const latestIssue = issueLogs[0];
 
@@ -40,9 +87,7 @@ export default function DashboardScreen() {
         <View style={styles.heroCopy}>
           <Text style={styles.kicker}>Dashboard</Text>
           <Text style={styles.title}>{siteSetup.siteName || 'Programme Buddy'}</Text>
-          <Text style={styles.subtitle}>
-            Programme, quality, trade actions and daily control in one live dashboard.
-          </Text>
+          <Text style={styles.subtitle}>Programme, quality, trade actions and daily control in one live dashboard.</Text>
         </View>
         <Link href="/site/setup" asChild>
           <Pressable style={styles.setupButton}>
@@ -55,9 +100,13 @@ export default function DashboardScreen() {
       <View style={styles.statGrid}>
         <StatCard icon="home-outline" label="Plots" value={metrics.totalPlots} tone="blue" />
         <StatCard icon="construct-outline" label="Live stages" value={metrics.inProgressStages.length} tone="slate" />
+        <StatCard icon="trending-down-outline" label="Behind programme" value={metrics.plotsBehind} tone={metrics.plotsBehind ? 'red' : 'green'} />
+        <StatCard icon="pause-circle-outline" label="Plots on hold" value={metrics.holds} tone={metrics.holds ? 'amber' : 'green'} />
         <StatCard icon="warning-outline" label="Open actions" value={metrics.openActions.length} tone={metrics.openActions.length ? 'red' : 'green'} />
-        <StatCard icon="checkmark-done-outline" label="Awaiting verify" value={metrics.verification.length} tone={metrics.verification.length ? 'amber' : 'green'} />
+        <StatCard icon="time-outline" label="Overdue actions" value={metrics.overdueActions.length} tone={metrics.overdueActions.length ? 'red' : 'green'} />
         <StatCard icon="clipboard-outline" label="Inspection issues" value={metrics.inspectionIssues.length} tone={metrics.inspectionIssues.length ? 'red' : 'green'} />
+        <StatCard icon="key-outline" label="Handover 28d" value={metrics.handoversDue.length} tone={metrics.handoversDue.length ? 'amber' : 'green'} />
+        <StatCard icon="checkmark-done-outline" label="Awaiting verify" value={metrics.verification.length} tone={metrics.verification.length ? 'amber' : 'green'} />
         <StatCard icon="people-outline" label="Trade contacts" value={tradeContacts.filter((item) => item.supervisorEmail.trim()).length} tone="violet" />
       </View>
 
@@ -72,9 +121,34 @@ export default function DashboardScreen() {
           <QuickLink href="/(tabs)/walk" icon="walk-outline" title="8am Walk" text="Check live plots, labour, starts and blockers." />
           <QuickLink href="/(tabs)/two-week" icon="grid-outline" title="2 Week Programme" text="Control the next 14 days and move activities." />
           <QuickLink href="/(tabs)/qa" icon="shield-checkmark-outline" title="QA & Actions" text="Inspect evidence, close defects and verify fixes." />
+          <QuickLink href="/handover" icon="key-outline" title="Handover" text="Track plot readiness, certificates, cleaning and open QA." />
           <QuickLink href="/(tabs)/dabs" icon="people-circle-outline" title="DABS" text="Record the PM briefing, risks and agreed actions." />
           <QuickLink href="/cloud" icon="cloud-done-outline" title="Cloud Backup" text="Protect the site data and restore it on another device." />
         </View>
+      </View>
+
+      <View style={styles.intelligencePanel}>
+        <View style={styles.panelHeader}>
+          <View>
+            <Text style={styles.sectionEyebrow}>Programme intelligence</Text>
+            <Text style={styles.panelTitle}>What needs attention now</Text>
+          </View>
+          <Link href="/(tabs)/master" style={styles.linkText}>Open master</Link>
+        </View>
+        {metrics.risks.length === 0 ? (
+          <View style={styles.clearState}>
+            <Ionicons name="checkmark-circle-outline" size={22} color={siteprogTheme.colors.success} />
+            <Text style={styles.clearText}>No overdue stages, aged actions or inspection blockers detected.</Text>
+          </View>
+        ) : metrics.risks.map((risk) => (
+          <View key={risk.id} style={styles.riskRow}>
+            <View style={[styles.riskDot, { backgroundColor: toneStyles[risk.tone].text.color }]} />
+            <View style={styles.rowMain}>
+              <Text style={styles.rowTitle}>{risk.title}</Text>
+              <Text style={styles.rowMeta}>{risk.text}</Text>
+            </View>
+          </View>
+        ))}
       </View>
 
       <View style={styles.twoColumn}>
@@ -85,20 +159,18 @@ export default function DashboardScreen() {
           </View>
           {metrics.inProgressStages.length === 0 ? (
             <Text style={styles.emptyText}>No stages are currently marked In progress.</Text>
-          ) : (
-            metrics.inProgressStages.slice(0, 6).map((stage) => {
-              const plot = plotProgrammes.find((item) => item.id === stage.plotProgrammeId);
-              return (
-                <View key={stage.id} style={styles.row}>
-                  <View style={styles.rowMain}>
-                    <Text style={styles.rowTitle}>{plot?.plotName ?? 'Plot'}</Text>
-                    <Text style={styles.rowMeta}>{stage.stageName} · {stage.trade}</Text>
-                  </View>
-                  <StatusPill text="In progress" tone="blue" />
+          ) : metrics.inProgressStages.slice(0, 6).map((stage) => {
+            const plot = plotProgrammes.find((item) => item.id === stage.plotProgrammeId);
+            return (
+              <View key={stage.id} style={styles.row}>
+                <View style={styles.rowMain}>
+                  <Text style={styles.rowTitle}>{plot?.plotName ?? 'Plot'}</Text>
+                  <Text style={styles.rowMeta}>{stage.stageName} · {stage.trade}</Text>
                 </View>
-              );
-            })
-          )}
+                <StatusPill text="In progress" tone="blue" />
+              </View>
+            );
+          })}
         </View>
 
         <View style={styles.panel}>
@@ -108,31 +180,25 @@ export default function DashboardScreen() {
           </View>
           {metrics.openActions.length === 0 ? (
             <Text style={styles.emptyText}>No open trade actions. ✅</Text>
-          ) : (
-            metrics.openActions.slice(0, 6).map((action) => {
-              const plot = plotProgrammes.find((item) => item.id === action.plotProgrammeId);
-              return (
-                <View key={action.id} style={styles.row}>
-                  <View style={styles.rowMain}>
-                    <Text style={styles.rowTitle}>{plot?.plotName ?? 'Plot'} · {action.trade}</Text>
-                    <Text numberOfLines={2} style={styles.rowMeta}>{action.description}</Text>
-                  </View>
-                  <StatusPill text={action.status} tone={action.status === 'Fixed awaiting verification' ? 'amber' : 'red'} />
+          ) : metrics.openActions.slice(0, 6).map((action) => {
+            const plot = plotProgrammes.find((item) => item.id === action.plotProgrammeId);
+            return (
+              <View key={action.id} style={styles.row}>
+                <View style={styles.rowMain}>
+                  <Text style={styles.rowTitle}>{plot?.plotName ?? 'Plot'} · {action.trade}</Text>
+                  <Text numberOfLines={2} style={styles.rowMeta}>{action.description}</Text>
                 </View>
-              );
-            })
-          )}
+                <StatusPill text={action.status} tone={action.status === 'Fixed awaiting verification' ? 'amber' : 'red'} />
+              </View>
+            );
+          })}
         </View>
       </View>
 
       <View style={styles.footerPanel}>
         <View style={{ flex: 1, minWidth: 240 }}>
           <Text style={styles.footerTitle}>Latest programme issue</Text>
-          <Text style={styles.footerText}>
-            {latestIssue
-              ? `${latestIssue.note} · ${new Date(latestIssue.issuedAt).toLocaleString('en-GB')}`
-              : 'No formal programme issue has been recorded yet.'}
-          </Text>
+          <Text style={styles.footerText}>{latestIssue ? `${latestIssue.note} · ${new Date(latestIssue.issuedAt).toLocaleString('en-GB')}` : 'No formal programme issue has been recorded yet.'}</Text>
         </View>
         <Link href="/(tabs)/issue" asChild>
           <Pressable style={styles.darkButton}>
@@ -210,9 +276,14 @@ const styles = StyleSheet.create({
   quickText: { color: siteprogTheme.colors.muted, fontSize: 12, lineHeight: 18 },
   quickOpen: { color: siteprogTheme.colors.blueDark, fontWeight: '900', fontSize: 12, marginTop: 2 },
   pressed: { opacity: 0.75, transform: [{ scale: 0.995 }] },
+  intelligencePanel: { backgroundColor: '#FBFCFF', borderWidth: 1, borderColor: '#DCE3F0', borderRadius: 16, padding: 16, gap: 8 },
+  clearState: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 },
+  clearText: { color: '#087A52', fontSize: 13, fontWeight: '800' },
+  riskRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', borderTopWidth: 1, borderTopColor: '#EEF0F4', paddingTop: 10 },
+  riskDot: { width: 9, height: 9, borderRadius: 999, marginTop: 4 },
   twoColumn: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   panel: { flex: 1, minWidth: 310, backgroundColor: siteprogTheme.colors.card, borderWidth: 1, borderColor: siteprogTheme.colors.border, borderRadius: 16, padding: 16, gap: 8 },
-  panelHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  panelHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
   panelTitle: { color: siteprogTheme.colors.text, fontSize: 18, fontWeight: '900' },
   linkText: { color: siteprogTheme.colors.blueDark, fontWeight: '900', fontSize: 12 },
   row: { borderTopWidth: 1, borderTopColor: '#EEF0F4', paddingTop: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
