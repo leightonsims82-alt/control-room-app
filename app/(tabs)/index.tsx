@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { useProgrammeData } from '../../data/programmeStore';
@@ -11,9 +11,35 @@ function dateOnly(value: Date) {
   return value.toISOString().slice(0, 10);
 }
 
+function normalisePlotName(value: string) {
+  return value.toLowerCase().replace(/^plot\s*/i, '').trim();
+}
+
+type Tone = 'blue' | 'green' | 'red' | 'amber' | 'slate' | 'violet';
+type DashboardMetricKey =
+  | 'plots'
+  | 'liveStages'
+  | 'behindProgramme'
+  | 'plotsOnHold'
+  | 'openActions'
+  | 'overdueActions'
+  | 'inspectionIssues'
+  | 'handover28d'
+  | 'awaitingVerify'
+  | 'tradeContacts';
+
+type DrilldownRow = {
+  id: string;
+  title: string;
+  meta: string;
+  plotId?: string;
+  tone?: Tone;
+};
+
 export default function DashboardScreen() {
   const { plotProgrammes, plotStages, inspections, defects } = useProgrammeData();
   const { sitePlots, tradeContacts, issueLogs, siteSetup } = useSitePlanner();
+  const [selectedMetric, setSelectedMetric] = useState<DashboardMetricKey | null>(null);
 
   const metrics = useMemo(() => {
     const totalPlots = Math.max(sitePlots.length, plotProgrammes.length);
@@ -29,8 +55,12 @@ export default function DashboardScreen() {
     const horizonDate = dateOnly(horizon);
     const behindStages = plotStages.filter((stage) => stage.status !== 'Complete' && stage.endDate < today);
     const plotsBehind = new Set(behindStages.map((stage) => stage.plotProgrammeId));
-    const holds = plotProgrammes.filter((plot) => plot.holdStatus === 'On hold').length
-      + sitePlots.filter((plot) => Boolean(plot.holdStage)).length;
+    const heldProgrammes = plotProgrammes.filter((plot) => plot.holdStatus === 'On hold');
+    const heldSitePlots = sitePlots.filter((plot) => Boolean(plot.holdStage));
+    const heldNames = new Set([
+      ...heldProgrammes.map((plot) => normalisePlotName(plot.plotName)),
+      ...heldSitePlots.map((plot) => normalisePlotName(plot.plotNo)),
+    ]);
     const handoversDue = plotProgrammes.filter((plot) => plot.endDate >= today && plot.endDate <= horizonDate);
     const sevenDaysAgo = Date.now() - (7 * 86400000);
     const overdueActions = openActions.filter((action) => new Date(action.createdAt).getTime() < sevenDaysAgo);
@@ -71,15 +101,187 @@ export default function DashboardScreen() {
       openActions,
       verification,
       inspectionIssues,
+      behindStages,
       plotsBehind: plotsBehind.size,
-      holds,
+      holds: heldNames.size,
+      heldProgrammes,
+      heldSitePlots,
       handoversDue,
       overdueActions,
       risks,
     };
   }, [sitePlots, plotProgrammes, plotStages, defects, inspections]);
 
+  const drilldown = useMemo(() => {
+    if (!selectedMetric) return null;
+
+    const findPlot = (plotId: string) => plotProgrammes.find((plot) => plot.id === plotId);
+    const rowsForPlotIds = (
+      plotIds: string[],
+      getMeta: (plotId: string) => string,
+      tone: Tone,
+    ): DrilldownRow[] => plotIds.map((plotId) => {
+      const plot = findPlot(plotId);
+      return {
+        id: plotId,
+        title: plot?.plotName ?? 'Plot',
+        meta: getMeta(plotId),
+        plotId: plot?.id,
+        tone,
+      };
+    });
+
+    if (selectedMetric === 'plots') {
+      const programmeRows: DrilldownRow[] = plotProgrammes.map((plot) => ({
+        id: `plot-${plot.id}`,
+        title: plot.plotName,
+        meta: `${plot.startDate} to ${plot.endDate}${plot.holdStatus === 'On hold' ? ' · On hold' : ''}`,
+        plotId: plot.id,
+        tone: plot.holdStatus === 'On hold' ? 'amber' : 'blue',
+      }));
+      const programmeNames = new Set(plotProgrammes.map((plot) => normalisePlotName(plot.plotName)));
+      const setupOnlyRows: DrilldownRow[] = sitePlots
+        .filter((plot) => !programmeNames.has(normalisePlotName(plot.plotNo)))
+        .map((plot) => ({
+          id: `site-${plot.id}`,
+          title: `Plot ${plot.plotNo}`,
+          meta: plot.holdStage ? `Site programme · held at stage ${plot.holdStage}` : 'Site programme plot',
+          tone: plot.holdStage ? 'amber' : 'blue',
+        }));
+      return { title: 'All plots', subtitle: 'Every plot currently set up on this site.', rows: [...programmeRows, ...setupOnlyRows] };
+    }
+
+    if (selectedMetric === 'liveStages') {
+      const plotIds = [...new Set(metrics.inProgressStages.map((stage) => stage.plotProgrammeId))];
+      return {
+        title: 'Live stages',
+        subtitle: 'Plots with at least one stage currently marked In progress.',
+        rows: rowsForPlotIds(plotIds, (plotId) => {
+          const stages = metrics.inProgressStages.filter((stage) => stage.plotProgrammeId === plotId);
+          return stages.map((stage) => `${stage.stageName} · ${stage.trade}`).join(' | ');
+        }, 'blue'),
+      };
+    }
+
+    if (selectedMetric === 'behindProgramme') {
+      const plotIds = [...new Set(metrics.behindStages.map((stage) => stage.plotProgrammeId))];
+      return {
+        title: 'Behind programme',
+        subtitle: 'Plots with incomplete stages whose planned finish date has passed.',
+        rows: rowsForPlotIds(plotIds, (plotId) => {
+          const overdue = metrics.behindStages.filter((stage) => stage.plotProgrammeId === plotId);
+          const oldest = [...overdue].sort((a, b) => a.endDate.localeCompare(b.endDate))[0];
+          return `${overdue.length} overdue stage${overdue.length === 1 ? '' : 's'} · ${oldest?.stageName ?? 'Stage'} was due ${oldest?.endDate ?? ''}`;
+        }, 'red'),
+      };
+    }
+
+    if (selectedMetric === 'plotsOnHold') {
+      const rowsByName = new Map<string, DrilldownRow>();
+      metrics.heldProgrammes.forEach((plot) => {
+        rowsByName.set(normalisePlotName(plot.plotName), {
+          id: `hold-programme-${plot.id}`,
+          title: plot.plotName,
+          meta: plot.holdReason?.trim() || 'Programme hold active',
+          plotId: plot.id,
+          tone: 'amber',
+        });
+      });
+      metrics.heldSitePlots.forEach((plot) => {
+        const key = normalisePlotName(plot.plotNo);
+        if (!rowsByName.has(key)) {
+          const matchingProgramme = plotProgrammes.find((item) => normalisePlotName(item.plotName) === key);
+          rowsByName.set(key, {
+            id: `hold-site-${plot.id}`,
+            title: `Plot ${plot.plotNo}`,
+            meta: `Held at stage ${plot.holdStage}${plot.holdReason ? ` · ${plot.holdReason}` : ''}`,
+            plotId: matchingProgramme?.id,
+            tone: 'amber',
+          });
+        }
+      });
+      return { title: 'Plots on hold', subtitle: 'Plots currently prevented from progressing.', rows: [...rowsByName.values()] };
+    }
+
+    if (selectedMetric === 'openActions') {
+      const plotIds = [...new Set(metrics.openActions.map((action) => action.plotProgrammeId))];
+      return {
+        title: 'Open actions',
+        subtitle: 'Plots with QA or trade actions that are not yet verified fixed.',
+        rows: rowsForPlotIds(plotIds, (plotId) => {
+          const actions = metrics.openActions.filter((action) => action.plotProgrammeId === plotId);
+          const trades = [...new Set(actions.map((action) => action.trade))].join(', ');
+          return `${actions.length} open action${actions.length === 1 ? '' : 's'} · ${trades}`;
+        }, 'red'),
+      };
+    }
+
+    if (selectedMetric === 'overdueActions') {
+      const plotIds = [...new Set(metrics.overdueActions.map((action) => action.plotProgrammeId))];
+      return {
+        title: 'Overdue actions',
+        subtitle: 'Plots with open actions more than 7 days old.',
+        rows: rowsForPlotIds(plotIds, (plotId) => {
+          const actions = metrics.overdueActions.filter((action) => action.plotProgrammeId === plotId);
+          return `${actions.length} overdue action${actions.length === 1 ? '' : 's'} · oldest ${[...actions].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]?.createdAt.slice(0, 10) ?? ''}`;
+        }, 'red'),
+      };
+    }
+
+    if (selectedMetric === 'inspectionIssues') {
+      const plotIds = [...new Set(metrics.inspectionIssues.map((inspection) => inspection.plotProgrammeId))];
+      return {
+        title: 'Inspection issues',
+        subtitle: 'Plots with inspections marked as an issue, failed close-out or blocked.',
+        rows: rowsForPlotIds(plotIds, (plotId) => {
+          const issues = metrics.inspectionIssues.filter((inspection) => inspection.plotProgrammeId === plotId);
+          return issues.map((inspection) => `${inspection.templateName} · ${inspection.status}`).join(' | ');
+        }, 'red'),
+      };
+    }
+
+    if (selectedMetric === 'handover28d') {
+      return {
+        title: 'Handover in 28 days',
+        subtitle: 'Plots whose planned completion falls within the next 28 days.',
+        rows: metrics.handoversDue.map((plot) => ({
+          id: `handover-${plot.id}`,
+          title: plot.plotName,
+          meta: `Planned completion ${plot.endDate}`,
+          plotId: plot.id,
+          tone: 'amber' as Tone,
+        })),
+      };
+    }
+
+    if (selectedMetric === 'awaitingVerify') {
+      const plotIds = [...new Set(metrics.verification.map((action) => action.plotProgrammeId))];
+      return {
+        title: 'Awaiting verification',
+        subtitle: 'Plots with reported fixes still waiting for site verification.',
+        rows: rowsForPlotIds(plotIds, (plotId) => {
+          const actions = metrics.verification.filter((action) => action.plotProgrammeId === plotId);
+          return `${actions.length} item${actions.length === 1 ? '' : 's'} awaiting verification · ${[...new Set(actions.map((action) => action.trade))].join(', ')}`;
+        }, 'amber'),
+      };
+    }
+
+    return {
+      title: 'Trade contacts',
+      subtitle: 'Trade supervisors with contact details entered.',
+      rows: tradeContacts
+        .filter((contact) => contact.supervisorEmail.trim())
+        .map((contact) => ({
+          id: contact.id,
+          title: contact.trade,
+          meta: `${contact.contractor || 'Contractor not entered'} · ${contact.supervisorName || 'Supervisor not entered'} · ${contact.supervisorEmail}`,
+          tone: 'violet' as Tone,
+        })),
+    };
+  }, [selectedMetric, metrics, plotProgrammes, sitePlots, tradeContacts]);
+
   const latestIssue = issueLogs[0];
+  const selectMetric = (key: DashboardMetricKey) => setSelectedMetric((current) => current === key ? null : key);
 
   return (
     <AppScreen>
@@ -98,17 +300,54 @@ export default function DashboardScreen() {
       </View>
 
       <View style={styles.statGrid}>
-        <StatCard icon="home-outline" label="Plots" value={metrics.totalPlots} tone="blue" />
-        <StatCard icon="construct-outline" label="Live stages" value={metrics.inProgressStages.length} tone="slate" />
-        <StatCard icon="trending-down-outline" label="Behind programme" value={metrics.plotsBehind} tone={metrics.plotsBehind ? 'red' : 'green'} />
-        <StatCard icon="pause-circle-outline" label="Plots on hold" value={metrics.holds} tone={metrics.holds ? 'amber' : 'green'} />
-        <StatCard icon="warning-outline" label="Open actions" value={metrics.openActions.length} tone={metrics.openActions.length ? 'red' : 'green'} />
-        <StatCard icon="time-outline" label="Overdue actions" value={metrics.overdueActions.length} tone={metrics.overdueActions.length ? 'red' : 'green'} />
-        <StatCard icon="clipboard-outline" label="Inspection issues" value={metrics.inspectionIssues.length} tone={metrics.inspectionIssues.length ? 'red' : 'green'} />
-        <StatCard icon="key-outline" label="Handover 28d" value={metrics.handoversDue.length} tone={metrics.handoversDue.length ? 'amber' : 'green'} />
-        <StatCard icon="checkmark-done-outline" label="Awaiting verify" value={metrics.verification.length} tone={metrics.verification.length ? 'amber' : 'green'} />
-        <StatCard icon="people-outline" label="Trade contacts" value={tradeContacts.filter((item) => item.supervisorEmail.trim()).length} tone="violet" />
+        <StatCard icon="home-outline" label="Plots" value={metrics.totalPlots} tone="blue" selected={selectedMetric === 'plots'} onPress={() => selectMetric('plots')} />
+        <StatCard icon="construct-outline" label="Live stages" value={metrics.inProgressStages.length} tone="slate" selected={selectedMetric === 'liveStages'} onPress={() => selectMetric('liveStages')} />
+        <StatCard icon="trending-down-outline" label="Behind programme" value={metrics.plotsBehind} tone={metrics.plotsBehind ? 'red' : 'green'} selected={selectedMetric === 'behindProgramme'} onPress={() => selectMetric('behindProgramme')} />
+        <StatCard icon="pause-circle-outline" label="Plots on hold" value={metrics.holds} tone={metrics.holds ? 'amber' : 'green'} selected={selectedMetric === 'plotsOnHold'} onPress={() => selectMetric('plotsOnHold')} />
+        <StatCard icon="warning-outline" label="Open actions" value={metrics.openActions.length} tone={metrics.openActions.length ? 'red' : 'green'} selected={selectedMetric === 'openActions'} onPress={() => selectMetric('openActions')} />
+        <StatCard icon="time-outline" label="Overdue actions" value={metrics.overdueActions.length} tone={metrics.overdueActions.length ? 'red' : 'green'} selected={selectedMetric === 'overdueActions'} onPress={() => selectMetric('overdueActions')} />
+        <StatCard icon="clipboard-outline" label="Inspection issues" value={metrics.inspectionIssues.length} tone={metrics.inspectionIssues.length ? 'red' : 'green'} selected={selectedMetric === 'inspectionIssues'} onPress={() => selectMetric('inspectionIssues')} />
+        <StatCard icon="key-outline" label="Handover 28d" value={metrics.handoversDue.length} tone={metrics.handoversDue.length ? 'amber' : 'green'} selected={selectedMetric === 'handover28d'} onPress={() => selectMetric('handover28d')} />
+        <StatCard icon="checkmark-done-outline" label="Awaiting verify" value={metrics.verification.length} tone={metrics.verification.length ? 'amber' : 'green'} selected={selectedMetric === 'awaitingVerify'} onPress={() => selectMetric('awaitingVerify')} />
+        <StatCard icon="people-outline" label="Trade contacts" value={tradeContacts.filter((item) => item.supervisorEmail.trim()).length} tone="violet" selected={selectedMetric === 'tradeContacts'} onPress={() => selectMetric('tradeContacts')} />
       </View>
+
+      {drilldown ? (
+        <View style={styles.drilldownPanel}>
+          <View style={styles.panelHeader}>
+            <View style={styles.drilldownHeading}>
+              <Text style={styles.sectionEyebrow}>Dashboard drill-down</Text>
+              <Text style={styles.panelTitle}>{drilldown.title}</Text>
+              <Text style={styles.drilldownSubtitle}>{drilldown.subtitle}</Text>
+            </View>
+            <Pressable style={styles.closeButton} onPress={() => setSelectedMetric(null)}>
+              <Ionicons name="close" size={18} color={siteprogTheme.colors.text} />
+            </Pressable>
+          </View>
+          {drilldown.rows.length === 0 ? (
+            <View style={styles.clearState}>
+              <Ionicons name="checkmark-circle-outline" size={22} color={siteprogTheme.colors.success} />
+              <Text style={styles.clearText}>Nothing currently falls into this category.</Text>
+            </View>
+          ) : drilldown.rows.map((row) => {
+            const content = (
+              <View style={styles.drilldownRow}>
+                <View style={[styles.riskDot, { backgroundColor: toneStyles[row.tone ?? 'slate'].text.color }]} />
+                <View style={styles.rowMain}>
+                  <Text style={styles.rowTitle}>{row.title}</Text>
+                  <Text style={styles.rowMeta}>{row.meta}</Text>
+                </View>
+                {row.plotId ? <Ionicons name="chevron-forward" size={18} color={siteprogTheme.colors.muted} /> : null}
+              </View>
+            );
+            return row.plotId ? (
+              <Link key={row.id} href={`/plot/${row.plotId}` as never} asChild>
+                <Pressable style={({ pressed }) => [pressed && styles.pressed]}>{content}</Pressable>
+              </Link>
+            ) : <View key={row.id}>{content}</View>;
+          })}
+        </View>
+      ) : null}
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -211,13 +450,40 @@ export default function DashboardScreen() {
   );
 }
 
-function StatCard({ icon, label, value, tone }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string | number; tone: Tone }) {
+function StatCard({
+  icon,
+  label,
+  value,
+  tone,
+  selected,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string | number;
+  tone: Tone;
+  selected?: boolean;
+  onPress: () => void;
+}) {
   return (
-    <View style={[styles.statCard, toneStyles[tone].card]}>
-      <Ionicons name={icon} size={21} color={toneStyles[tone].text.color} />
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}. Show details.`}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.statCard,
+        toneStyles[tone].card,
+        selected && styles.statCardSelected,
+        pressed && styles.statCardPressed,
+      ]}
+    >
+      <View style={styles.statTopRow}>
+        <Ionicons name={icon} size={21} color={toneStyles[tone].text.color} />
+        <Ionicons name={selected ? 'chevron-up' : 'chevron-down'} size={16} color={toneStyles[tone].text.color} />
+      </View>
       <Text style={[styles.statValue, toneStyles[tone].text]}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -233,8 +499,6 @@ function QuickLink({ href, icon, title, text }: { href: string; icon: keyof type
     </Link>
   );
 }
-
-type Tone = 'blue' | 'green' | 'red' | 'amber' | 'slate' | 'violet';
 
 const toneStyles: Record<Tone, { card: object; text: { color: string } }> = {
   blue: { card: { backgroundColor: siteprogTheme.colors.blueSoft, borderColor: '#D8DEFF' }, text: { color: siteprogTheme.colors.blueDark } },
@@ -263,8 +527,16 @@ const styles = StyleSheet.create({
   setupButtonText: { color: '#ffffff', fontWeight: '900', fontSize: 12 },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   statCard: { flex: 1, minWidth: 135, borderWidth: 1, borderRadius: 14, padding: 14, gap: 3 },
+  statCardSelected: { borderWidth: 2, transform: [{ translateY: -1 }] },
+  statCardPressed: { opacity: 0.8 },
+  statTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   statValue: { fontSize: 25, fontWeight: '900', marginTop: 3 },
   statLabel: { color: siteprogTheme.colors.muted, fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  drilldownPanel: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DCE3F0', borderRadius: 16, padding: 16, gap: 4 },
+  drilldownHeading: { flex: 1, minWidth: 220 },
+  drilldownSubtitle: { color: siteprogTheme.colors.muted, fontSize: 12, lineHeight: 18, marginTop: 3 },
+  closeButton: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#F1F3F7', alignItems: 'center', justifyContent: 'center' },
+  drilldownRow: { borderTopWidth: 1, borderTopColor: '#EEF0F4', paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 10 },
   section: { backgroundColor: siteprogTheme.colors.card, borderWidth: 1, borderColor: siteprogTheme.colors.border, borderRadius: 16, padding: 16, gap: 12 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
   sectionEyebrow: { color: siteprogTheme.colors.blue, fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
