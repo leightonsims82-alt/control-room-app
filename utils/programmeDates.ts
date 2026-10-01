@@ -1,3 +1,5 @@
+import { isUnscheduledProgrammeWeek } from './programmeDateReset';
+
 const DEFAULT_START_DATE = '05/01/2026';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -40,6 +42,7 @@ export function getProgrammeDate(programmeStartDate: string | undefined, week: n
 }
 
 export function formatProgrammeDate(programmeStartDate: string | undefined, week: number, day = 1) {
+  if (isUnscheduledProgrammeWeek(week)) return '';
   return formatBritishDate(getProgrammeDate(programmeStartDate, week, day));
 }
 
