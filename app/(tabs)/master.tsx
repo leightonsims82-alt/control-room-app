@@ -21,6 +21,7 @@ import {
 } from '../../utils/stageConfiguration';
 import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber } from '../../utils/siteProgrammeEngine';
 import {
+  getEffectiveProgrammeWeeks,
   getHouseTypeLabel,
   getLinearStage1StartWeekForPlot,
   getPlotBuildOrder,
@@ -33,6 +34,7 @@ import {
 } from '../../utils/templateProgramme';
 
 type ResetMode = 'all' | 'single';
+type ProgrammeGenerationBasis = 'start' | 'completion';
 
 export default function MasterProgrammeScreen() {
   const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
@@ -43,6 +45,8 @@ export default function MasterProgrammeScreen() {
   const initialStageCount = Math.max(1, siteSetup.stageCount || 9);
   const [plotNo, setPlotNo] = useState('');
   const [houseTypeName, setHouseTypeName] = useState('');
+  const [programmeGenerationBasis, setProgrammeGenerationBasis] = useState<ProgrammeGenerationBasis>('completion');
+  const [plotStartDate, setPlotStartDate] = useState('');
   const [plotCompletionDate, setPlotCompletionDate] = useState('');
   const [plotDateError, setPlotDateError] = useState('');
   const [buildRoute, setBuildRoute] = useState<PlotBuildRoute>('Traditional');
@@ -60,7 +64,14 @@ export default function MasterProgrammeScreen() {
   const selectedResetPlot = sortedPlots.find((plot) => plot.id === selectedResetPlotId) ?? sortedPlots[0];
   const selectedHoldPlot = sortedPlots.find((plot) => plot.id === holdPlotId) ?? sortedPlots[0];
   const nextPlotHint = String(sitePlots.length + 1);
-  const nextCompletionHint = formatProgrammeDate(siteSetup.programmeStartDate, (sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.stage9CompleteWeek)) : 22) + 1);
+  const selectedProgrammeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : templateId;
+  const selectedProgrammeTemplate = getTemplateById(selectedProgrammeTemplateId, plotTemplates);
+  const selectedProgrammeWeeks = selectedProgrammeTemplate
+    ? getEffectiveProgrammeWeeks(selectedProgrammeTemplate, siteSetup)
+    : Math.max(1, siteSetup.defaultProgrammeWeeks || 23);
+  const nextCompletionWeek = (sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.stage9CompleteWeek)) : 22) + 1;
+  const nextCompletionHint = formatProgrammeDate(siteSetup.programmeStartDate, nextCompletionWeek);
+  const nextStartHint = formatProgrammeDate(siteSetup.programmeStartDate, Math.max(1, nextCompletionWeek - selectedProgrammeWeeks + 1));
 
   useEffect(() => {
     readPlotMetadata().then(setPlotMetadata).catch(() => setPlotMetadata({}));
@@ -93,19 +104,37 @@ export default function MasterProgrammeScreen() {
     return stage === plot.holdStage ? `${stage}H` : `H${plot.holdStage}`;
   };
 
+  const selectGenerationBasis = (basis: ProgrammeGenerationBasis) => {
+    setProgrammeGenerationBasis(basis);
+    setPlotDateError('');
+  };
+
   const savePlot = async () => {
-    const dateError = validatePlotCompletionDate(siteSetup.programmeStartDate, plotCompletionDate);
+    const selectedDate = programmeGenerationBasis === 'start' ? plotStartDate : plotCompletionDate;
+    const dateLabel = programmeGenerationBasis === 'start' ? 'Plot Start Date' : 'Plot Completion Date';
+    const rawDateError = validatePlotCompletionDate(siteSetup.programmeStartDate, selectedDate);
+    const dateError = rawDateError.replace(/Plot Completion Date/g, dateLabel);
     setPlotDateError(dateError);
-    const parsedWeek = getProgrammeWeekForDate(siteSetup.programmeStartDate, plotCompletionDate);
+    const anchorWeek = getProgrammeWeekForDate(siteSetup.programmeStartDate, selectedDate);
     const cleanedPlotNo = plotNo.trim();
-    if (!cleanedPlotNo || dateError || !parsedWeek) return;
+    if (!cleanedPlotNo || dateError || !anchorWeek) return;
+
+    const programmeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : templateId;
+    const programmeTemplate = getTemplateById(programmeTemplateId, plotTemplates);
+    const programmeWeeks = programmeTemplate
+      ? getEffectiveProgrammeWeeks(programmeTemplate, siteSetup)
+      : Math.max(1, siteSetup.defaultProgrammeWeeks || 23);
+    const completionWeek = programmeGenerationBasis === 'start'
+      ? anchorWeek + programmeWeeks - 1
+      : anchorWeek;
+
     const existingPlot = sitePlots.find((plot) => plot.plotNo.toLowerCase() === cleanedPlotNo.toLowerCase());
     const nextBuildOrder = sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.buildOrder ?? 0)) + 1 : 1;
     await upsertSitePlot({
       plotNo: cleanedPlotNo,
       buildOrder: existingPlot?.buildOrder ?? nextBuildOrder,
-      stage9CompleteWeek: parsedWeek,
-      templateId: buildRoute === 'Timber Frame' ? 'timberFrame' : templateId,
+      stage9CompleteWeek: completionWeek,
+      templateId: programmeTemplateId,
     });
     const nextMetadata = await savePlotMetadata({
       plotNo: cleanedPlotNo,
@@ -116,6 +145,7 @@ export default function MasterProgrammeScreen() {
     setPlotMetadata(nextMetadata);
     setPlotNo('');
     setHouseTypeName('');
+    setPlotStartDate('');
     setPlotCompletionDate('');
     setPlotDateError('');
     setClearConfirm(false);
@@ -179,19 +209,45 @@ export default function MasterProgrammeScreen() {
         <Text style={styles.subtitle}>The programme starts at the current week and shows the following 22 weeks.</Text>
       </View>
 
-      <SectionCard title="Plot input" subtitle="Add each plot in sequence. Build route, house type and property size are recorded separately.">
+      <SectionCard title="Plot input" subtitle="Choose whether the programme is driven from the plot start date or the completion date, then add the plot in sequence.">
+        <View style={styles.generationPanel}>
+          <View style={styles.inputWrapRoute}>
+            <Text style={styles.label}>Generate Programme From</Text>
+            <View style={styles.routeChips}>
+              {(['start', 'completion'] as ProgrammeGenerationBasis[]).map((basis) => {
+                const active = basis === programmeGenerationBasis;
+                const label = basis === 'start' ? 'Start Date' : 'Completion Date';
+                return (
+                  <Pressable key={basis} style={[styles.routeChip, active ? styles.routeChipActive : null]} onPress={() => selectGenerationBasis(basis)}>
+                    <Text style={[styles.routeChipText, active ? styles.routeChipTextActive : null]}>{label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+          <Text style={styles.generationHelp}>
+            {programmeGenerationBasis === 'start'
+              ? `Forward plan: choose the start date and SiteProg will calculate the completion date using the ${selectedProgrammeWeeks}-week programme.`
+              : `Back-plan: choose the completion date and SiteProg will calculate the start date using the ${selectedProgrammeWeeks}-week programme.`}
+          </Text>
+        </View>
+
         <View style={styles.formRow}>
           <View style={styles.inputWrapSmall}>
             <Text style={styles.label}>Plot No</Text>
             <TextInput value={plotNo} onChangeText={setPlotNo} style={styles.input} placeholder={`e.g. ${nextPlotHint}`} />
           </View>
           <View style={styles.inputWrapSmall}>
-            <Text style={styles.label}>Plot Completion Date</Text>
+            <Text style={styles.label}>{programmeGenerationBasis === 'start' ? 'Plot Start Date' : 'Plot Completion Date'}</Text>
             <ProgrammeDatePicker
-              value={plotCompletionDate}
-              onChange={(value) => { setPlotCompletionDate(value); setPlotDateError(''); }}
-              placeholder={`Select date, e.g. ${nextCompletionHint}`}
-              initialDate={nextCompletionHint}
+              value={programmeGenerationBasis === 'start' ? plotStartDate : plotCompletionDate}
+              onChange={(value) => {
+                if (programmeGenerationBasis === 'start') setPlotStartDate(value);
+                else setPlotCompletionDate(value);
+                setPlotDateError('');
+              }}
+              placeholder={`Select date, e.g. ${programmeGenerationBasis === 'start' ? nextStartHint : nextCompletionHint}`}
+              initialDate={programmeGenerationBasis === 'start' ? nextStartHint : nextCompletionHint}
               minimumDate={siteSetup.programmeStartDate}
               error={Boolean(plotDateError)}
             />
@@ -237,7 +293,7 @@ export default function MasterProgrammeScreen() {
             </ScrollView>
           </View>
           <Pressable style={styles.saveButton} onPress={savePlot}>
-            <Text style={styles.saveButtonText}>Save Plot</Text>
+            <Text style={styles.saveButtonText}>Generate Plot Programme</Text>
           </Pressable>
         </View>
         {plotDateError ? <Text style={styles.errorText}>{plotDateError}</Text> : null}
@@ -329,7 +385,8 @@ export default function MasterProgrammeScreen() {
               <Text style={[styles.headerCell, styles.weekInputCell]}>Start</Text>
               <Text style={[styles.headerCell, styles.completionCell]}>Plot Completion</Text>
               {visibleWeeks.map((week) => (
-                <Text key={week} style={styles.weekHeader}>{`WK${String(week).padStart(2, '0')}\n${formatProgrammeDate(siteSetup.programmeStartDate, week)}`}</Text>
+                <Text key={week} style={styles.weekHeader}>{`WK${String(week).padStart(2, '0')}\
+${formatProgrammeDate(siteSetup.programmeStartDate, week)}`}</Text>
               ))}
               <Text style={[styles.headerCell, styles.actionCell]}>Action</Text>
             </View>
@@ -395,6 +452,8 @@ const styles = StyleSheet.create({
   header: { gap: 4 },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
   subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
+  generationPanel: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, padding: 14, gap: 8 },
+  generationHelp: { color: '#64748b', fontSize: 13, lineHeight: 19, fontWeight: '700' },
   formRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
   inputWrapSmall: { gap: 6, minWidth: 180, flex: 1 },
   inputWrapRoute: { gap: 6, minWidth: 230, flex: 1 },
