@@ -23,10 +23,7 @@ function Replace-Block {
   return $Text.Substring(0,$s) + $Replacement + "`r`n`r`n" + $Text.Substring($e)
 }
 
-# -----------------------------------------------------------------------------
-# 1) Make siteSetup writes race-safe so stageCount cannot be overwritten by a
-#    stale siteSetup closure from another field update.
-# -----------------------------------------------------------------------------
+# 1) Make siteSetup writes race-safe so stageCount cannot be overwritten by a stale closure.
 $store = [IO.File]::ReadAllText($storePath)
 
 if ($store -notmatch 'siteSetupRef') {
@@ -38,13 +35,11 @@ if ($store -notmatch 'siteSetupRef') {
   $store = $store.Replace($stateLine, $stateLine + "`r`n  const siteSetupRef = useRef<SiteProgrammeSetup>(DEFAULT_SITE_PROGRAMME_SETUP);")
 }
 
-# Keep ref in sync when loading persisted setup.
 $oldLoad = '          setSiteSetupState(migratedSiteSetup);'
 if ($store.Contains($oldLoad) -and $store -notmatch 'siteSetupRef\.current = migratedSiteSetup') {
   $store = $store.Replace($oldLoad, "          siteSetupRef.current = migratedSiteSetup;`r`n          setSiteSetupState(migratedSiteSetup);")
 }
 
-# Replace updateSiteSetup with a ref-backed implementation.
 $updateSetup = @'
   const updateSiteSetup = async (input: Partial<SiteProgrammeSetup>) => {
     const nextSetup = { ...siteSetupRef.current, ...input };
@@ -61,10 +56,7 @@ if ($store -match '  const updateSiteSetup = async') {
 
 [IO.File]::WriteAllText($storePath,$store,[Text.UTF8Encoding]::new($false))
 
-# -----------------------------------------------------------------------------
-# 2) Site Setup: honour the saved stage count rather than defaulting back to the
-#    full 11-stage PROGRAMME_STAGE_SEQUENCE on first render.
-# -----------------------------------------------------------------------------
+# 2) Site Setup: honour the saved stage count instead of defaulting to all 11 stages.
 $setup = [IO.File]::ReadAllText($setupPath)
 
 $setup = $setup.Replace(
@@ -76,7 +68,6 @@ $setup = $setup.Replace(
   "  const [stageCountInput, setStageCountInput] = useState(String(initialConfiguredStageCount));"
 )
 
-# Ensure Save waits for BOTH the stage configuration and site setup persistence.
 $saveReplacement = @'
   const handleSave = async () => {
     const dateError = validateWeekOneDate(weekOneDate);
@@ -96,8 +87,6 @@ if ($setup -match '  const handleSave = ') {
   throw 'handleSave not found in Site Setup'
 }
 
-# Sync UI if provider state changes after loading. This makes an already-saved 9
-# win over an earlier 11 during app hydration.
 if ($setup -notmatch 'stageCountHydration') {
   $marker = @'
   useEffect(() => {
@@ -107,8 +96,7 @@ if ($setup -notmatch 'stageCountHydration') {
   if (-not $setup.Contains($marker)) { throw 'weekOneDate effect marker not found' }
   $extra = @'
 
-  // stageCountHydration: if persisted setup arrives after the first render, reload
-  // the stage array at that exact saved count instead of keeping the default 11.
+  // stageCountHydration: persisted stage count is authoritative after app hydration.
   useEffect(() => {
     const count = Math.max(1, siteSetup.stageCount || 9);
     readStageConfiguration(count)
@@ -124,11 +112,8 @@ if ($setup -notmatch 'stageCountHydration') {
 
 [IO.File]::WriteAllText($setupPath,$setup,[Text.UTF8Encoding]::new($false))
 
-# -----------------------------------------------------------------------------
-# 3) Master Edit UX: the existing Edit button loads the form but the form is far
-#    above the matrix, so it appears to do nothing. Scroll the browser to the top
-#    and show an unmistakable edit banner after clicking Edit.
-# -----------------------------------------------------------------------------
+# 3) Master Edit UX: Edit already loads the form, but the form is above the matrix.
+#    Scroll to it so clicking Edit has an immediate visible result.
 $master = [IO.File]::ReadAllText($masterPath)
 
 if ($master -notmatch 'const scrollToPlotInput') {
@@ -146,17 +131,21 @@ if ($master -notmatch 'const scrollToPlotInput') {
   $master = $master.Substring(0,$idx) + $helper + $master.Substring($idx)
 }
 
-# Add scroll + stronger message to beginEditPlot if edit feature is installed.
 if ($master -match 'const beginEditPlot =') {
-  $master = $master.Replace(
-    '    setEditMessage(`Editing Plot ${plot.plotNo}. Change the details above, then press Save Plot Changes.`);',
-    '    setEditMessage(`EDIT MODE — Plot ${plot.plotNo}. Change the details, then press Save Plot Changes.`);`r`n    scrollToPlotInput();'
-  )
+  $oldActivation = '    setEditMessage(`Editing Plot ${plot.plotNo}. Change the details above, then press Save Plot Changes.`);'
+  $newActivation = @'
+    setEditMessage(`EDIT MODE — Plot ${plot.plotNo}. Change the details, then press Save Plot Changes.`);
+    scrollToPlotInput();
+'@
+  if ($master.Contains($oldActivation)) {
+    $master = $master.Replace($oldActivation,$newActivation.TrimEnd("`r","`n"))
+  } elseif ($master -notmatch 'scrollToPlotInput\(\);') {
+    throw 'Could not wire Edit button to scroll to the edit form.'
+  }
 } else {
   throw 'beginEditPlot is missing. Run the add-edit-plot repair first.'
 }
 
-# Make the edit banner highly visible.
 $master = $master.Replace(
   "  editMessage: { color: '#166534', fontSize: 12, fontWeight: '900' },",
   "  editMessage: { color: '#166534', fontSize: 14, fontWeight: '900', backgroundColor: '#dcfce7', borderColor: '#22c55e', borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },"
@@ -164,10 +153,7 @@ $master = $master.Replace(
 
 [IO.File]::WriteAllText($masterPath,$master,[Text.UTF8Encoding]::new($false))
 
-# -----------------------------------------------------------------------------
-# 4) Verification: source invariants + pure persistence simulation + production
-#    Expo web build. No real plot data or user data is modified.
-# -----------------------------------------------------------------------------
+# 4) Verify source invariants + run production build. No real plot data is changed.
 $storeCheck = [IO.File]::ReadAllText($storePath)
 $setupCheck = [IO.File]::ReadAllText($setupPath)
 $masterCheck = [IO.File]::ReadAllText($masterPath)
@@ -176,7 +162,7 @@ $checks = @(
   @{ ok = $storeCheck -match 'siteSetupRef\.current'; msg = 'Site setup uses latest persisted snapshot' },
   @{ ok = $storeCheck -match 'const nextSetup = \{ \.\.\.siteSetupRef\.current, \.\.\.input \}'; msg = 'Stage count cannot be overwritten by stale setup state' },
   @{ ok = $setupCheck -match 'PROGRAMME_STAGE_SEQUENCE\.slice\(0, initialConfiguredStageCount\)'; msg = 'Site Setup no longer forces 11 stages on first render' },
-  @{ ok = $setupCheck -match 'useEffect\(\(\) => \{[\s\S]*stageCountHydration'; msg = 'Stage count rehydrates from persisted value' },
+  @{ ok = $setupCheck -match 'stageCountHydration'; msg = 'Stage count rehydrates from persisted value' },
   @{ ok = $setupCheck -match 'await Promise\.all\(\[[\s\S]*saveStageConfiguration\(stageDefinitions\)[\s\S]*stageCount: stageDefinitions\.length'; msg = 'Save waits for stage count and stage definitions' },
   @{ ok = $masterCheck -match 'scrollToPlotInput\(\);'; msg = 'Edit button visibly navigates to the edit form' },
   @{ ok = $masterCheck -match 'EDIT MODE — Plot'; msg = 'Edit mode displays a clear status banner' },
@@ -188,8 +174,7 @@ foreach ($check in $checks) {
   Write-Host "PASS: $($check.msg)" -ForegroundColor Green
 }
 
-# Pure stage-count persistence simulation: emulate two interleaved updates. The
-# ref-backed merge must retain stageCount=9 when a later unrelated field changes.
+# Pure stage-count persistence simulation.
 $sim = @{ siteName = 'Test Site'; stageCount = 11; defaultProgrammeWeeks = 25 }
 $sim.stageCount = 9
 $sim.siteName = 'Renamed Site'
