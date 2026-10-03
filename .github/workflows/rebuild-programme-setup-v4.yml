@@ -32,7 +32,7 @@ jobs:
 
       - name: Run Programme Setup V4 rebuild
         shell: pwsh
-        run: powershell -ExecutionPolicy Bypass -File .\scripts\rebuild-programme-setup-v4.ps1
+        run: pwsh -NoProfile -File .\scripts\rebuild-programme-setup-v4.ps1
 
       - name: Commit rebuilt files
         shell: pwsh
