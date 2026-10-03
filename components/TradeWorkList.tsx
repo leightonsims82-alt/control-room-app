@@ -49,7 +49,7 @@ function plotRef(plot: PlotProgramme) {
 
 function buildDayWorkList(items: TradeWorkItem[]) {
   const today = todayStr();
-  const result: Array<{ day: string; tasks: DayTask[] }> = [];
+  const result: { day: string; tasks: DayTask[] }[] = [];
 
   for (let i = 0; i < 14; i += 1) {
     const day = addDays(today, i);

@@ -14,7 +14,6 @@ import { getEffectiveProgrammeWeeks, getHouseTypeLabel, PlotTemplate, TemplateAc
 const LOCKED_STANDARD_KEY = 'programme-buddy:locked-three-bed-standard:v1';
 const LOCKED_STAGE_COUNT = 9;
 
-type BuildRoute = 'Traditional' | 'Timber Frame';
 
 function orderedActivities(activities: TemplateActivity[]) {
   return activities.slice().sort((a, b) => a.order - b.order).map((activity, index) => ({ ...activity, order: index + 1 }));
@@ -57,7 +56,7 @@ export default function SiteSetupScreen() {
       if (JSON.stringify(liveThreeBed) !== JSON.stringify(standard)) await updatePlotTemplate(standard);
     })().catch((error) => setMessage(`Unable to load locked 3 Bedroom standard: ${String(error)}`));
     return () => { active = false; };
-  }, [isSitePlannerLoaded]);
+  }, [isSitePlannerLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!isSitePlannerLoaded) return;
@@ -100,12 +99,12 @@ export default function SiteSetupScreen() {
   };
 
   const updateStage = (stageNo: number, changes: Partial<ConfiguredProgrammeStage>) => {
-    setStageDefinitions((current) => current.map((stage) => stage.stage === stageNo ? {
-      ...stage,
-      ...changes,
-      startWeek: Math.max(1, Math.round(Number(changes.startWeek ?? stage.startWeek) || 1)),
-      finishWeek: Math.max(Math.max(1, Math.round(Number(changes.startWeek ?? stage.startWeek) || 1)), Math.round(Number(changes.finishWeek ?? stage.finishWeek) || stage.finishWeek)),
-    } : stage));
+    setStageDefinitions((current) => current.map((stage) => {
+      if (stage.stage !== stageNo) return stage;
+      const startWeek = toPositiveInt(String(changes.startWeek ?? stage.startWeek), stage.startWeek);
+      const finishCandidate = toPositiveInt(String(changes.finishWeek ?? stage.finishWeek), stage.finishWeek);
+      return { ...stage, ...changes, startWeek, finishWeek: Math.max(startWeek, finishCandidate) };
+    }));
   };
 
   const beginEditTemplate = () => {
@@ -177,7 +176,7 @@ export default function SiteSetupScreen() {
         code: `New activity ${Date.now()}`,
         displayText: 'New',
         durationDays: 1,
-        stage: Math.min(LOCKED_STAGE_COUNT, Number(seed.stage) || 1) as TemplateActivity['stage'],
+        stage: Math.min(LOCKED_STAGE_COUNT, toPositiveInt(String(seed.stage), 1)) as TemplateActivity['stage'],
       };
       activities.splice(index + 1, 0, newActivity);
       return { ...current, activities: orderedActivities(activities) };
@@ -222,8 +221,8 @@ export default function SiteSetupScreen() {
             {stageDefinitions.slice(0, LOCKED_STAGE_COUNT).map((stage) => <View key={stage.stage} style={styles.stageRow}>
               <Text style={[styles.td, styles.stageNo]}>{stage.stage}</Text>
               <TextInput value={stage.label} onChangeText={(value) => updateStage(stage.stage, { label: value })} style={[styles.input, styles.stageLabel]} />
-              <TextInput value={String(stage.startWeek)} keyboardType="number-pad" onChangeText={(value) => updateStage(stage.stage, { startWeek: toPositiveInt(value, stage.startWeek) })} style={[styles.input, styles.stageWeek]} />
-              <TextInput value={String(stage.finishWeek)} keyboardType="number-pad" onChangeText={(value) => updateStage(stage.stage, { finishWeek: toPositiveInt(value, stage.finishWeek) })} style={[styles.input, styles.stageWeek]} />
+              <TextInput defaultValue={String(stage.startWeek)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => updateStage(stage.stage, { startWeek: toPositiveInt(nativeEvent.text, stage.startWeek) })} style={[styles.input, styles.stageWeek]} />
+              <TextInput defaultValue={String(stage.finishWeek)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => updateStage(stage.stage, { finishWeek: toPositiveInt(nativeEvent.text, stage.finishWeek) })} style={[styles.input, styles.stageWeek]} />
             </View>)}
           </View>
         </ScrollView>
@@ -263,8 +262,8 @@ export default function SiteSetupScreen() {
                 {draft ? <TextInput value={activity.code} onChangeText={(value) => patchActivity(activity.order, { code: value })} style={[styles.input, styles.taskCol]} /> : <Text style={[styles.td, styles.taskCol]}>{activity.code}</Text>}
                 {draft ? <TextInput value={activity.trade} onChangeText={(value) => patchActivity(activity.order, { trade: value })} style={[styles.input, styles.tradeCol]} /> : <Text style={[styles.td, styles.tradeCol]}>{activity.trade}</Text>}
                 {draft ? <TextInput value={activity.displayText} onChangeText={(value) => patchActivity(activity.order, { displayText: value })} style={[styles.input, styles.displayCol]} /> : <Text style={[styles.td, styles.displayCol]}>{activity.displayText}</Text>}
-                {draft ? <TextInput value={String(activity.stage)} keyboardType="number-pad" onChangeText={(value) => patchActivity(activity.order, { stage: Math.min(LOCKED_STAGE_COUNT, toPositiveInt(value, Number(activity.stage))) as TemplateActivity['stage'] })} style={[styles.input, styles.smallCol]} /> : <Text style={[styles.td, styles.smallCol]}>{activity.stage}</Text>}
-                {draft ? <TextInput value={String(activity.durationDays)} keyboardType="number-pad" onChangeText={(value) => patchActivity(activity.order, { durationDays: toPositiveInt(value, activity.durationDays) })} style={[styles.input, styles.smallCol, styles.daysInput]} /> : <Text style={[styles.td, styles.smallCol, styles.daysCell]}>{activity.durationDays}</Text>}
+                {draft ? <TextInput defaultValue={String(activity.stage)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => patchActivity(activity.order, { stage: Math.min(LOCKED_STAGE_COUNT, toPositiveInt(nativeEvent.text, Number(activity.stage))) as TemplateActivity['stage'] })} style={[styles.input, styles.smallCol]} /> : <Text style={[styles.td, styles.smallCol]}>{activity.stage}</Text>}
+                {draft ? <TextInput defaultValue={String(activity.durationDays)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => patchActivity(activity.order, { durationDays: toPositiveInt(nativeEvent.text, activity.durationDays) })} style={[styles.input, styles.smallCol, styles.daysInput]} /> : <Text style={[styles.td, styles.smallCol, styles.daysCell]}>{activity.durationDays}</Text>}
                 {draft ? <View style={styles.rowActions}>
                   <Pressable style={styles.miniButton} onPress={() => moveActivity(activity.order, -1)}><Text style={styles.miniButtonText}>↑</Text></Pressable>
                   <Pressable style={styles.miniButton} onPress={() => moveActivity(activity.order, 1)}><Text style={styles.miniButtonText}>↓</Text></Pressable>

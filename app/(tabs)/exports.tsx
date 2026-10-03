@@ -29,7 +29,8 @@ export default function ExportsScreen() {
   const [startWeek, setStartWeek] = useState('1');
   const [status, setStatus] = useState('');
 
-  const parsedStartWeek = Number(startWeek) || 1;
+  const parsedStartWeekCandidate = Math.round(Number(startWeek));
+  const parsedStartWeek = Number.isFinite(parsedStartWeekCandidate) && parsedStartWeekCandidate > 0 ? parsedStartWeekCandidate : 1;
   const smTeamRecipients = [smEmail.trim(), ...splitEmails(assistantEmails)].filter(Boolean);
   const tradeRecipients = tradeContacts.filter((contact) => contact.supervisorEmail.trim());
   const selectedOutputs = [

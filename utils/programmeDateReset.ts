@@ -40,3 +40,8 @@ export async function clearExistingPlotDataOnce() {
   await AsyncStorage.setItem(RESET_MARKER_KEY, new Date().toISOString());
   return true;
 }
+
+/** True when a programme week is intentionally unscheduled/invalid. */
+export function isUnscheduledProgrammeWeek(week: number) {
+  return !Number.isFinite(week) || week < 1;
+}

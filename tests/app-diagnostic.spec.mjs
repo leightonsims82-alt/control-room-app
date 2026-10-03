@@ -158,10 +158,10 @@ test('main navigation reaches key programme screens', async ({ page }) => {
   ];
   for (const [label, path] of targets) {
     await goto(page, '/');
-    const control = page.getByText(label, { exact: true });
-    if (!(await control.count())) continue;
-    await control.last().click();
-    await page.waitForTimeout(250);
+    const directLink = page.locator(`a[href="${path}"], a[href$="${path}"]`);
+    expect(await directLink.count(), `${label} navigation link is missing`).toBeGreaterThan(0);
+    await directLink.last().click();
+    await page.waitForTimeout(350);
     expect(new URL(page.url()).pathname, `${label} did not navigate to ${path}`).toBe(path);
   }
 });

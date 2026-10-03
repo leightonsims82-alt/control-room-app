@@ -47,7 +47,7 @@ export function MasterPlotManager() {
 
   useEffect(() => {
     if (visible && selectedPlot && selectedPlot.id !== selectedId) loadPlot(selectedPlot.id).catch(() => undefined);
-  }, [visible, selectedId, sitePlots.length]);
+  }, [visible, selectedId, sitePlots.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveChanges = async () => {
     if (!selectedPlot) return;

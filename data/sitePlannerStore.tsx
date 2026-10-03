@@ -462,7 +462,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       updatePlotTemplate,
       updateTemplateActivityDuration,
     }),
-    [sitePlots, activityDelays, activityMoves, tradeContacts, issueSettingsState, issueLogs, programmeNotes, plotTemplates, siteSetup, isSitePlannerLoaded],
+    [sitePlots, activityDelays, activityMoves, tradeContacts, issueSettingsState, issueLogs, programmeNotes, plotTemplates, siteSetup, isSitePlannerLoaded], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   return <SitePlannerContext.Provider value={value}>{children}</SitePlannerContext.Provider>;

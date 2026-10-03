@@ -366,7 +366,7 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
       updateDefect,
       upsertDabsBriefing,
     }),
-    [plotProgrammes, plotStages, inspections, defects, dabsBriefings, isLoaded],
+    [plotProgrammes, plotStages, inspections, defects, dabsBriefings, isLoaded], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   return <ProgrammeContext.Provider value={value}>{children}</ProgrammeContext.Provider>;
