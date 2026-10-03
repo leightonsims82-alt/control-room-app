@@ -1,5 +1,6 @@
 name: Full SiteProg Diagnostic
 
+# Full regression gate after programme repairs.
 on:
   workflow_dispatch:
   push:
