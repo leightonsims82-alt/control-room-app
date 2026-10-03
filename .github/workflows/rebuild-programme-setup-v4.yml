@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - programme-buddy-excel-rebuild
+    paths:
+      - 'scripts/rebuild-programme-setup-v4.ps1'
   workflow_dispatch:
 
 permissions:
