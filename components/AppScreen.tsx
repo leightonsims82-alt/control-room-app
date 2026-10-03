@@ -5,7 +5,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { siteprogTheme } from '../theme/siteprogTheme';
 import { FloatingFeedbackButton } from './FloatingFeedbackButton';
-import { MasterPlotDeleteControl } from './MasterPlotDeleteControl';
+import { MasterPlotManager } from './MasterPlotManager';
 
 export function AppScreen({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
@@ -36,7 +36,7 @@ export function AppScreen({ children }: { children: ReactNode }) {
       </ScrollView>
 
       <FloatingFeedbackButton />
-      {pathname === '/master' ? <MasterPlotDeleteControl /> : null}
+      {pathname === '/master' ? <MasterPlotManager /> : null}
     </SafeAreaView>
   );
 }

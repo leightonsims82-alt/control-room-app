@@ -1,368 +1,334 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { ReactNode, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { ProgrammeDatePicker } from '../../components/ProgrammeDatePicker';
+import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { getProgrammeStartDateValue, normaliseBritishDate, validateWeekOneDate } from '../../utils/programmeDates';
-import {
-  ConfiguredProgrammeStage,
-  MAX_PROGRAMME_STAGES,
-  readStageConfiguration,
-  resizeStageConfiguration,
-  saveStageConfiguration,
-} from '../../utils/stageConfiguration';
+import { ConfiguredProgrammeStage, readStageConfiguration, saveStageConfiguration } from '../../utils/stageConfiguration';
 import { PROGRAMME_STAGE_SEQUENCE } from '../../utils/siteProgrammeEngine';
-import { getEffectiveProgrammeWeeks, TemplateActivity } from '../../utils/templateProgramme';
+import { getEffectiveProgrammeWeeks, getHouseTypeLabel, PlotTemplate, TemplateActivity } from '../../utils/templateProgramme';
 
-const workingDayChoices = [5, 6, 7] as const;
-type WorkingDays = typeof workingDayChoices[number];
+const LOCKED_STANDARD_KEY = 'programme-buddy:locked-three-bed-standard:v1';
+const LOCKED_STAGE_COUNT = 9;
+
 type BuildRoute = 'Traditional' | 'Timber Frame';
 
-function cleanCode(value: string) {
-  return value.trim().replace(/\s+/g, ' ');
+function orderedActivities(activities: TemplateActivity[]) {
+  return activities.slice().sort((a, b) => a.order - b.order).map((activity, index) => ({ ...activity, order: index + 1 }));
 }
 
-function toStage(value: string, stageCount: number): TemplateActivity['stage'] {
+function cloneTemplate(template: PlotTemplate): PlotTemplate {
+  return { ...template, activities: template.activities.map((activity) => ({ ...activity })) };
+}
+
+function toPositiveInt(value: string, fallback: number) {
   const parsed = Math.round(Number(value));
-  const safeStage = Number.isFinite(parsed) ? Math.min(Math.max(1, parsed), Math.max(1, stageCount)) : 1;
-  return safeStage as TemplateActivity['stage'];
-}
-
-function reorderActivities(activities: TemplateActivity[]) {
-  return activities
-    .slice()
-    .sort((a, b) => a.order - b.order)
-    .map((activity, index) => ({ ...activity, order: index + 1, overlapAllowed: activity.overlapAllowed ?? false }));
-}
-
-function renumberActivities(activities: TemplateActivity[]) {
-  return activities.map((activity, index) => ({ ...activity, order: index + 1, overlapAllowed: activity.overlapAllowed ?? false }));
-}
-
-function currentWorkingDays(setup: { includeSaturday?: boolean; includeSunday?: boolean }): WorkingDays {
-  if (setup.includeSunday) return 7;
-  if (setup.includeSaturday) return 6;
-  return 5;
-}
-
-function workingWeekLabel(days: WorkingDays) {
-  if (days === 7) return '7 days - Monday to Sunday';
-  if (days === 6) return '6 days - Monday to Saturday';
-  return '5 days - Monday to Friday';
-}
-
-function workingWeekChanges(days: WorkingDays) {
-  return { workingWeek: workingWeekLabel(days), includeSaturday: days >= 6, includeSunday: days >= 7 };
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 export default function SiteSetupScreen() {
   const router = useRouter();
-  const { siteSetup, plotTemplates, sitePlots, resetPlotData, updateSiteSetup, updatePlotTemplate, updateTemplateActivityDuration } = useSitePlanner();
-  const [selectedBuildRoute, setSelectedBuildRoute] = useState<BuildRoute>('Traditional');
-  const [selectedTemplateId, setSelectedTemplateId] = useState(plotTemplates[2]?.id ?? plotTemplates[0]?.id ?? 'threeBed');
-  const [saved, setSaved] = useState(false);
-  const [message, setMessage] = useState('');
+  const { siteSetup, plotTemplates, isSitePlannerLoaded, updateSiteSetup, updatePlotTemplate } = useSitePlanner();
   const [weekOneDate, setWeekOneDate] = useState(getProgrammeStartDateValue(siteSetup.programmeStartDate));
+  const [workingDays, setWorkingDays] = useState<5 | 6 | 7>(siteSetup.includeSunday ? 7 : siteSetup.includeSaturday ? 6 : 5);
+  const [stageDefinitions, setStageDefinitions] = useState<ConfiguredProgrammeStage[]>(PROGRAMME_STAGE_SEQUENCE.slice(0, LOCKED_STAGE_COUNT).map((stage) => ({ ...stage })));
+  const [lockedThreeBed, setLockedThreeBed] = useState<PlotTemplate | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('threeBed');
+  const [draft, setDraft] = useState<PlotTemplate | null>(null);
+  const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
   const [weekOneDateError, setWeekOneDateError] = useState('');
-  const [stageDefinitions, setStageDefinitions] = useState<ConfiguredProgrammeStage[]>(PROGRAMME_STAGE_SEQUENCE.map((stage) => ({ ...stage })));
-  const [stageCountInput, setStageCountInput] = useState(String(Math.max(siteSetup.stageCount || 0, PROGRAMME_STAGE_SEQUENCE.length)));
 
-  const plotTypeTemplates = plotTemplates.filter((template) => template.id !== 'timberFrame');
-  const selectedPlotTypeTemplate = plotTypeTemplates.find((template) => template.id === selectedTemplateId) ?? plotTypeTemplates[0] ?? plotTemplates[0];
-  const timberFrameTemplate = plotTemplates.find((template) => template.id === 'timberFrame');
-  const selectedTemplate = selectedBuildRoute === 'Timber Frame' && timberFrameTemplate ? timberFrameTemplate : selectedPlotTypeTemplate;
-  const orderedActivities = selectedTemplate ? reorderActivities(selectedTemplate.activities) : [];
-  const activeWorkingDays = currentWorkingDays(siteSetup);
+  useEffect(() => {
+    if (!isSitePlannerLoaded) return;
+    let active = true;
+    (async () => {
+      const liveThreeBed = plotTemplates.find((template) => template.id === 'threeBed');
+      if (!liveThreeBed) return;
+      const existing = await AsyncStorage.getItem(LOCKED_STANDARD_KEY);
+      const standard = existing ? JSON.parse(existing) as PlotTemplate : cloneTemplate(liveThreeBed);
+      if (!existing) await AsyncStorage.setItem(LOCKED_STANDARD_KEY, JSON.stringify(standard));
+      if (!active) return;
+      setLockedThreeBed(standard);
+      // Enforce the locked standard in the planner store as the source of truth.
+      if (JSON.stringify(liveThreeBed) !== JSON.stringify(standard)) await updatePlotTemplate(standard);
+    })().catch((error) => setMessage(`Unable to load locked 3 Bedroom standard: ${String(error)}`));
+    return () => { active = false; };
+  }, [isSitePlannerLoaded]);
+
+  useEffect(() => {
+    if (!isSitePlannerLoaded) return;
+    readStageConfiguration(LOCKED_STAGE_COUNT)
+      .then((stages) => setStageDefinitions(stages.slice(0, LOCKED_STAGE_COUNT)))
+      .catch(() => setStageDefinitions(PROGRAMME_STAGE_SEQUENCE.slice(0, LOCKED_STAGE_COUNT).map((stage) => ({ ...stage }))));
+  }, [isSitePlannerLoaded]);
 
   useEffect(() => {
     setWeekOneDate(getProgrammeStartDateValue(siteSetup.programmeStartDate));
-  }, [siteSetup.programmeStartDate]);
+    setWorkingDays(siteSetup.includeSunday ? 7 : siteSetup.includeSaturday ? 6 : 5);
+  }, [siteSetup.programmeStartDate, siteSetup.includeSaturday, siteSetup.includeSunday]);
 
-  useEffect(() => {
-    readStageConfiguration(siteSetup.stageCount)
-      .then((stages) => {
-        setStageDefinitions(stages);
-        setStageCountInput(String(stages.length));
-        if (siteSetup.stageCount !== stages.length) updateSiteSetup({ stageCount: stages.length });
-      })
-      .catch(() => undefined);
-  }, []);
+  const visibleTemplates = useMemo(() => plotTemplates.filter((template) => template.id !== 'timberFrame'), [plotTemplates]);
+  const selectedLiveTemplate = visibleTemplates.find((template) => template.id === selectedTemplateId) ?? visibleTemplates[0];
+  const selectedTemplate = selectedTemplateId === 'threeBed' && lockedThreeBed ? lockedThreeBed : selectedLiveTemplate;
+  const displayTemplate = draft ?? selectedTemplate;
+  const isLocked = selectedTemplateId === 'threeBed';
+  const calculatedWeeks = displayTemplate ? getEffectiveProgrammeWeeks(displayTemplate, { ...siteSetup, includeSaturday: workingDays >= 6, includeSunday: workingDays >= 7 }) : 0;
 
-  const markChanged = () => setSaved(false);
-  const goMain = () => router.replace('/');
-
-  const handleSave = () => {
+  const saveSiteSettings = async () => {
     const dateError = validateWeekOneDate(weekOneDate);
     setWeekOneDateError(dateError);
     if (dateError) return;
-    updateSiteSetup({ programmeStartDate: normaliseBritishDate(weekOneDate), stageCount: stageDefinitions.length });
-    setSaved(true);
-    router.replace('/');
+    setSaving(true);
+    try {
+      const stages = stageDefinitions.slice(0, LOCKED_STAGE_COUNT).map((stage, index) => ({ ...stage, stage: index + 1 }));
+      await saveStageConfiguration(stages);
+      await updateSiteSetup({
+        programmeStartDate: normaliseBritishDate(weekOneDate),
+        stageCount: LOCKED_STAGE_COUNT,
+        workingWeek: workingDays === 7 ? '7 days - Monday to Sunday' : workingDays === 6 ? '6 days - Monday to Saturday' : '5 days - Monday to Friday',
+        includeSaturday: workingDays >= 6,
+        includeSunday: workingDays >= 7,
+      });
+      setMessage('Site programme settings saved. The site is locked to 9 programme stages.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const saveSiteSetup = (changes: Partial<typeof siteSetup>) => {
-    markChanged();
-    updateSiteSetup(changes);
+  const updateStage = (stageNo: number, changes: Partial<ConfiguredProgrammeStage>) => {
+    setStageDefinitions((current) => current.map((stage) => stage.stage === stageNo ? {
+      ...stage,
+      ...changes,
+      startWeek: Math.max(1, Math.round(Number(changes.startWeek ?? stage.startWeek) || 1)),
+      finishWeek: Math.max(Math.max(1, Math.round(Number(changes.startWeek ?? stage.startWeek) || 1)), Math.round(Number(changes.finishWeek ?? stage.finishWeek) || stage.finishWeek)),
+    } : stage));
   };
 
-  const selectWeekOneDate = (value: string) => {
-    setWeekOneDate(value);
-    setWeekOneDateError('');
-    saveSiteSetup({ programmeStartDate: normaliseBritishDate(value) });
+  const beginEditTemplate = () => {
+    if (!selectedTemplate || isLocked) return;
+    setDraft(cloneTemplate(selectedTemplate));
+    setMessage(`Editing ${getHouseTypeLabel(selectedTemplate)}. Changes are local until Save Template is pressed.`);
   };
 
-  const changeStageCount = async (requestedCount: number) => {
-    const nextCount = Math.min(MAX_PROGRAMME_STAGES, Math.max(1, Math.round(requestedCount || 1)));
-    const nextStages = resizeStageConfiguration(stageDefinitions, nextCount);
-    setStageDefinitions(nextStages);
-    setStageCountInput(String(nextCount));
-    markChanged();
-    await Promise.all([saveStageConfiguration(nextStages), updateSiteSetup({ stageCount: nextCount })]);
-    setMessage(`Programme now uses ${nextCount} stage${nextCount === 1 ? '' : 's'}.`);
+  const cancelEditTemplate = () => {
+    setDraft(null);
+    setMessage('Template edit cancelled. Nothing was saved.');
   };
 
-  const applyStageCountInput = () => {
-    changeStageCount(Number(stageCountInput) || stageDefinitions.length);
+  const saveTemplate = async () => {
+    if (!draft || isLocked) return;
+    setSaving(true);
+    try {
+      const cleaned: PlotTemplate = { ...draft, stageCount: LOCKED_STAGE_COUNT, activities: orderedActivities(draft.activities) };
+      await updatePlotTemplate(cleaned);
+      setDraft(null);
+      setMessage(`${getHouseTypeLabel(cleaned)} saved successfully.`);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const updateStageDefinition = async (stageNo: number, changes: Partial<ConfiguredProgrammeStage>) => {
-    const nextStages = stageDefinitions.map((stage) => {
-      if (stage.stage !== stageNo) return stage;
-      const startWeek = Math.max(1, Math.round(Number(changes.startWeek ?? stage.startWeek) || 1));
-      const finishWeek = Math.max(startWeek, Math.round(Number(changes.finishWeek ?? stage.finishWeek) || startWeek));
-      return {
-        ...stage,
-        ...changes,
-        label: changes.label !== undefined ? changes.label : stage.label,
-        startWeek,
-        finishWeek,
-      };
+  const cloneThreeBedToSelected = () => {
+    if (!lockedThreeBed || !selectedLiveTemplate || isLocked) return;
+    setDraft({
+      ...cloneTemplate(lockedThreeBed),
+      id: selectedLiveTemplate.id,
+      name: selectedLiveTemplate.name,
+      houseTypeCode: selectedLiveTemplate.houseTypeCode,
+      description: selectedLiveTemplate.description,
+      constructionMethod: selectedLiveTemplate.constructionMethod,
     });
-    setStageDefinitions(nextStages);
-    markChanged();
-    await saveStageConfiguration(nextStages);
+    setMessage(`Draft reset from the locked 3 Bedroom standard. Press Save Template to commit it.`);
   };
 
-  const savePlotTemplate = (template: typeof selectedTemplate) => {
-    if (!template) return;
-    markChanged();
-    updatePlotTemplate(template);
+  const patchActivity = (order: number, changes: Partial<TemplateActivity>) => {
+    setDraft((current) => current ? {
+      ...current,
+      activities: current.activities.map((activity) => activity.order === order ? { ...activity, ...changes } : activity),
+    } : current);
   };
 
-  const updateActivity = (activityCode: string, changes: Partial<TemplateActivity>) => {
-    if (!selectedTemplate) return;
-    markChanged();
-    const nextActivities = selectedTemplate.activities.map((activity) =>
-      activity.code !== activityCode
-        ? activity
-        : { ...activity, ...changes, code: changes.code ? cleanCode(String(changes.code)) : activity.code, overlapAllowed: activity.overlapAllowed ?? false },
-    );
-    updatePlotTemplate({ ...selectedTemplate, stageCount: stageDefinitions.length, activities: reorderActivities(nextActivities) });
+  const moveActivity = (order: number, direction: -1 | 1) => {
+    setDraft((current) => {
+      if (!current) return current;
+      const activities = orderedActivities(current.activities);
+      const index = activities.findIndex((activity) => activity.order === order);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= activities.length) return current;
+      [activities[index], activities[target]] = [activities[target], activities[index]];
+      return { ...current, activities: orderedActivities(activities) };
+    });
   };
 
-  const updateDuration = (templateId: string, activityCode: string, durationDays: number) => {
-    markChanged();
-    updateTemplateActivityDuration(templateId, activityCode, durationDays);
+  const addActivityAfter = (order: number) => {
+    setDraft((current) => {
+      if (!current) return current;
+      const activities = orderedActivities(current.activities);
+      const index = activities.findIndex((activity) => activity.order === order);
+      const seed = activities[Math.max(0, index)] ?? activities[0];
+      if (!seed) return current;
+      const newActivity: TemplateActivity = {
+        ...seed,
+        order: index + 2,
+        code: `New activity ${Date.now()}`,
+        displayText: 'New',
+        durationDays: 1,
+        stage: Math.min(LOCKED_STAGE_COUNT, Number(seed.stage) || 1) as TemplateActivity['stage'],
+      };
+      activities.splice(index + 1, 0, newActivity);
+      return { ...current, activities: orderedActivities(activities) };
+    });
   };
 
-  const moveFix = (activity: TemplateActivity, direction: -1 | 1) => {
-    if (!selectedTemplate) return;
-    const currentActivities = reorderActivities(selectedTemplate.activities);
-    const currentIndex = currentActivities.findIndex((item) => item.code === activity.code);
-    const nextIndex = currentIndex + direction;
-    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= currentActivities.length) return;
-    const nextActivities = currentActivities.slice();
-    [nextActivities[currentIndex], nextActivities[nextIndex]] = [nextActivities[nextIndex], nextActivities[currentIndex]];
-    markChanged();
-    updatePlotTemplate({ ...selectedTemplate, activities: renumberActivities(nextActivities) });
-    setMessage(`${activity.code} moved ${direction < 0 ? 'up' : 'down'}.`);
+  const removeActivity = (order: number) => {
+    setDraft((current) => current ? { ...current, activities: orderedActivities(current.activities.filter((activity) => activity.order !== order)) } : current);
   };
 
-  const addFixAfter = (activity: TemplateActivity) => {
-    if (!selectedTemplate) return;
-    const insertOrder = activity.order + 1;
-    const uniqueSuffix = Date.now().toString().slice(-5);
-    const newActivity: TemplateActivity = { order: insertOrder, code: `New fix ${uniqueSuffix}`, trade: activity.trade, displayText: 'New Fix', durationDays: 1, relativeWeek: 1, relativeDay: 1, stage: activity.stage, overlapAllowed: false };
-    const nextActivities = selectedTemplate.activities.map((item) => (item.order >= insertOrder ? { ...item, order: item.order + 1 } : item)).concat(newActivity);
-    markChanged();
-    updatePlotTemplate({ ...selectedTemplate, activities: reorderActivities(nextActivities) });
-    setMessage(`New fix added below ${activity.code}. Edit the row in the table.`);
-  };
-
-  const removeFix = (activity: TemplateActivity) => {
-    if (!selectedTemplate) return;
-    markChanged();
-    updatePlotTemplate({ ...selectedTemplate, activities: reorderActivities(selectedTemplate.activities.filter((item) => item.code !== activity.code)) });
-    setMessage(`${activity.code} removed.`);
-  };
+  const rows = displayTemplate ? orderedActivities(displayTemplate.activities) : [];
 
   return (
     <AppScreen>
-      <Pressable style={styles.backButton} onPress={goMain}>
-        <Text style={styles.backButtonText}>← Back to main programme</Text>
-      </Pressable>
-
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>Site Setup</Text>
-        <Text style={styles.title}>Programme & Plot Templates</Text>
-        <Text style={styles.subtitle}>Set the site calendar, stage structure, build routes and activity sequences.</Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Site programme defaults</Text>
-        <Text style={styles.helpText}>Select the Monday when programme Week 1 begins. This required date drives all programme headings.</Text>
-        <View style={styles.formGrid}>
-          <Field label="Site name"><TextInput value={siteSetup.siteName} onChangeText={(siteName) => saveSiteSetup({ siteName })} style={styles.input} /></Field>
-          <Field label="Week 1 commencement date">
-            <ProgrammeDatePicker value={weekOneDate} onChange={selectWeekOneDate} initialDate={weekOneDate} mondaysOnly error={Boolean(weekOneDateError)} />
-            <Text style={weekOneDateError ? styles.errorText : styles.helpText}>{weekOneDateError || 'Required · Select a Monday'}</Text>
-          </Field>
-          <Field label="Default programme weeks"><TextInput value={String(siteSetup.defaultProgrammeWeeks)} onChangeText={(value) => saveSiteSetup({ defaultProgrammeWeeks: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} /></Field>
-          <Field label="Working week">
-            <View style={styles.optionRow}>{workingDayChoices.map((days) => { const active = days === activeWorkingDays; return <Pressable key={days} style={[styles.smallChip, active ? styles.smallChipActive : null]} onPress={() => saveSiteSetup(workingWeekChanges(days))}><Text style={[styles.smallChipText, active ? styles.smallChipTextActive : null]}>{days} days</Text></Pressable>; })}</View>
-            <Text style={styles.helpText}>{workingWeekLabel(activeWorkingDays)}</Text>
-          </Field>
+        <View>
+          <Text style={styles.title}>Programme setup</Text>
+          <Text style={styles.subtitle}>A clean, explicit-save setup. The current 3 Bedroom programme is now the locked site standard.</Text>
         </View>
+        <Pressable style={styles.secondaryButton} onPress={() => router.replace('/')}><Text style={styles.secondaryButtonText}>Back to dashboard</Text></Pressable>
       </View>
 
-      <View style={styles.card}>
-        <View style={styles.cardHeadingRow}>
-          <View style={styles.headingTextWrap}>
-            <Text style={styles.cardTitle}>Programme stages</Text>
-            <Text style={styles.helpText}>Choose how many stages your developer uses, rename each stage and set where it sits in the plot programme.</Text>
+      <SectionCard title="Site programme settings" subtitle="These settings only change when you press Save Site Settings.">
+        <View style={styles.settingsGrid}>
+          <View style={styles.field}>
+            <Text style={styles.label}>Week 1 commencement</Text>
+            <ProgrammeDatePicker value={weekOneDate} onChange={(value) => { setWeekOneDate(value); setWeekOneDateError(''); }} error={Boolean(weekOneDateError)} />
+            {weekOneDateError ? <Text style={styles.error}>{weekOneDateError}</Text> : null}
           </View>
-          <View style={styles.stageCountControls}>
-            <Pressable style={styles.countButton} onPress={() => changeStageCount(stageDefinitions.length - 1)}><Text style={styles.countButtonText}>−</Text></Pressable>
-            <View style={styles.stageCountField}><Text style={styles.stageCountLabel}>Number of stages</Text><TextInput value={stageCountInput} onChangeText={setStageCountInput} onEndEditing={applyStageCountInput} keyboardType="number-pad" style={styles.stageCountInput} /></View>
-            <Pressable style={styles.countButton} onPress={() => changeStageCount(stageDefinitions.length + 1)}><Text style={styles.countButtonText}>+</Text></Pressable>
+          <View style={styles.field}>
+            <Text style={styles.label}>Working week</Text>
+            <View style={styles.chips}>
+              {([5, 6, 7] as const).map((days) => <Pressable key={days} onPress={() => setWorkingDays(days)} style={[styles.chip, workingDays === days ? styles.chipActive : null]}><Text style={[styles.chipText, workingDays === days ? styles.chipTextActive : null]}>{days} days</Text></Pressable>)}
+            </View>
           </View>
+          <View style={styles.lockCard}><Text style={styles.lockLabel}>Programme stages</Text><Text style={styles.lockValue}>9</Text><Text style={styles.lockHint}>Locked site standard</Text></View>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View style={styles.stageTable}>
-            <View style={styles.stageTableRow}>
-              <Text style={[styles.stageHeaderCell, styles.stageNumberColumn]}>Stage</Text>
-              <Text style={[styles.stageHeaderCell, styles.stageNameColumn]}>Stage name</Text>
-              <Text style={[styles.stageHeaderCell, styles.stageWeekColumn]}>Start week</Text>
-              <Text style={[styles.stageHeaderCell, styles.stageWeekColumn]}>Finish week</Text>
-            </View>
-            {stageDefinitions.map((stage, index) => (
-              <View key={stage.stage} style={[styles.stageTableRow, index % 2 ? styles.altRow : null]}>
-                <Text style={[styles.stageBodyCell, styles.stageNumberColumn]}>{stage.stage}</Text>
-                <TextInput value={stage.label} onChangeText={(label) => updateStageDefinition(stage.stage, { label })} style={[styles.stageInput, styles.stageNameColumn]} placeholder={`Stage ${stage.stage}`} />
-                <TextInput value={String(stage.startWeek)} onChangeText={(value) => updateStageDefinition(stage.stage, { startWeek: Number(value) || 1 })} keyboardType="number-pad" style={[styles.stageInput, styles.stageWeekColumn]} />
-                <TextInput value={String(stage.finishWeek)} onChangeText={(value) => updateStageDefinition(stage.stage, { finishWeek: Number(value) || stage.startWeek })} keyboardType="number-pad" style={[styles.stageInput, styles.stageWeekColumn]} />
-              </View>
-            ))}
+            <View style={styles.stageRow}><Text style={[styles.th, styles.stageNo]}>Stage</Text><Text style={[styles.th, styles.stageLabel]}>Label</Text><Text style={[styles.th, styles.stageWeek]}>Start week</Text><Text style={[styles.th, styles.stageWeek]}>Finish week</Text></View>
+            {stageDefinitions.slice(0, LOCKED_STAGE_COUNT).map((stage) => <View key={stage.stage} style={styles.stageRow}>
+              <Text style={[styles.td, styles.stageNo]}>{stage.stage}</Text>
+              <TextInput value={stage.label} onChangeText={(value) => updateStage(stage.stage, { label: value })} style={[styles.input, styles.stageLabel]} />
+              <TextInput value={String(stage.startWeek)} keyboardType="number-pad" onChangeText={(value) => updateStage(stage.stage, { startWeek: toPositiveInt(value, stage.startWeek) })} style={[styles.input, styles.stageWeek]} />
+              <TextInput value={String(stage.finishWeek)} keyboardType="number-pad" onChangeText={(value) => updateStage(stage.stage, { finishWeek: toPositiveInt(value, stage.finishWeek) })} style={[styles.input, styles.stageWeek]} />
+            </View>)}
           </View>
         </ScrollView>
-        <Text style={styles.helpText}>Activities can be assigned to any stage from 1 to {stageDefinitions.length}. New stages are added after the current final stage and can then be repositioned by changing their start and finish weeks.</Text>
-      </View>
+        <Pressable disabled={saving} style={styles.primaryButton} onPress={saveSiteSettings}><Text style={styles.primaryButtonText}>{saving ? 'Saving…' : 'Save Site Settings'}</Text></Pressable>
+      </SectionCard>
 
-      <View style={styles.warningCard}>
-        <View style={styles.warningTextWrap}><Text style={styles.warningTitle}>Plot data reset</Text><Text style={styles.warningText}>Clears all current plots and plot delays so you can add your own site data and test from a clean start.</Text><Text style={styles.warningMeta}>Current plots: {sitePlots.length}</Text></View>
-        <Pressable style={styles.dangerButton} onPress={resetPlotData}><Text style={styles.dangerButtonText}>Reset plot data</Text></Pressable>
-      </View>
+      <SectionCard title="Build route and property type templates" subtitle="3 Bedroom is the locked baseline. Other property types use a safe draft → Save workflow; there is no autosave.">
+        <View style={styles.chips}>
+          {visibleTemplates.map((template) => <Pressable key={template.id} onPress={() => { setSelectedTemplateId(template.id); setDraft(null); }} style={[styles.chip, selectedTemplateId === template.id ? styles.chipActive : null]}><Text style={[styles.chipText, selectedTemplateId === template.id ? styles.chipTextActive : null]}>{getHouseTypeLabel(template)}</Text></Pressable>)}
+        </View>
 
-      <View style={styles.card}>
-        <View style={styles.cardHeadingRow}><View><Text style={styles.cardTitle}>Build route and property size templates</Text><Text style={styles.helpText}>Select Traditional or Timber Frame, then choose the property size underneath.</Text></View>{message ? <Text style={styles.message}>{message}</Text> : null}</View>
-        <View style={styles.routeChips}>{(['Traditional', 'Timber Frame'] as BuildRoute[]).map((route) => { const active = route === selectedBuildRoute; return <Pressable key={route} style={[styles.routeChip, active ? styles.routeChipActive : null]} onPress={() => { setSelectedBuildRoute(route); setMessage(`${route} route selected.`); }}><Text style={[styles.routeChipText, active ? styles.routeChipTextActive : null]}>{route}</Text></Pressable>; })}</View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}><View style={styles.templateChips}>{plotTypeTemplates.map((template) => { const active = template.id === selectedTemplateId; return <Pressable key={template.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => { setSelectedTemplateId(template.id); setMessage(''); }}><Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>{template.name}</Text></Pressable>; })}</View></ScrollView>
+        {displayTemplate ? <>
+          <View style={styles.templateSummary}>
+            <View><Text style={styles.label}>Template</Text><Text style={styles.summaryValue}>{getHouseTypeLabel(displayTemplate)}</Text></View>
+            <View><Text style={styles.label}>Build route</Text><Text style={styles.summaryValue}>{displayTemplate.constructionMethod === 'timberFrame' ? 'Timber Frame' : 'Traditional'}</Text></View>
+            <View><Text style={styles.label}>Target weeks</Text><Text style={styles.summaryValue}>{displayTemplate.programmeWeeks}</Text></View>
+            <View><Text style={styles.label}>Stages</Text><Text style={styles.summaryValue}>9</Text></View>
+            <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>Calculated weeks</Text><Text style={styles.calculatedValue}>{calculatedWeeks}</Text></View>
+          </View>
 
-        {selectedTemplate ? <View style={styles.templatePanel}>
-          <View style={styles.formGrid}><Field label="Template name"><TextInput value={selectedTemplate.name} onChangeText={(name) => savePlotTemplate({ ...selectedTemplate, name })} style={styles.input} /></Field><Field label="Build route"><TextInput value={selectedBuildRoute} editable={false} style={styles.input} /></Field><Field label="Target weeks"><TextInput value={String(selectedTemplate.programmeWeeks)} onChangeText={(value) => savePlotTemplate({ ...selectedTemplate, programmeWeeks: Number(value) || 0 })} keyboardType="number-pad" style={styles.input} /></Field><Field label="Available stages"><TextInput value={String(stageDefinitions.length)} editable={false} style={styles.input} /></Field><View style={styles.summaryBox}><Text style={styles.summaryLabel}>Calculated weeks</Text><Text style={styles.summaryValue}>{getEffectiveProgrammeWeeks(selectedTemplate, siteSetup)}</Text></View></View>
-          <ScrollView horizontal showsHorizontalScrollIndicator><View><View style={styles.tableRow}><Text style={[styles.headerCell, styles.addCell]}>Add</Text><Text style={[styles.headerCell, styles.moveCell]}>Move</Text><Text style={[styles.headerCell, styles.orderCell]}>Seq</Text><Text style={[styles.headerCell, styles.taskCell]}>Task</Text><Text style={[styles.headerCell, styles.tradeCell]}>Trade</Text><Text style={[styles.headerCell, styles.displayCell]}>Display</Text><Text style={[styles.headerCell, styles.stageCell]}>Stage</Text><Text style={[styles.headerCell, styles.durationCell]}>Days</Text><Text style={[styles.headerCell, styles.removeCell]}>Remove</Text></View>{orderedActivities.map((activity, index) => <View key={`${activity.order}-${activity.code}`} style={[styles.tableRow, index % 2 ? styles.altRow : null]}><Pressable style={styles.addButton} onPress={() => addFixAfter(activity)}><Text style={styles.addButtonText}>+</Text></Pressable><View style={styles.moveButtons}><Pressable style={styles.moveButton} onPress={() => moveFix(activity, -1)}><Text style={styles.moveButtonText}>↑</Text></Pressable><Pressable style={styles.moveButton} onPress={() => moveFix(activity, 1)}><Text style={styles.moveButtonText}>↓</Text></Pressable></View><Text style={[styles.bodyCell, styles.orderCell]}>{activity.order}</Text><TextInput defaultValue={activity.code} onEndEditing={(event) => updateActivity(activity.code, { code: event.nativeEvent.text })} style={[styles.bodyInput, styles.taskCell]} /><TextInput defaultValue={activity.trade} onEndEditing={(event) => updateActivity(activity.code, { trade: event.nativeEvent.text })} style={[styles.bodyInput, styles.tradeCell]} /><TextInput defaultValue={activity.displayText} onEndEditing={(event) => updateActivity(activity.code, { displayText: event.nativeEvent.text })} style={[styles.bodyInput, styles.displayCell]} /><TextInput defaultValue={String(activity.stage)} keyboardType="number-pad" onEndEditing={(event) => updateActivity(activity.code, { stage: toStage(event.nativeEvent.text, stageDefinitions.length) })} style={[styles.bodyInput, styles.stageCell]} /><TextInput defaultValue={String(activity.durationDays)} keyboardType="number-pad" onEndEditing={(event) => updateDuration(selectedTemplate.id, activity.code, Number(event.nativeEvent.text) || 0)} style={[styles.durationInput, styles.durationCell]} /><Pressable style={styles.removeButton} onPress={() => removeFix(activity)}><Text style={styles.removeButtonText}>-</Text></Pressable></View>)}</View></ScrollView>
-        </View> : null}
-        <Pressable style={[styles.primaryButton, saved ? styles.savedButton : null]} onPress={handleSave}><Text style={styles.primaryButtonText}>{saved ? 'Saved' : 'Save'}</Text></Pressable>
-      </View>
+          {isLocked ? <View style={styles.lockedBanner}><Text style={styles.lockedTitle}>🔒 Standard 3 Bedroom — locked</Text><Text style={styles.lockedText}>This exact programme has been captured from your current saved 3 Bedroom setup and is now the baseline. It cannot be accidentally changed from this screen.</Text></View> : null}
+
+          {!isLocked ? <View style={styles.actionRow}>
+            {!draft ? <Pressable style={styles.primaryButton} onPress={beginEditTemplate}><Text style={styles.primaryButtonText}>Edit Template</Text></Pressable> : null}
+            {!draft ? <Pressable style={styles.secondaryButton} onPress={cloneThreeBedToSelected}><Text style={styles.secondaryButtonText}>Start from 3 Bed Standard</Text></Pressable> : null}
+            {draft ? <Pressable disabled={saving} style={styles.primaryButton} onPress={saveTemplate}><Text style={styles.primaryButtonText}>{saving ? 'Saving…' : 'Save Template'}</Text></Pressable> : null}
+            {draft ? <Pressable style={styles.secondaryButton} onPress={cancelEditTemplate}><Text style={styles.secondaryButtonText}>Cancel</Text></Pressable> : null}
+          </View> : null}
+
+          <ScrollView horizontal showsHorizontalScrollIndicator>
+            <View style={styles.activityTable}>
+              <View style={styles.activityRow}>
+                <Text style={[styles.th, styles.seqCol]}>Seq</Text><Text style={[styles.th, styles.taskCol]}>Task</Text><Text style={[styles.th, styles.tradeCol]}>Trade</Text><Text style={[styles.th, styles.displayCol]}>Display</Text><Text style={[styles.th, styles.smallCol]}>Stage</Text><Text style={[styles.th, styles.smallCol]}>Days</Text>{draft ? <Text style={[styles.th, styles.actionCol]}>Actions</Text> : null}
+              </View>
+              {rows.map((activity) => <View key={`${activity.order}-${activity.code}`} style={styles.activityRow}>
+                <Text style={[styles.td, styles.seqCol]}>{activity.order}</Text>
+                {draft ? <TextInput value={activity.code} onChangeText={(value) => patchActivity(activity.order, { code: value })} style={[styles.input, styles.taskCol]} /> : <Text style={[styles.td, styles.taskCol]}>{activity.code}</Text>}
+                {draft ? <TextInput value={activity.trade} onChangeText={(value) => patchActivity(activity.order, { trade: value })} style={[styles.input, styles.tradeCol]} /> : <Text style={[styles.td, styles.tradeCol]}>{activity.trade}</Text>}
+                {draft ? <TextInput value={activity.displayText} onChangeText={(value) => patchActivity(activity.order, { displayText: value })} style={[styles.input, styles.displayCol]} /> : <Text style={[styles.td, styles.displayCol]}>{activity.displayText}</Text>}
+                {draft ? <TextInput value={String(activity.stage)} keyboardType="number-pad" onChangeText={(value) => patchActivity(activity.order, { stage: Math.min(LOCKED_STAGE_COUNT, toPositiveInt(value, Number(activity.stage))) as TemplateActivity['stage'] })} style={[styles.input, styles.smallCol]} /> : <Text style={[styles.td, styles.smallCol]}>{activity.stage}</Text>}
+                {draft ? <TextInput value={String(activity.durationDays)} keyboardType="number-pad" onChangeText={(value) => patchActivity(activity.order, { durationDays: toPositiveInt(value, activity.durationDays) })} style={[styles.input, styles.smallCol, styles.daysInput]} /> : <Text style={[styles.td, styles.smallCol, styles.daysCell]}>{activity.durationDays}</Text>}
+                {draft ? <View style={styles.rowActions}>
+                  <Pressable style={styles.miniButton} onPress={() => moveActivity(activity.order, -1)}><Text style={styles.miniButtonText}>↑</Text></Pressable>
+                  <Pressable style={styles.miniButton} onPress={() => moveActivity(activity.order, 1)}><Text style={styles.miniButtonText}>↓</Text></Pressable>
+                  <Pressable style={styles.addButton} onPress={() => addActivityAfter(activity.order)}><Text style={styles.addButtonText}>+</Text></Pressable>
+                  <Pressable style={styles.removeButton} onPress={() => removeActivity(activity.order)}><Text style={styles.removeButtonText}>−</Text></Pressable>
+                </View> : null}
+              </View>)}
+            </View>
+          </ScrollView>
+        </> : <Text style={styles.subtitle}>No template available.</Text>}
+      </SectionCard>
+
+      {message ? <View style={styles.messageBox}><Text style={styles.messageText}>{message}</Text></View> : null}
     </AppScreen>
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) { return <View style={styles.field}><Text style={styles.label}>{label}</Text>{children}</View>; }
-
 const styles = StyleSheet.create({
-  backButton: { alignSelf: 'flex-start', backgroundColor: '#ffffff', borderRadius: 999, borderWidth: 1, borderColor: '#cbd5e1', paddingHorizontal: 14, paddingVertical: 10 },
-  backButtonText: { color: '#173b5f', fontWeight: '900', fontSize: 13 },
-  header: { gap: 4 },
-  eyebrow: { color: '#2563eb', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
-  subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
-  card: { backgroundColor: '#ffffff', borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', padding: 18, gap: 16 },
-  cardHeadingRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' },
-  headingTextWrap: { flex: 1, minWidth: 260 },
-  warningCard: { backgroundColor: '#fff7ed', borderRadius: 18, borderWidth: 1, borderColor: '#fed7aa', padding: 18, gap: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' },
-  warningTextWrap: { flex: 1, minWidth: 240 },
-  warningTitle: { color: '#9a3412', fontSize: 18, fontWeight: '900' },
-  warningText: { color: '#9a3412', fontSize: 13, lineHeight: 19, marginTop: 5 },
-  warningMeta: { color: '#7c2d12', fontSize: 12, fontWeight: '900', marginTop: 8 },
-  dangerButton: { backgroundColor: '#c2410c', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11 },
-  dangerButtonText: { color: '#ffffff', fontWeight: '900', fontSize: 13 },
-  cardTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
-  formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' },
-  field: { gap: 8, minWidth: 150, flex: 1 },
-  label: { color: '#475569', fontSize: 13, fontWeight: '900' },
-  input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', backgroundColor: '#ffffff', fontWeight: '800' },
-  errorText: { color: '#dc2626', fontSize: 12, fontWeight: '800' },
-  optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  smallChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: '#ffffff' },
-  smallChipActive: { backgroundColor: '#173b5f', borderColor: '#173b5f' },
-  smallChipText: { color: '#475569', fontSize: 12, fontWeight: '900' },
-  smallChipTextActive: { color: '#ffffff' },
-  helpText: { color: '#64748b', fontSize: 12, lineHeight: 18 },
-  message: { color: '#166534', fontWeight: '900', fontSize: 12, backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, maxWidth: 420 },
-  summaryBox: { minWidth: 150, backgroundColor: '#eff6ff', borderRadius: 12, padding: 12 },
-  summaryLabel: { color: '#2563eb', fontSize: 12, fontWeight: '900' },
-  summaryValue: { color: '#0f172a', fontSize: 24, fontWeight: '900' },
-  routeChips: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  routeChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11, backgroundColor: '#ffffff' },
-  routeChipActive: { backgroundColor: '#173b5f', borderColor: '#173b5f' },
-  routeChipText: { color: '#475569', fontSize: 13, fontWeight: '900' },
-  routeChipTextActive: { color: '#ffffff' },
-  templateChips: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
-  templateChip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#ffffff' },
-  templateChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
-  templateChipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
-  templateChipTextActive: { color: '#ffffff' },
-  templatePanel: { gap: 14 },
-  stageCountControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  countButton: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#173b5f' },
-  countButtonText: { color: '#ffffff', fontWeight: '900', fontSize: 22 },
-  stageCountField: { gap: 3, alignItems: 'center' },
-  stageCountLabel: { color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
-  stageCountInput: { width: 86, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, textAlign: 'center', color: '#0f172a', backgroundColor: '#ffffff', fontWeight: '900' },
-  stageTable: { minWidth: 640 },
-  stageTableRow: { flexDirection: 'row', alignItems: 'stretch' },
-  stageHeaderCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 10, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
-  stageBodyCell: { color: '#0f172a', fontWeight: '900', padding: 10, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center' },
-  stageInput: { color: '#0f172a', fontWeight: '800', padding: 10, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff' },
-  stageNumberColumn: { width: 80 },
-  stageNameColumn: { width: 340 },
-  stageWeekColumn: { width: 110, textAlign: 'center' },
-  tableRow: { flexDirection: 'row', alignItems: 'stretch' },
-  altRow: { backgroundColor: '#f8fafc' },
-  headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
-  bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', fontWeight: '800' },
-  bodyInput: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#ffffff', fontWeight: '800' },
-  addCell: { width: 52, textAlign: 'center' },
-  moveCell: { width: 70, textAlign: 'center' },
-  orderCell: { width: 54, textAlign: 'center' },
-  taskCell: { width: 170 },
-  tradeCell: { width: 150 },
-  displayCell: { width: 140 },
-  stageCell: { width: 70, textAlign: 'center' },
-  durationCell: { width: 80, textAlign: 'center' },
-  durationInput: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#fff4cc', fontWeight: '900' },
-  removeCell: { width: 52, textAlign: 'center' },
-  addButton: { width: 52, borderWidth: 1, borderColor: '#c8d7e6', alignItems: 'center', justifyContent: 'center', backgroundColor: '#dcfce7' },
-  addButtonText: { color: '#166534', fontWeight: '900', fontSize: 18 },
-  moveButtons: { width: 70, flexDirection: 'row', borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  moveButton: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#bfdbfe' },
-  moveButtonText: { color: '#1d4ed8', fontWeight: '900', fontSize: 16 },
-  removeButton: { width: 52, borderWidth: 1, borderColor: '#c8d7e6', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fee2e2' },
-  removeButtonText: { color: '#991b1b', fontWeight: '900', fontSize: 18 },
-  primaryButton: { alignSelf: 'flex-start', backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
-  savedButton: { backgroundColor: '#16a34a' },
+  subtitle: { color: '#64748b', fontSize: 13, lineHeight: 19, marginTop: 3 },
+  settingsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'stretch' },
+  field: { minWidth: 230, flex: 1, gap: 7 },
+  label: { color: '#475569', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
+  input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 8, color: '#0f172a', fontWeight: '800' },
+  error: { color: '#dc2626', fontSize: 12, fontWeight: '800' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8, backgroundColor: '#ffffff' },
+  chipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  chipText: { color: '#64748b', fontWeight: '900', fontSize: 12 },
+  chipTextActive: { color: '#ffffff' },
+  lockCard: { minWidth: 170, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 12, padding: 12 },
+  lockLabel: { color: '#1d4ed8', fontWeight: '900', fontSize: 11, textTransform: 'uppercase' },
+  lockValue: { color: '#0f172a', fontWeight: '900', fontSize: 26, marginTop: 2 },
+  lockHint: { color: '#64748b', fontSize: 11, marginTop: 2 },
+  primaryButton: { alignSelf: 'flex-start', backgroundColor: '#0f172a', borderRadius: 10, paddingHorizontal: 15, paddingVertical: 11 },
   primaryButtonText: { color: '#ffffff', fontWeight: '900' },
+  secondaryButton: { alignSelf: 'flex-start', backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 15, paddingVertical: 11 },
+  secondaryButtonText: { color: '#0f172a', fontWeight: '900' },
+  stageTable: { minWidth: 680 },
+  stageRow: { flexDirection: 'row', alignItems: 'stretch' },
+  th: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', padding: 8, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  td: { color: '#0f172a', fontWeight: '800', padding: 8, borderWidth: 1, borderColor: '#cbd5e1', textAlign: 'center', backgroundColor: '#ffffff' },
+  stageNo: { width: 72 }, stageLabel: { width: 320 }, stageWeek: { width: 140 },
+  templateSummary: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'stretch' },
+  summaryValue: { color: '#0f172a', fontWeight: '900', fontSize: 15, marginTop: 3, minWidth: 120 },
+  calculatedCard: { backgroundColor: '#eff6ff', borderRadius: 10, padding: 10, minWidth: 130 },
+  calculatedLabel: { color: '#1d4ed8', fontWeight: '900', fontSize: 11 },
+  calculatedValue: { color: '#0f172a', fontWeight: '900', fontSize: 22 },
+  lockedBanner: { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac', borderRadius: 12, padding: 13, gap: 3 },
+  lockedTitle: { color: '#166534', fontWeight: '900', fontSize: 14 },
+  lockedText: { color: '#166534', fontWeight: '700', fontSize: 12, lineHeight: 18 },
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  activityTable: { minWidth: 1010 },
+  activityRow: { flexDirection: 'row', alignItems: 'stretch' },
+  seqCol: { width: 55 }, taskCol: { width: 250 }, tradeCol: { width: 190 }, displayCol: { width: 180 }, smallCol: { width: 80 }, actionCol: { width: 175 },
+  daysCell: { backgroundColor: '#fff7cc' }, daysInput: { backgroundColor: '#fff7cc' },
+  rowActions: { width: 175, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#ffffff' },
+  miniButton: { borderWidth: 1, borderColor: '#93c5fd', backgroundColor: '#eff6ff', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 5 },
+  miniButtonText: { color: '#1d4ed8', fontWeight: '900' },
+  addButton: { backgroundColor: '#dcfce7', borderWidth: 1, borderColor: '#86efac', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5 },
+  addButtonText: { color: '#166534', fontWeight: '900' },
+  removeButton: { backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5 },
+  removeButtonText: { color: '#b91c1c', fontWeight: '900' },
+  messageBox: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12 },
+  messageText: { color: '#334155', fontWeight: '800' },
 });

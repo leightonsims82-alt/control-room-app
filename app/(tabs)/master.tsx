@@ -418,9 +418,7 @@ ${formatProgrammeDate(siteSetup.programmeStartDate, week)}`}</Text>
                     const heldStageCell = String(stage).includes('H');
                     return <Text key={week} style={[styles.weekCell, stage ? styles.activeWeekCell : null, heldStageCell ? styles.heldWeekCell : null]}>{stage}</Text>;
                   })}
-                  <Pressable style={styles.removeButton} onPress={() => selectResetPlot(plot.id)}>
-                    <Text style={styles.removeButtonText}>Select</Text>
-                  </Pressable>
+                  <Text style={[styles.bodyCell, styles.actionCell]}>Manage</Text>
                 </View>
               );
             })}

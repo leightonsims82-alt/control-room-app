@@ -186,26 +186,11 @@ function normaliseTemplate(template: PlotTemplate) {
 }
 
 function mergeDefaultTemplates(stored: PlotTemplate[]) {
-  const storedById = new Map(stored.map((template) => [template.id, template]));
+  const savedById = new Map(stored.map((template) => [template.id, normaliseTemplate(template)]));
+  const merged = DEFAULT_PLOT_TEMPLATES.map((template) => savedById.get(template.id) ?? normaliseTemplate(template));
   const defaultIds = new Set(DEFAULT_PLOT_TEMPLATES.map((template) => template.id));
-  const mergedDefaults = DEFAULT_PLOT_TEMPLATES.map((template) => {
-    const storedTemplate = storedById.get(template.id);
-    if (!storedTemplate) return normaliseTemplate(template);
-    const storedActivitiesByCode = new Map(storedTemplate.activities.map((activity) => [activity.code, activity]));
-    return normaliseTemplate({
-      ...template,
-      name: storedTemplate.name || template.name,
-      houseTypeCode: storedTemplate.houseTypeCode || template.houseTypeCode || template.name,
-      constructionMethod: storedTemplate.constructionMethod ?? template.constructionMethod ?? 'traditional',
-      description: storedTemplate.description || template.description,
-      activities: template.activities.map((activity) => {
-        const storedActivity = storedActivitiesByCode.get(activity.code);
-        return storedActivity ? { ...activity, durationDays: storedActivity.durationDays ?? activity.durationDays } : activity;
-      }),
-    });
-  });
-  const customTemplates = stored.filter((template) => !defaultIds.has(template.id)).map(normaliseTemplate);
-  return [...mergedDefaults, ...customTemplates];
+  const custom = stored.filter((template) => !defaultIds.has(template.id)).map(normaliseTemplate);
+  return [...merged, ...custom];
 }
 
 function cleanPlotInput(input: SitePlotInput, fallbackBuildOrder: number): SitePlotInput | null {

@@ -9,6 +9,9 @@ export type PlotMetadata = {
   houseTypeName: string;
   bedroomTemplateId: string;
   buildRoute: PlotBuildRoute;
+  programmeGenerationBasis?: 'start' | 'completion';
+  plotStartDate?: string;
+  plotCompletionDate?: string;
 };
 
 export type PlotMetadataMap = Record<string, PlotMetadata>;
