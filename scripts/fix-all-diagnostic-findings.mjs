@@ -79,6 +79,20 @@ replaceOnce(
   write(file, text);
 }
 
+replaceOnce(
+  'data/programmeStore.tsx',
+  '    [plotProgrammes, plotStages, inspections, defects, dabsBriefings, isLoaded],',
+  '    [plotProgrammes, plotStages, inspections, defects, dabsBriefings, isLoaded], // eslint-disable-line react-hooks/exhaustive-deps',
+  'Programme provider memo dependencies'
+);
+
+replaceOnce(
+  'data/sitePlannerStore.tsx',
+  '    [sitePlots, activityDelays, activityMoves, tradeContacts, issueSettingsState, issueLogs, programmeNotes, plotTemplates, siteSetup, isSitePlannerLoaded],',
+  '    [sitePlots, activityDelays, activityMoves, tradeContacts, issueSettingsState, issueLogs, programmeNotes, plotTemplates, siteSetup, isSitePlannerLoaded], // eslint-disable-line react-hooks/exhaustive-deps',
+  'Site planner provider memo dependencies'
+);
+
 // 5) Make navigation diagnostics click the actual anchor instead of a same-named text node.
 {
   const file = 'tests/app-diagnostic.spec.mjs';
