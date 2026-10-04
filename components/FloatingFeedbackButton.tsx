@@ -39,7 +39,11 @@ export function FloatingFeedbackButton() {
         accessibilityRole="button"
         accessibilityLabel="Send feedback"
         onPress={() => setOpen(true)}
-        style={({ pressed }) => [styles.floatingButton, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.floatingButton,
+          pathname === '/master' ? styles.floatingButtonMaster : styles.floatingButtonDefault,
+          pressed && styles.pressed,
+        ]}
       >
         <Ionicons name="chatbubble-ellipses-outline" size={19} color="#ffffff" />
         <Text style={styles.floatingText}>Feedback</Text>
@@ -107,7 +111,6 @@ const styles = StyleSheet.create({
   floatingButton: {
     position: 'absolute',
     right: 22,
-    bottom: 94,
     zIndex: 1000,
     elevation: 30,
     flexDirection: 'row',
@@ -122,6 +125,8 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
   },
+  floatingButtonDefault: { bottom: 94 },
+  floatingButtonMaster: { top: 76 },
   floatingText: { color: '#ffffff', fontSize: 12, fontWeight: '900' },
   pressed: { opacity: 0.84, transform: [{ scale: 0.98 }] },
   backdrop: {
