@@ -31,7 +31,7 @@ for (const file of codeFiles) {
     {
       id: 'numeric-coercion-during-typing',
       severity: 'high',
-      re: /onChangeText\s*=\s*\{[\s\S]{0,300}?(?:toPositiveInt|parseInt|parseFloat|Number|Math\.max)\s*\(/g,
+      re: /onChangeText\s*=\s*\{(?:(?!<TextInput\b)[\s\S]){0,300}?(?:toPositiveInt|parseInt|parseFloat|Number|Math\.max)\s*\(/g,
       message: 'Numeric TextInput appears to coerce text to a number inside onChangeText. This can turn an empty edit into 1 or otherwise fight the user while typing. Keep a string draft and validate/convert on blur or save.'
     },
     {
