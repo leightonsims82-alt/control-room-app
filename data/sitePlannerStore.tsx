@@ -5,6 +5,7 @@ import { getProgrammeStartDateValue } from '../utils/programmeDates';
 import { ActivityDelay, ProgrammeStageNumber, TRADE_ORDER } from '../utils/siteProgrammeEngine';
 import {
   ActivityMove,
+  ConstructionMethod,
   createHouseTypeTemplate,
   DEFAULT_PLOT_TEMPLATES,
   DEFAULT_SITE_PROGRAMME_SETUP,
@@ -68,6 +69,8 @@ export type SitePlotInput = {
   buildOrder?: number;
   stage9CompleteWeek: number;
   templateId: string;
+  houseTypeId?: string;
+  constructionMethod?: ConstructionMethod;
 };
 
 const DEFAULT_TRADE_CONTACTS: TradeContact[] = TRADE_ORDER.map((trade) => ({
@@ -110,7 +113,7 @@ type SitePlannerStore = {
   setProgrammeNote: (input: { plotId: string; trade: string; startWeek: number; note: string }) => Promise<void>;
   recordIssue: (input: { startWeek: number; recipientCount: number; note: string }) => Promise<void>;
   updateSiteSetup: (input: Partial<SiteProgrammeSetup>) => Promise<void>;
-  addPlotTemplate: (input: { name: string; houseTypeCode: string; baseTemplateId?: string }) => Promise<void>;
+  addPlotTemplate: (input: { name: string; bedrooms: number; floors: number; baseTemplateId?: string }) => Promise<PlotTemplate>;
   updatePlotTemplate: (input: PlotTemplate) => Promise<void>;
   updateTemplateActivityDuration: (templateId: string, activityCode: string, durationDays: number) => Promise<void>;
 };
@@ -166,10 +169,16 @@ function normaliseHoldStage(plot: TemplateSitePlot) {
 function normalisePlots(stored: TemplateSitePlot[]) {
   return stored.map((plot, index) => {
     const holdStage = normaliseHoldStage(plot);
+    const legacyTemplateId = plot.templateId || 'threeBed';
+    const constructionMethod: ConstructionMethod = plot.constructionMethod
+      ?? (legacyTemplateId === 'timberFrame' ? 'timberFrame' : 'traditional');
+    const houseTypeId = plot.houseTypeId ?? (legacyTemplateId === 'timberFrame' ? 'threeBed' : legacyTemplateId);
     return {
       ...plot,
       buildOrder: plot.buildOrder || index + 1,
-      templateId: plot.templateId || 'threeBed',
+      templateId: houseTypeId,
+      houseTypeId,
+      constructionMethod,
       holdStage,
       holdReason: holdStage ? plot.holdReason ?? '' : undefined,
       holdUpdatedAt: holdStage ? plot.holdUpdatedAt : undefined,
@@ -177,11 +186,16 @@ function normalisePlots(stored: TemplateSitePlot[]) {
   });
 }
 
+const LEGACY_PROPERTY_TEMPLATE_IDS = new Set(['apartment', 'twoBed', 'fourBed', 'fiveBed']);
+
 function normaliseTemplate(template: PlotTemplate) {
+  const isSystemTemplate = template.isSystemTemplate ?? template.id === 'threeBed' || template.id === 'timberFrame';
+  const isHouseType = template.isHouseType ?? (!isSystemTemplate && !LEGACY_PROPERTY_TEMPLATE_IDS.has(template.id));
   return {
     ...template,
     houseTypeCode: template.houseTypeCode || template.name,
-    constructionMethod: template.constructionMethod ?? 'traditional',
+    isSystemTemplate,
+    isHouseType,
   };
 }
 
@@ -189,7 +203,10 @@ function mergeDefaultTemplates(stored: PlotTemplate[]) {
   const savedById = new Map(stored.map((template) => [template.id, normaliseTemplate(template)]));
   const merged = DEFAULT_PLOT_TEMPLATES.map((template) => savedById.get(template.id) ?? normaliseTemplate(template));
   const defaultIds = new Set(DEFAULT_PLOT_TEMPLATES.map((template) => template.id));
-  const custom = stored.filter((template) => !defaultIds.has(template.id)).map(normaliseTemplate);
+  const custom = stored
+    .filter((template) => !defaultIds.has(template.id) && !LEGACY_PROPERTY_TEMPLATE_IDS.has(template.id))
+    .map(normaliseTemplate)
+    .filter((template) => template.isHouseType);
   return [...merged, ...custom];
 }
 
@@ -197,11 +214,14 @@ function cleanPlotInput(input: SitePlotInput, fallbackBuildOrder: number): SiteP
   const plotNo = input.plotNo.trim();
   const stage9CompleteWeek = Number(input.stage9CompleteWeek);
   if (!plotNo || !Number.isFinite(stage9CompleteWeek) || stage9CompleteWeek <= 0) return null;
+  const houseTypeId = input.houseTypeId || input.templateId || 'threeBed';
   return {
     plotNo,
     buildOrder: Number.isFinite(input.buildOrder) && input.buildOrder && input.buildOrder > 0 ? input.buildOrder : fallbackBuildOrder,
     stage9CompleteWeek,
-    templateId: input.templateId || 'threeBed',
+    templateId: houseTypeId,
+    houseTypeId,
+    constructionMethod: input.constructionMethod ?? 'traditional',
   };
 }
 
@@ -212,8 +232,24 @@ function applyPlotInputs(currentPlots: TemplateSitePlot[], inputs: SitePlotInput
     if (!cleaned) return;
     const existing = nextPlots.find((plot) => plot.plotNo.toLowerCase() === cleaned.plotNo.toLowerCase());
     const nextPlot: TemplateSitePlot = existing
-      ? { ...existing, plotNo: cleaned.plotNo, buildOrder: cleaned.buildOrder, stage9CompleteWeek: cleaned.stage9CompleteWeek, templateId: cleaned.templateId }
-      : { id: `site-plot-${Date.now()}-${inputIndex}`, plotNo: cleaned.plotNo, buildOrder: cleaned.buildOrder, stage9CompleteWeek: cleaned.stage9CompleteWeek, templateId: cleaned.templateId };
+      ? {
+          ...existing,
+          plotNo: cleaned.plotNo,
+          buildOrder: cleaned.buildOrder,
+          stage9CompleteWeek: cleaned.stage9CompleteWeek,
+          templateId: cleaned.templateId,
+          houseTypeId: cleaned.houseTypeId,
+          constructionMethod: cleaned.constructionMethod,
+        }
+      : {
+          id: `site-plot-${Date.now()}-${inputIndex}`,
+          plotNo: cleaned.plotNo,
+          buildOrder: cleaned.buildOrder,
+          stage9CompleteWeek: cleaned.stage9CompleteWeek,
+          templateId: cleaned.templateId,
+          houseTypeId: cleaned.houseTypeId,
+          constructionMethod: cleaned.constructionMethod,
+        };
     nextPlots = existing ? nextPlots.map((plot) => (plot.id === existing.id ? nextPlot : plot)) : [...nextPlots, nextPlot];
   });
   return getSortedSitePlots(nextPlots);
@@ -405,12 +441,15 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
     await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(nextSetup));
   };
 
-  const addPlotTemplate = async (input: { name: string; houseTypeCode: string; baseTemplateId?: string }) => {
-    const baseTemplate = plotTemplates.find((template) => template.id === input.baseTemplateId) ?? plotTemplates.find((template) => template.id === 'threeBed') ?? plotTemplates[0];
+  const addPlotTemplate = async (input: { name: string; bedrooms: number; floors: number; baseTemplateId?: string }) => {
+    const baseTemplate = plotTemplates.find((template) => template.id === input.baseTemplateId)
+      ?? plotTemplates.find((template) => template.id === 'threeBed')
+      ?? plotTemplates[0];
     const nextTemplate = createHouseTypeTemplate({ ...input, baseTemplate });
     const nextTemplates = [...plotTemplates, nextTemplate];
     setPlotTemplates(nextTemplates);
     await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(nextTemplates));
+    return nextTemplate;
   };
 
   const updatePlotTemplate = async (input: PlotTemplate) => {
