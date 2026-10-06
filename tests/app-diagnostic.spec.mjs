@@ -123,6 +123,73 @@ test('site setup: create a named 3-storey house type and add the automatic struc
   await expect(page.getByText('5th lift scaffold', { exact: true })).toBeVisible();
 });
 
+test('site setup: four bedroom house type uses the agreed four bedroom programme', async ({ page }) => {
+  await goto(page, '/site/setup');
+  await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Four Bed QA');
+
+  const bedroomsLabel = page.getByText('Bedrooms', { exact: true }).first();
+  const bedroomPicker = bedroomsLabel.locator('xpath=..');
+  await bedroomPicker.getByText('4', { exact: true }).click();
+
+  await page.getByText('Create House Type', { exact: true }).click();
+  await expect(page.getByText('Four Bed QA', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Substructure', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('QA Drainage', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('NHBC Drainage', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Groundwork Externals', { exact: true }).first()).toBeVisible();
+
+  await page.getByText('Edit House Type', { exact: true }).click();
+  const foundationRow = page.getByDisplayValue('Foundations').locator('xpath=..');
+  const substructureRow = page.getByDisplayValue('Substructure').locator('xpath=..');
+  const decorationRow = page.getByDisplayValue('Decoration').locator('xpath=..');
+  expect(await foundationRow.locator('input').last().inputValue()).toBe('5');
+  expect(await substructureRow.locator('input').last().inputValue()).toBe('5');
+  expect(await decorationRow.locator('input').last().inputValue()).toBe('7');
+});
+
+test('site setup: three storey four bed adds extra structure and fix days', async ({ page }) => {
+  await goto(page, '/site/setup');
+  await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Three Storey QA');
+
+  const bedroomsLabel = page.getByText('Bedrooms', { exact: true }).first();
+  await bedroomsLabel.locator('xpath=..').getByText('4', { exact: true }).click();
+  const storeysLabel = page.getByText('Storeys', { exact: true }).first();
+  await storeysLabel.locator('xpath=..').getByText('3', { exact: true }).click();
+
+  await page.getByText('Create House Type', { exact: true }).click();
+  await expect(page.getByText('2nd floor joists and flooring', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('4th lift brickwork', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('4th lift scaffold', { exact: true }).first()).toBeVisible();
+
+  await page.getByText('Edit House Type', { exact: true }).click();
+  const firstCarpRow = page.getByDisplayValue('1st Fix Carp').locator('xpath=..');
+  const firstPlumbRow = page.getByDisplayValue('1st fix plumbing').locator('xpath=..');
+  const firstElecRow = page.getByDisplayValue('1st fix electrics').locator('xpath=..');
+  const secondCarpRow = page.getByDisplayValue('2nd fix carpentry').locator('xpath=..');
+  expect(await firstCarpRow.locator('input').last().inputValue()).toBe('4');
+  expect(await firstPlumbRow.locator('input').last().inputValue()).toBe('3');
+  expect(await firstElecRow.locator('input').last().inputValue()).toBe('3');
+  expect(await secondCarpRow.locator('input').last().inputValue()).toBe('4');
+});
+
+test('feedback: accepts pasted screenshots and offers file attachment', async ({ page }) => {
+  await goto(page, '/site/setup');
+  await page.getByRole('button', { name: 'Send feedback' }).click();
+  await expect(page.getByText(/Paste a screen grab with Ctrl\+V/i)).toBeVisible();
+  await expect(page.getByText('Add screenshot', { exact: true })).toBeVisible();
+
+  await page.evaluate(() => {
+    const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2n6sAAAAASUVORK5CYII='), (char) => char.charCodeAt(0));
+    const file = new File([bytes], 'clipboard.png', { type: 'image/png' });
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true }));
+  });
+
+  await expect(page.getByText('Screenshot attached.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Remove', { exact: true })).toBeVisible();
+});
+
 test('site setup: named house type uses explicit edit and save workflow', async ({ page }) => {
   await goto(page, '/site/setup');
   await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Linngate QA');
