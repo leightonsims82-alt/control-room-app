@@ -322,7 +322,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           if (houseTypesReset !== 'done') {
             await AsyncStorage.setItem(HOUSE_TYPES_RESET_KEY, 'done');
           }
-          const migratedSiteSetup = { ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup, programmeStartDate: getProgrammeStartDateValue(storedSiteSetup.programmeStartDate) };
+          const migratedSiteSetup = { ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup, stageCount: 9, programmeStartDate: getProgrammeStartDateValue(storedSiteSetup.programmeStartDate) };
           setSiteSetupState(migratedSiteSetup);
           await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(migratedSiteSetup));
         }
@@ -467,7 +467,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   };
 
   const updateSiteSetup = async (input: Partial<SiteProgrammeSetup>) => {
-    const nextSetup = { ...siteSetup, ...input };
+    const nextSetup = { ...siteSetup, ...input, stageCount: 9 };
     setSiteSetupState(nextSetup);
     await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(nextSetup));
   };
