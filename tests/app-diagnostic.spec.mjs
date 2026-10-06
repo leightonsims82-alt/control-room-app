@@ -20,6 +20,19 @@ async function goto(page, route) {
   await expect(page.locator('body')).not.toContainText('Uncaught Error');
 }
 
+async function inputWithValue(page, value) {
+  const inputs = page.locator('input');
+  const index = await inputs.evaluateAll((nodes, expected) => {
+    let found = -1;
+    nodes.forEach((node, itemIndex) => {
+      if (node.value === expected) found = itemIndex;
+    });
+    return found;
+  }, value);
+  expect(index, `Input with value "${value}" was not found`).toBeGreaterThanOrEqual(0);
+  return inputs.nth(index);
+}
+
 test.afterAll(async () => {
   fs.mkdirSync('diagnostics', { recursive: true });
   fs.writeFileSync('diagnostics/browser-button-inventory.json', JSON.stringify(inventory, null, 2));
@@ -105,7 +118,7 @@ test('site setup: create a named 3-storey house type and add the automatic struc
 
   await expect(page.getByText('3 Bedroom', { exact: true })).toHaveCount(0);
   await expect(page.getByText('4 Bedroom', { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/Site-standard programme locked/i)).toBeVisible();
+  await expect(page.getByText(/Standard programmes protected/i)).toBeVisible();
 
   const name = page.getByPlaceholder('e.g. Warrley or Linngate');
   await expect(name).toBeVisible();
@@ -121,6 +134,73 @@ test('site setup: create a named 3-storey house type and add the automatic struc
   await expect(page.getByText('2nd floor joists and flooring', { exact: true })).toBeVisible();
   await expect(page.getByText('5th lift brickwork', { exact: true })).toBeVisible();
   await expect(page.getByText('5th lift scaffold', { exact: true })).toBeVisible();
+});
+
+test('site setup: four bedroom house type uses the agreed four bedroom programme', async ({ page }) => {
+  await goto(page, '/site/setup');
+  await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Four Bed QA');
+
+  const bedroomsLabel = page.getByText('Bedrooms', { exact: true }).first();
+  const bedroomPicker = bedroomsLabel.locator('xpath=..');
+  await bedroomPicker.getByText('4', { exact: true }).click();
+
+  await page.getByText('Create House Type', { exact: true }).click();
+  await expect(page.getByText('Four Bed QA', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Substructure', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('QA Drainage', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('NHBC Drainage', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Groundwork Externals', { exact: true }).first()).toBeVisible();
+
+  await page.getByText('Edit House Type', { exact: true }).click();
+  const foundationRow = (await inputWithValue(page, 'Foundations')).locator('xpath=..');
+  const substructureRow = (await inputWithValue(page, 'Substructure')).locator('xpath=..');
+  const decorationRow = (await inputWithValue(page, 'Decoration')).locator('xpath=..');
+  expect(await foundationRow.locator('input').last().inputValue()).toBe('5');
+  expect(await substructureRow.locator('input').last().inputValue()).toBe('5');
+  expect(await decorationRow.locator('input').last().inputValue()).toBe('7');
+});
+
+test('site setup: three storey four bed adds extra structure and fix days', async ({ page }) => {
+  await goto(page, '/site/setup');
+  await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Three Storey QA');
+
+  const bedroomsLabel = page.getByText('Bedrooms', { exact: true }).first();
+  await bedroomsLabel.locator('xpath=..').getByText('4', { exact: true }).click();
+  const storeysLabel = page.getByText('Storeys', { exact: true }).first();
+  await storeysLabel.locator('xpath=..').getByText('3', { exact: true }).click();
+
+  await page.getByText('Create House Type', { exact: true }).click();
+  await expect(page.getByText('2nd floor joists and flooring', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('4th lift brickwork', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('4th lift scaffold', { exact: true }).first()).toBeVisible();
+
+  await page.getByText('Edit House Type', { exact: true }).click();
+  const firstCarpRow = (await inputWithValue(page, '1st Fix Carp')).locator('xpath=..');
+  const firstPlumbRow = (await inputWithValue(page, '1st fix plumbing')).locator('xpath=..');
+  const firstElecRow = (await inputWithValue(page, '1st fix electrics')).locator('xpath=..');
+  const secondCarpRow = (await inputWithValue(page, '2nd fix carpentry')).locator('xpath=..');
+  expect(await firstCarpRow.locator('input').last().inputValue()).toBe('4');
+  expect(await firstPlumbRow.locator('input').last().inputValue()).toBe('3');
+  expect(await firstElecRow.locator('input').last().inputValue()).toBe('3');
+  expect(await secondCarpRow.locator('input').last().inputValue()).toBe('4');
+});
+
+test('feedback: accepts pasted screenshots and offers file attachment', async ({ page }) => {
+  await goto(page, '/site/setup');
+  await page.getByRole('button', { name: 'Send feedback' }).click();
+  await expect(page.getByText(/Paste a screen grab with Ctrl\+V/i)).toBeVisible();
+  await expect(page.getByText('Add screenshot', { exact: true })).toBeVisible();
+
+  await page.evaluate(() => {
+    const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2n6sAAAAASUVORK5CYII='), (char) => char.charCodeAt(0));
+    const file = new File([bytes], 'clipboard.png', { type: 'image/png' });
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true }));
+  });
+
+  await expect(page.getByText('Screenshot attached.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Remove', { exact: true })).toBeVisible();
 });
 
 test('site setup: named house type uses explicit edit and save workflow', async ({ page }) => {
@@ -144,28 +224,23 @@ test('site setup: activity up and down arrows really reorder fixes', async ({ pa
   await page.getByText('Create House Type', { exact: true }).click();
   await page.getByText('Edit House Type', { exact: true }).click();
 
-  const foundation = page.getByDisplayValue('Foundation');
-  const drainage = page.getByDisplayValue('Drainage');
+  const foundation = await inputWithValue(page, 'Foundation');
   await expect(foundation).toBeVisible();
-  await expect(drainage).toBeVisible();
 
   const beforeFoundation = await foundation.boundingBox();
-  const beforeDrainage = await drainage.boundingBox();
-  expect(beforeFoundation?.y ?? 0).toBeLessThan(beforeDrainage?.y ?? 0);
+  expect(beforeFoundation).not.toBeNull();
 
   const foundationRow = foundation.locator('xpath=..');
   await foundationRow.getByText('↓', { exact: true }).click();
 
-  const movedFoundation = await foundation.boundingBox();
-  const movedDrainage = await drainage.boundingBox();
-  expect(movedFoundation?.y ?? 0).toBeGreaterThan(movedDrainage?.y ?? 0);
+  const movedFoundation = await (await inputWithValue(page, 'Foundation')).boundingBox();
+  expect(movedFoundation?.y ?? 0).toBeGreaterThan(beforeFoundation?.y ?? 0);
 
-  const movedFoundationRow = foundation.locator('xpath=..');
+  const movedFoundationRow = (await inputWithValue(page, 'Foundation')).locator('xpath=..');
   await movedFoundationRow.getByText('↑', { exact: true }).click();
 
-  const restoredFoundation = await foundation.boundingBox();
-  const restoredDrainage = await drainage.boundingBox();
-  expect(restoredFoundation?.y ?? 0).toBeLessThan(restoredDrainage?.y ?? 0);
+  const restoredFoundation = await (await inputWithValue(page, 'Foundation')).boundingBox();
+  expect(restoredFoundation?.y ?? 0).toBeLessThan(movedFoundation?.y ?? 0);
 });
 
 test('master: named house type and construction route are separate selections', async ({ page }) => {

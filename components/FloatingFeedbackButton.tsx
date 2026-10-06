@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { usePathname } from 'expo-router';
-import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { submitSiteProgFeedback, SiteProgFeedbackCategory } from '../lib/feedback';
 import { siteprogTheme } from '../theme/siteprogTheme';
 
@@ -14,14 +14,67 @@ export function FloatingFeedbackButton() {
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState('');
   const [sending, setSending] = useState(false);
+  const [screenshotDataUrl, setScreenshotDataUrl] = useState('');
+  const [screenshotName, setScreenshotName] = useState('');
+
+  const loadScreenshotFile = (file: any) => {
+    if (!file) return;
+    if (!String(file.type || '').startsWith('image/')) {
+      setStatus('Please choose an image file.');
+      return;
+    }
+    if (Number(file.size || 0) > 5 * 1024 * 1024) {
+      setStatus('Screenshot is too large. Please use an image under 5 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      if (!result.startsWith('data:image/')) {
+        setStatus('Unable to read that screenshot.');
+        return;
+      }
+      setScreenshotDataUrl(result);
+      setScreenshotName(file.name || 'Pasted screenshot');
+      setStatus('Screenshot attached.');
+    };
+    reader.onerror = () => setStatus('Unable to read that screenshot.');
+    reader.readAsDataURL(file);
+  };
+
+  const chooseScreenshot = () => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      setStatus('Screenshot upload is currently available in the web app.');
+      return;
+    }
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/webp';
+    input.onchange = () => loadScreenshotFile(input.files?.[0]);
+    input.click();
+  };
+
+  useEffect(() => {
+    if (!open || Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const onPaste = (event: ClipboardEvent) => {
+      const items = Array.from(event.clipboardData?.items ?? []);
+      const imageItem = items.find((item) => item.type.startsWith('image/'));
+      const file = imageItem?.getAsFile();
+      if (file) loadScreenshotFile(file);
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [open]);
 
   const submit = async () => {
     setSending(true);
     setStatus('');
     try {
-      const result = await submitSiteProgFeedback({ page: pathname || '/', category, message });
+      const result = await submitSiteProgFeedback({ page: pathname || '/', category, message, screenshotDataUrl: screenshotDataUrl || undefined });
       setStatus(result.synced ? 'Feedback sent — thank you.' : 'Saved on this device and will be available locally.');
       setMessage('');
+      setScreenshotDataUrl('');
+      setScreenshotName('');
       setTimeout(() => {
         setOpen(false);
         setStatus('');
@@ -88,6 +141,31 @@ export function FloatingFeedbackButton() {
               autoFocus
               style={styles.input}
             />
+
+            <View style={styles.screenshotPanel}>
+              <View style={styles.screenshotHeader}>
+                <View style={styles.screenshotCopy}>
+                  <Text style={styles.screenshotTitle}>Screenshot</Text>
+                  <Text style={styles.screenshotHint}>Paste a screen grab with Ctrl+V, or choose an image file.</Text>
+                </View>
+                <Pressable onPress={chooseScreenshot} style={styles.attachmentButton}>
+                  <Ionicons name="image-outline" size={17} color={siteprogTheme.colors.blueDark} />
+                  <Text style={styles.attachmentButtonText}>Add screenshot</Text>
+                </Pressable>
+              </View>
+              {screenshotDataUrl ? (
+                <View style={styles.previewWrap}>
+                  <Image source={{ uri: screenshotDataUrl }} resizeMode="contain" style={styles.previewImage} />
+                  <View style={styles.previewMeta}>
+                    <Text numberOfLines={1} style={styles.previewName}>{screenshotName || 'Screenshot attached'}</Text>
+                    <Pressable onPress={() => { setScreenshotDataUrl(''); setScreenshotName(''); setStatus('Screenshot removed.'); }} style={styles.removeAttachmentButton}>
+                      <Ionicons name="trash-outline" size={15} color="#b91c1c" />
+                      <Text style={styles.removeAttachmentText}>Remove</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
+            </View>
 
             {status ? <Text style={styles.status}>{status}</Text> : null}
 
@@ -175,6 +253,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  screenshotPanel: { borderWidth: 1, borderColor: siteprogTheme.colors.border, borderRadius: 14, padding: 12, gap: 10, backgroundColor: '#FBFCFF' },
+  screenshotHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' },
+  screenshotCopy: { flex: 1, minWidth: 220 },
+  screenshotTitle: { color: siteprogTheme.colors.text, fontSize: 13, fontWeight: '900' },
+  screenshotHint: { color: siteprogTheme.colors.muted, fontSize: 11, marginTop: 2, lineHeight: 16 },
+  attachmentButton: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: siteprogTheme.colors.border, borderRadius: siteprogTheme.radius.pill, backgroundColor: '#ffffff', paddingHorizontal: 12, paddingVertical: 9 },
+  attachmentButtonText: { color: siteprogTheme.colors.blueDark, fontWeight: '900', fontSize: 12 },
+  previewWrap: { gap: 8 },
+  previewImage: { width: '100%', height: 180, borderRadius: 10, backgroundColor: '#eef2f7' },
+  previewMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  previewName: { flex: 1, color: siteprogTheme.colors.muted, fontSize: 11, fontWeight: '700' },
+  removeAttachmentButton: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 6 },
+  removeAttachmentText: { color: '#b91c1c', fontSize: 11, fontWeight: '900' },
   status: { color: siteprogTheme.colors.blueDark, fontSize: 12, fontWeight: '800' },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 9, flexWrap: 'wrap' },
   cancelButton: { borderRadius: siteprogTheme.radius.pill, borderWidth: 1, borderColor: siteprogTheme.colors.border, paddingHorizontal: 15, paddingVertical: 10 },
