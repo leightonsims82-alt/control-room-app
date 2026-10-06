@@ -236,15 +236,15 @@ test('site setup: activity up and down arrows really reorder fixes', async ({ pa
   const foundationRow = foundation.locator('xpath=..');
   await foundationRow.getByText('↓', { exact: true }).click();
 
-  const movedFoundation = await foundation.boundingBox();
-  const movedSlab = await slab.boundingBox();
+  const movedFoundation = await (await inputWithValue(page, 'Foundation')).boundingBox();
+  const movedSlab = await (await inputWithValue(page, 'Slab')).boundingBox();
   expect(movedFoundation?.y ?? 0).toBeGreaterThan(movedSlab?.y ?? 0);
 
-  const movedFoundationRow = foundation.locator('xpath=..');
+  const movedFoundationRow = (await inputWithValue(page, 'Foundation')).locator('xpath=..');
   await movedFoundationRow.getByText('↑', { exact: true }).click();
 
-  const restoredFoundation = await foundation.boundingBox();
-  const restoredSlab = await slab.boundingBox();
+  const restoredFoundation = await (await inputWithValue(page, 'Foundation')).boundingBox();
+  const restoredSlab = await (await inputWithValue(page, 'Slab')).boundingBox();
   expect(restoredFoundation?.y ?? 0).toBeLessThan(restoredSlab?.y ?? 0);
 });
 
