@@ -19,7 +19,7 @@ const TRADE_COLOURS = ['#334155', '#B45309', '#15803D', '#9A3412', '#7C3AED', '#
 type TradeMode = 'setup' | 'programme';
 
 function normaliseWeek(week: number) {
-  return ((((Math.round(week) - 1) % 52) + 52) % 52) + 1;
+  return Math.max(1, Math.round(week));
 }
 
 function buildDays(startWeek: number, programmeStartDate: string) {
