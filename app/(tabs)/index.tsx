@@ -10,14 +10,6 @@ import { buildCanonicalQaPlots, canonicalEvidenceBelongsToPlot, findCanonicalQaP
 import { getCurrentProgrammeWeek, parseProgrammeDate } from '../../utils/programmeDates';
 import { getActivitiesForTemplateDay } from '../../utils/templateProgramme';
 
-function dateOnly(value: Date) {
-  return value.toISOString().slice(0, 10);
-}
-
-function normalisePlotName(value: string) {
-  return value.toLowerCase().replace(/^plot\s*/i, '').trim();
-}
-
 type Tone = 'blue' | 'green' | 'red' | 'amber' | 'slate' | 'violet';
 type DashboardMetricKey =
   | 'plots'
