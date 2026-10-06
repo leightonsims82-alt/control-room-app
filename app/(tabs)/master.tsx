@@ -430,7 +430,7 @@ export default function MasterProgrammeScreen() {
                   <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.floors ?? '-'}</Text>
                   <Text style={[styles.holdBodyCell, styles.holdCell, plot.holdStage ? styles.holdBodyCellActive : null]}>{getPlotHoldLabel(plot)}</Text>
                   <Text style={[styles.stageStartBody, styles.weekInputCell]}>{formatCalendarWeek(siteSetup.programmeStartDate, getStage1StartWeekForPlot(plot, plotTemplates, siteSetup), siteSetup.calendarWeekOne)}</Text>
-                  <Text style={[styles.weekInputBody, styles.completionCell]}>{formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
+                  <Text style={[styles.weekInputBody, styles.completionCell]}>{metadata?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
                   {visibleWeeks.map((week) => {
                     const stage = getStageDisplayForWeek(plot, week);
                     const heldStageCell = String(stage).includes('H');
