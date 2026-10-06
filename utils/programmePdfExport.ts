@@ -4,6 +4,7 @@ import {
   getActivitiesForTemplateDay,
   getMilestoneForPlotWeek,
   getStage1StartWeekForPlot,
+  getHouseTypeTemplates,
   getTemplateForPlot,
   normaliseProgrammeWeek,
   PlotTemplate,
@@ -96,12 +97,13 @@ export function exportMainTwoWeekPdf(input: { siteName: string; programmeStartDa
   const headerDays = `<tr><th>Plot</th><th>House Type</th>${windowDays.map((item) => `<th>${item.dayName}<br/><span class="small">${item.date}</span></th>`).join('')}</tr>`;
   const rows = input.plots.map((plot) => {
     const template = getTemplateForPlot(plot, input.templates);
+    const houseType = getHouseTypeTemplates(input.templates).find((item) => item.id === (plot.houseTypeId ?? plot.templateId));
     const cells = windowDays.map((item) => {
       const text = item.weekend ? '' : cellActivities(plot, item.week, item.day, input.delays, input.templates);
       const cls = item.weekend ? 'weekend' : text ? 'planned' : '';
       return `<td class="${cls}">${text}</td>`;
     }).join('');
-    return `<tr><td>${escapeHtml(plot.plotNo)}</td><td>${escapeHtml(template.name)}</td>${cells}</tr>`;
+    return `<tr><td>${escapeHtml(plot.plotNo)}</td><td>${escapeHtml(houseType?.name ?? template.name)}</td>${cells}</tr>`;
   }).join('');
 
   return openPrintablePdf(
@@ -141,8 +143,9 @@ export function exportMasterProgrammePdf(input: { siteName: string; programmeSta
   const header = `<tr><th style="width:55px">Plot</th><th style="width:80px">House</th><th style="width:85px">Plot Completion</th><th style="width:45px">Start</th>${WEEK_NUMBERS.map((week) => `<th>WK${String(week).padStart(2, '0')}<br/><span class="small">${formatProgrammeDate(input.programmeStartDate, week)}</span></th>`).join('')}</tr>`;
   const rows = input.plots.map((plot) => {
     const template = getTemplateForPlot(plot, input.templates);
+    const houseType = getHouseTypeTemplates(input.templates).find((item) => item.id === (plot.houseTypeId ?? plot.templateId));
     const weeks = WEEK_NUMBERS.map((week) => `<td>${escapeHtml(getMilestoneForPlotWeek(plot, week, input.templates))}</td>`).join('');
-    return `<tr><td>${escapeHtml(plot.plotNo)}</td><td>${escapeHtml(template.name)}</td><td>${escapeHtml(formatProgrammeDate(input.programmeStartDate, plot.stage9CompleteWeek))}</td><td>WK${escapeHtml(getStage1StartWeekForPlot(plot, input.templates))}</td>${weeks}</tr>`;
+    return `<tr><td>${escapeHtml(plot.plotNo)}</td><td>${escapeHtml(houseType?.name ?? template.name)}</td><td>${escapeHtml(formatProgrammeDate(input.programmeStartDate, plot.stage9CompleteWeek))}</td><td>WK${escapeHtml(getStage1StartWeekForPlot(plot, input.templates))}</td>${weeks}</tr>`;
   }).join('');
   return openPrintablePdf(
     `${input.siteName} Master Programme`,
