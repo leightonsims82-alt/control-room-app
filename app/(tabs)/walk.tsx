@@ -1,11 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useProgrammeData } from '../../data/programmeStore';
+import { useSitePlanner } from '../../data/sitePlannerStore';
 import { ChecklistAnswer } from '../../types/models';
-import { getActiveStage } from '../../utils/programmeLogic';
+import { buildCanonicalQaPlots, canonicalEvidenceBelongsToPlot } from '../../utils/canonicalQaProgramme';
+import { getCurrentProgrammeWeek } from '../../utils/programmeDates';
+import { getActivitiesForTemplateDay } from '../../utils/templateProgramme';
 
 const WALK_KEY = 'siteprog:8am-walk:v1';
 const WALK_NOTES_KEY = 'siteprog:8am-walk-notes:v1';
@@ -53,46 +56,83 @@ function blankItem(plotId: string, stageId?: string): WalkItem {
 }
 
 export default function WalkScreen() {
-  const { plotProgrammes, plotStages } = useProgrammeData();
+  const { plotProgrammes: legacyPlots } = useProgrammeData();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup } = useSitePlanner();
   const [items, setItems] = useState<WalkItem[]>([]);
+  const itemsRef = useRef<WalkItem[]>([]);
   const [walkNotes, setWalkNotes] = useState<WalkNote[]>([]);
+  const walkNotesRef = useRef<WalkNote[]>([]);
   const walkDate = today();
   const noteText = walkNotes.find((note) => note.walkDate === walkDate)?.notes ?? '';
+  const [siteNotesDraft, setSiteNotesDraft] = useState('');
+  const canonicalPlots = useMemo(
+    () => buildCanonicalQaPlots(sitePlots, plotTemplates, siteSetup, legacyPlots),
+    [sitePlots, plotTemplates, siteSetup, legacyPlots],
+  );
 
   useEffect(() => {
     async function load() {
       const [storedItems, storedNotes] = await Promise.all([AsyncStorage.getItem(WALK_KEY), AsyncStorage.getItem(WALK_NOTES_KEY)]);
-      setItems(storedItems ? (JSON.parse(storedItems) as WalkItem[]) : []);
-      setWalkNotes(storedNotes ? (JSON.parse(storedNotes) as WalkNote[]) : []);
+      const loadedItems = storedItems ? (JSON.parse(storedItems) as WalkItem[]) : [];
+      const loadedNotes = storedNotes ? (JSON.parse(storedNotes) as WalkNote[]) : [];
+      itemsRef.current = loadedItems;
+      walkNotesRef.current = loadedNotes;
+      setItems(loadedItems);
+      setWalkNotes(loadedNotes);
     }
     load();
   }, []);
 
+  useEffect(() => {
+    setSiteNotesDraft(noteText);
+  }, [noteText, walkDate]);
+
+
   async function saveItem(plotId: string, stageId: string | undefined, update: Partial<WalkItem>) {
-    const existing = items.find((item) => item.plotProgrammeId === plotId && item.walkDate === walkDate);
-    const updated = { ...(existing ?? blankItem(plotId, stageId)), ...update, updatedAt: new Date().toISOString() };
-    const nextItems = existing ? items.map((item) => (item.id === existing.id ? updated : item)) : [updated, ...items];
+    const current = itemsRef.current;
+    const canonical = canonicalPlots.find((plot) => plot.id === plotId);
+    const existing = current.find((item) => item.walkDate === walkDate && (
+      item.plotProgrammeId === plotId
+      || Boolean(canonical && canonicalEvidenceBelongsToPlot(canonical, item.plotProgrammeId))
+    ));
+    const updated = { ...(existing ?? blankItem(plotId, stageId)), plotProgrammeId: plotId, ...update, updatedAt: new Date().toISOString() };
+    const nextItems = existing ? current.map((item) => (item.id === existing.id ? updated : item)) : [updated, ...current];
+    itemsRef.current = nextItems;
     setItems(nextItems);
     await AsyncStorage.setItem(WALK_KEY, JSON.stringify(nextItems));
   }
 
   async function saveWalkNotes(notes: string) {
-    const existing = walkNotes.find((note) => note.walkDate === walkDate);
+    const current = walkNotesRef.current;
+    const existing = current.find((note) => note.walkDate === walkDate);
     const updated = { walkDate, notes, updatedAt: new Date().toISOString() };
-    const nextNotes = existing ? walkNotes.map((note) => (note.walkDate === walkDate ? updated : note)) : [updated, ...walkNotes];
+    const nextNotes = existing ? current.map((note) => (note.walkDate === walkDate ? updated : note)) : [updated, ...current];
+    walkNotesRef.current = nextNotes;
     setWalkNotes(nextNotes);
     await AsyncStorage.setItem(WALK_NOTES_KEY, JSON.stringify(nextNotes));
   }
 
   const rows = useMemo(() => {
-    return plotProgrammes
+    const now = new Date();
+    const programmeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
+    const utcDay = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())).getUTCDay();
+    const programmeDay = utcDay === 0 ? 7 : utcDay;
+    return sitePlots
       .map((plot) => {
-        const stage = getActiveStage(plot.id, plotStages) ?? plotStages.find((item) => item.plotProgrammeId === plot.id && item.status === 'In progress');
-        const saved = items.find((item) => item.plotProgrammeId === plot.id && item.walkDate === walkDate);
-        return { plot, stage, saved };
+        const activity = getActivitiesForTemplateDay(plot, programmeWeek, programmeDay, activityDelays, plotTemplates, siteSetup, activityMoves)[0];
+        const canonical = canonicalPlots.find((item) => item.id === plot.id);
+        const saved = items.find((item) => item.walkDate === walkDate && (
+          item.plotProgrammeId === plot.id
+          || Boolean(canonical && canonicalEvidenceBelongsToPlot(canonical, item.plotProgrammeId))
+        ));
+        return {
+          plot: { id: plot.id, plotName: `Plot ${plot.plotNo}`, phase: 'Live programme' },
+          stage: activity ? { id: activity.code, stageName: activity.displayText || activity.code, trade: activity.trade, status: 'In progress' as const } : undefined,
+          saved,
+        };
       })
-      .filter((row) => row.stage?.status === 'In progress');
-  }, [items, plotProgrammes, plotStages, walkDate]);
+      .filter((row) => Boolean(row.stage));
+  }, [items, sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, canonicalPlots, walkDate]);
 
   const completeCount = rows.filter((row) => row.saved?.complete).length;
   const issuesCount = rows.filter((row) => row.saved?.issueFound).length;
@@ -112,7 +152,7 @@ export default function WalkScreen() {
       </View>
 
       <SectionCard title="Site Notes" subtitle={`Walk date: ${walkDate}`}>
-        <TextInput style={[styles.input, styles.siteNotes]} defaultValue={noteText} placeholder="General site notes and actions" multiline onBlur={(event: any) => saveWalkNotes(event.nativeEvent.text)} />
+        <TextInput style={[styles.input, styles.siteNotes]} value={siteNotesDraft} onChangeText={setSiteNotesDraft} placeholder="General site notes and actions" multiline onBlur={() => saveWalkNotes(siteNotesDraft)} />
       </SectionCard>
 
       <SectionCard title="Plots in build" subtitle={`Walk date: ${walkDate}`}>
@@ -148,14 +188,20 @@ export default function WalkScreen() {
                 </Pressable>
               </View>
 
-              <TextInput style={[styles.input, styles.notes]} defaultValue={item.issueNotes} placeholder="Plot-specific issue or action" multiline onBlur={(event: any) => saveItem(plot.id, stage?.id, { issueNotes: event.nativeEvent.text, plotStageId: stage?.id })} />
-              <TextInput style={styles.input} defaultValue={item.actionOwner} placeholder="Action owner or trade" onBlur={(event: any) => saveItem(plot.id, stage?.id, { actionOwner: event.nativeEvent.text, plotStageId: stage?.id })} />
+              <DurableWalkInput value={item.issueNotes} style={[styles.input, styles.notes]} placeholder="Plot-specific issue or action" multiline onSave={(value) => saveItem(plot.id, stage?.id, { issueNotes: value, plotStageId: stage?.id })} />
+              <DurableWalkInput value={item.actionOwner} style={styles.input} placeholder="Action owner or trade" onSave={(value) => saveItem(plot.id, stage?.id, { actionOwner: value, plotStageId: stage?.id })} />
             </View>
           );
         })}
       </SectionCard>
     </AppScreen>
   );
+}
+
+function DurableWalkInput({ value, onSave, style, placeholder, multiline = false }: { value: string; onSave: (value: string) => void; style: any; placeholder: string; multiline?: boolean }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return <TextInput value={draft} onChangeText={setDraft} onBlur={() => onSave(draft)} style={style} placeholder={placeholder} multiline={multiline} />;
 }
 
 function AnswerRow({ label, value, onChange }: { label: string; value: ChecklistAnswer; onChange: (value: ChecklistAnswer) => void }) {
