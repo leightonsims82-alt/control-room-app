@@ -5,12 +5,14 @@ import { getProgrammeStartDateValue } from '../utils/programmeDates';
 import { ActivityDelay, ProgrammeStageNumber, TRADE_ORDER } from '../utils/siteProgrammeEngine';
 import {
   ActivityMove,
+  applyAgreedTraditionalStageSchedule,
   ConstructionMethod,
   createHouseTypeTemplate,
   DEFAULT_PLOT_TEMPLATES,
   DEFAULT_SITE_PROGRAMME_SETUP,
   getSortedSitePlots,
   isProgrammeStageNumber,
+  needsAgreedStageScheduleMigration,
   PlotTemplate,
   SiteProgrammeSetup,
   TemplateSitePlot,
@@ -191,12 +193,15 @@ const LEGACY_PROPERTY_TEMPLATE_IDS = new Set(['apartment', 'twoBed', 'fourBed', 
 function normaliseTemplate(template: PlotTemplate) {
   const isSystemTemplate = template.isSystemTemplate ?? (template.id === 'threeBed' || template.id === 'timberFrame');
   const isHouseType = template.isHouseType ?? (!isSystemTemplate && !LEGACY_PROPERTY_TEMPLATE_IDS.has(template.id));
-  return {
+  const normalised: PlotTemplate = {
     ...template,
     houseTypeCode: template.houseTypeCode || template.name,
     isSystemTemplate,
     isHouseType,
   };
+  return needsAgreedStageScheduleMigration(normalised)
+    ? applyAgreedTraditionalStageSchedule(normalised)
+    : normalised;
 }
 
 function mergeDefaultTemplates(stored: PlotTemplate[]) {
@@ -290,10 +295,14 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           setIssueSettingsState(storedIssueSettings);
           setIssueLogs(storedIssueLogs);
           setProgrammeNotes(storedNotes);
-          setPlotTemplates(mergeDefaultTemplates(storedTemplates));
+          const migratedTemplates = mergeDefaultTemplates(storedTemplates);
+          setPlotTemplates(migratedTemplates);
           const migratedSiteSetup = { ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup, programmeStartDate: getProgrammeStartDateValue(storedSiteSetup.programmeStartDate) };
           setSiteSetupState(migratedSiteSetup);
-          await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(migratedSiteSetup));
+          await Promise.all([
+            AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(migratedTemplates)),
+            AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(migratedSiteSetup)),
+          ]);
         }
       } catch (error) {
         console.warn('Unable to load site planner data', error);
