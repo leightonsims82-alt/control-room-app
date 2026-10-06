@@ -325,10 +325,11 @@ export function applyHouseTypeFloorConfiguration(template: PlotTemplate, floors:
     .filter((activity) => !activity.autoAddedForThreeStorey && !LEGACY_THREE_STOREY_AUTO_CODES.has(activity.code))
     .slice()
     .sort((a, b) => a.order - b.order)
-    .map((activity) => {
-      const baseDurationDays = activity.baseDurationDays ?? activity.durationDays;
-      return { ...activity, baseDurationDays, durationDays: baseDurationDays };
-    });
+    .map((activity) => ({
+      ...activity,
+      durationDays: activity.autoThreeStoreyFixDay ? Math.max(1, activity.durationDays - 1) : activity.durationDays,
+      autoThreeStoreyFixDay: false,
+    }));
 
   if (normalisedFloors !== 3) {
     return { ...template, floors: normalisedFloors, activities: reindexActivities(baseActivities) };
@@ -337,7 +338,7 @@ export function applyHouseTypeFloorConfiguration(template: PlotTemplate, floors:
   const roofTileOrder = baseActivities.find((activity) => activity.code.toLowerCase() === 'roof tile')?.order ?? Number.MAX_SAFE_INTEGER;
   const adjustedActivities = baseActivities.map((activity) =>
     shouldAddThreeStoreyFixDay(activity, roofTileOrder)
-      ? { ...activity, durationDays: (activity.baseDurationDays ?? activity.durationDays) + 1 }
+      ? { ...activity, durationDays: activity.durationDays + 1, autoThreeStoreyFixDay: true }
       : activity,
   );
 
