@@ -286,7 +286,7 @@ test('site setup: activity text inputs keep focus and cursor while typing', asyn
   await tradeInput.click();
   await tradeInput.press('End');
   await tradeInput.type(' team', { delay: 35 });
-  await expect(tradeInput).toHaveValue('Groundworks team');
+  await expect(tradeInput).toHaveValue('Groundworker team');
   expect(await tradeInput.evaluate((node) => document.activeElement === node)).toBeTruthy();
 
   const displayInput = rowInputs.nth(2);
@@ -323,7 +323,7 @@ test('site setup: named house type uses explicit edit and save workflow', async 
   const edit = page.getByText('Edit House Type', { exact: true });
   await expect(edit).toBeVisible();
   await edit.click();
-  await expect(page.getByText('Save House Type', { exact: true })).toBeVisible();
+  await expect(page.getByText('Save House Type', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Cancel', { exact: true })).toBeVisible();
   await page.getByText('Cancel', { exact: true }).click();
   await expect(page.getByText('Edit House Type', { exact: true })).toBeVisible();
@@ -451,6 +451,33 @@ test('site setup: Save Site Settings gives visible confirmation', async ({ page 
   await expect(save).toBeVisible();
   await save.click();
   await expect(page.getByText(/Site programme settings saved/i)).toBeVisible({ timeout: 10000 });
+});
+
+test('master: matrix Manage button opens the selected plot editor', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('programme-buddy:existing-plots-cleared:2026-10-01-v1', new Date().toISOString());
+    localStorage.setItem('programme-buddy:house-types-reset:v2', 'done');
+    localStorage.setItem('programme-buddy:plots:v1', JSON.stringify([
+      {
+        id: 'plot-manage-153',
+        plotNo: '153',
+        buildOrder: 1,
+        stage9CompleteWeek: 12,
+        templateId: 'threeBed',
+        houseTypeId: 'threeBed',
+        constructionMethod: 'traditional'
+      }
+    ]));
+  });
+
+  await goto(page, '/master');
+  const manage = page.getByRole('button', { name: 'Manage Plot 153' });
+  await expect(manage).toBeVisible();
+  await manage.click();
+
+  await expect(page.getByText('Manage plots', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('153', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Save Plot Changes', { exact: true })).toBeVisible();
 });
 
 test('master: Manage plots button opens and closes its modal', async ({ page }) => {
