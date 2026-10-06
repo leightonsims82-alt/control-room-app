@@ -66,7 +66,7 @@ export default function ExportsScreen() {
 
   const exportTradePdfPack = () => {
     const trades = tradeNamesWithEmails.length ? tradeNamesWithEmails : allTradeNames;
-    const opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, moves: activityMoves, templates: plotTemplates, trades });
+    const opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, moves: activityMoves, templates: plotTemplates, siteSetup, trades });
     setStatus(opened ? 'Trade PDF export opened — use Save as PDF in the print window' : 'Allow pop-ups to export PDF');
   };
 
