@@ -323,7 +323,7 @@ function shouldAddThreeStoreyFixDay(activity: TemplateActivity, roofTileOrder: n
 
 export function applyHouseTypeFloorConfiguration(template: PlotTemplate, floors: number): PlotTemplate {
   const normalisedFloors = Math.max(1, Math.min(3, Math.round(Number(floors) || 2)));
-  const baseActivities = template.activities
+  const baseActivities: TemplateActivity[] = template.activities
     .filter((activity) => !activity.autoAddedForThreeStorey && !LEGACY_THREE_STOREY_AUTO_CODES.has(activity.code))
     .slice()
     .sort((a, b) => a.order - b.order)
