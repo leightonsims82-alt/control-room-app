@@ -6,6 +6,9 @@ import { AppScreen } from '../../components/AppScreen';
 import { useProgrammeData } from '../../data/programmeStore';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { siteprogTheme } from '../../theme/siteprogTheme';
+import { buildCanonicalQaPlots, canonicalEvidenceBelongsToPlot, findCanonicalQaPlot } from '../../utils/canonicalQaProgramme';
+import { getCurrentProgrammeWeek, parseProgrammeDate } from '../../utils/programmeDates';
+import { getActivitiesForTemplateDay } from '../../utils/templateProgramme';
 
 function dateOnly(value: Date) {
   return value.toISOString().slice(0, 10);
@@ -37,46 +40,74 @@ type DrilldownRow = {
 };
 
 export default function DashboardScreen() {
-  const { plotProgrammes, plotStages, inspections, defects } = useProgrammeData();
-  const { sitePlots, tradeContacts, issueLogs, siteSetup } = useSitePlanner();
+  const { plotProgrammes, inspections, defects } = useProgrammeData();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, tradeContacts, issueLogs, siteSetup } = useSitePlanner();
+  const canonicalPlots = useMemo(
+    () => buildCanonicalQaPlots(sitePlots, plotTemplates, siteSetup, plotProgrammes),
+    [sitePlots, plotTemplates, siteSetup, plotProgrammes],
+  );
   const [selectedMetric, setSelectedMetric] = useState<DashboardMetricKey | null>(null);
 
   const metrics = useMemo(() => {
-    const totalPlots = Math.max(sitePlots.length, plotProgrammes.length);
-    const inProgressStages = plotStages.filter((stage) => stage.status === 'In progress');
-    const openActions = defects.filter((defect) => defect.status !== 'Verified fixed');
-    const verification = defects.filter((defect) => defect.status === 'Fixed awaiting verification');
-    const inspectionIssues = inspections.filter((inspection) =>
+    const canonicalDefects = defects.filter((defect) => canonicalPlots.some((plot) => canonicalEvidenceBelongsToPlot(plot, defect.plotProgrammeId)));
+    const canonicalInspections = inspections.filter((inspection) => canonicalPlots.some((plot) => canonicalEvidenceBelongsToPlot(plot, inspection.plotProgrammeId)));
+    const openActions = canonicalDefects.filter((defect) => defect.status !== 'Verified fixed');
+    const verification = canonicalDefects.filter((defect) => defect.status === 'Fixed awaiting verification');
+    const inspectionIssues = canonicalInspections.filter((inspection) =>
       ['Issues noted', 'Failed awaiting close out', 'Blocked'].includes(inspection.status),
     );
-    const today = dateOnly(new Date());
-    const horizon = new Date();
-    horizon.setDate(horizon.getDate() + 28);
-    const horizonDate = dateOnly(horizon);
-    const behindStages = plotStages.filter((stage) => stage.status !== 'Complete' && stage.endDate < today);
-    const plotsBehind = new Set(behindStages.map((stage) => stage.plotProgrammeId));
-    const heldProgrammes = plotProgrammes.filter((plot) => plot.holdStatus === 'On hold');
+
+    const now = new Date();
+    const currentProgrammeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
+    const utcDay = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())).getUTCDay();
+    const currentProgrammeDay = utcDay === 0 ? 7 : utcDay;
+    const inProgressStages = sitePlots.flatMap((plot) =>
+      getActivitiesForTemplateDay(plot, currentProgrammeWeek, currentProgrammeDay, activityDelays, plotTemplates, siteSetup, activityMoves)
+        .slice(0, 1)
+        .map((activity) => ({
+          id: `live-${plot.id}-${activity.code}`,
+          plotProgrammeId: plot.id,
+          stageName: activity.displayText || activity.code,
+          trade: activity.trade,
+        })),
+    );
+
+    const behindStages = sitePlots.flatMap((plot) => {
+      const movement = activityMoves
+        .filter((move) => move.plotId === plot.id)
+        .reduce((total, move) => total + move.deltaDays, 0);
+      if (movement <= 0) return [];
+      return [{
+        id: `behind-${plot.id}`,
+        plotProgrammeId: plot.id,
+        stageName: 'Live programme adjustment',
+        endDate: `+${movement} working day${movement === 1 ? '' : 's'}`,
+        delayDays: movement,
+      }];
+    });
     const heldSitePlots = sitePlots.filter((plot) => Boolean(plot.holdStage));
-    const heldNames = new Set([
-      ...heldProgrammes.map((plot) => normalisePlotName(plot.plotName)),
-      ...heldSitePlots.map((plot) => normalisePlotName(plot.plotNo)),
-    ]);
-    const handoversDue = plotProgrammes.filter((plot) => plot.endDate >= today && plot.endDate <= horizonDate);
+
+    const todayMs = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    const horizonMs = todayMs + 28 * 86400000;
+    const handoversDue = canonicalPlots
+      .map((plot) => ({ ...plot, endDate: plot.plotCompletionDate, parsed: parseProgrammeDate(plot.plotCompletionDate) }))
+      .filter((plot) => plot.parsed && plot.parsed.getTime() >= todayMs && plot.parsed.getTime() <= horizonMs);
+
     const sevenDaysAgo = Date.now() - (7 * 86400000);
     const overdueActions = openActions.filter((action) => new Date(action.createdAt).getTime() < sevenDaysAgo);
 
     const risks = [
       ...behindStages.slice(0, 4).map((stage) => {
-        const plot = plotProgrammes.find((item) => item.id === stage.plotProgrammeId);
+        const plot = canonicalPlots.find((item) => item.id === stage.plotProgrammeId);
         return {
-          id: `behind-${stage.id}`,
+          id: `risk-${stage.id}`,
           title: `${plot?.plotName ?? 'Plot'} is behind programme`,
-          text: `${stage.stageName} was due to finish ${stage.endDate}.`,
+          text: `Live programme has been pushed ${stage.endDate}.`,
           tone: 'red' as Tone,
         };
       }),
       ...inspectionIssues.slice(0, 3).map((inspection) => {
-        const plot = plotProgrammes.find((item) => item.id === inspection.plotProgrammeId);
+        const plot = findCanonicalQaPlot(canonicalPlots, inspection.plotProgrammeId);
         return {
           id: `inspection-${inspection.id}`,
           title: `${plot?.plotName ?? 'Plot'} has an inspection issue`,
@@ -85,7 +116,7 @@ export default function DashboardScreen() {
         };
       }),
       ...overdueActions.slice(0, 3).map((action) => {
-        const plot = plotProgrammes.find((item) => item.id === action.plotProgrammeId);
+        const plot = findCanonicalQaPlot(canonicalPlots, action.plotProgrammeId);
         return {
           id: `action-${action.id}`,
           title: `${plot?.plotName ?? 'Plot'} · ${action.trade}`,
@@ -96,26 +127,26 @@ export default function DashboardScreen() {
     ].slice(0, 6);
 
     return {
-      totalPlots,
+      totalPlots: canonicalPlots.length,
       inProgressStages,
       openActions,
       verification,
       inspectionIssues,
       behindStages,
-      plotsBehind: plotsBehind.size,
-      holds: heldNames.size,
-      heldProgrammes,
+      plotsBehind: behindStages.length,
+      holds: heldSitePlots.length,
+      heldProgrammes: [],
       heldSitePlots,
       handoversDue,
       overdueActions,
       risks,
     };
-  }, [sitePlots, plotProgrammes, plotStages, defects, inspections]);
+  }, [canonicalPlots, sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, defects, inspections]);
 
   const drilldown = useMemo(() => {
     if (!selectedMetric) return null;
 
-    const findPlot = (plotId: string) => plotProgrammes.find((plot) => plot.id === plotId);
+    const findPlot = (plotId: string) => canonicalPlots.find((plot) => plot.id === plotId) ?? findCanonicalQaPlot(canonicalPlots, plotId);
     const rowsForPlotIds = (
       plotIds: string[],
       getMeta: (plotId: string) => string,
@@ -132,23 +163,17 @@ export default function DashboardScreen() {
     });
 
     if (selectedMetric === 'plots') {
-      const programmeRows: DrilldownRow[] = plotProgrammes.map((plot) => ({
-        id: `plot-${plot.id}`,
-        title: plot.plotName,
-        meta: `${plot.startDate} to ${plot.endDate}${plot.holdStatus === 'On hold' ? ' · On hold' : ''}`,
-        plotId: plot.id,
-        tone: plot.holdStatus === 'On hold' ? 'amber' : 'blue',
-      }));
-      const programmeNames = new Set(plotProgrammes.map((plot) => normalisePlotName(plot.plotName)));
-      const setupOnlyRows: DrilldownRow[] = sitePlots
-        .filter((plot) => !programmeNames.has(normalisePlotName(plot.plotNo)))
-        .map((plot) => ({
-          id: `site-${plot.id}`,
-          title: `Plot ${plot.plotNo}`,
-          meta: plot.holdStage ? `Site programme · held at stage ${plot.holdStage}` : 'Site programme plot',
-          tone: plot.holdStage ? 'amber' : 'blue',
-        }));
-      return { title: 'All plots', subtitle: 'Every plot currently set up on this site.', rows: [...programmeRows, ...setupOnlyRows] };
+      const rows: DrilldownRow[] = canonicalPlots.map((plot) => {
+        const sitePlot = sitePlots.find((item) => item.id === plot.id);
+        return {
+          id: `plot-${plot.id}`,
+          title: plot.plotName,
+          meta: `${plot.plotStartDate || 'Derived start'} to ${plot.plotCompletionDate}${sitePlot?.holdStage ? ` · Held at stage ${sitePlot.holdStage}` : ''}`,
+          plotId: plot.id,
+          tone: sitePlot?.holdStage ? 'amber' : 'blue',
+        };
+      });
+      return { title: 'All plots', subtitle: 'Canonical plots currently set up on this site.', rows };
     }
 
     if (selectedMetric === 'liveStages') {
@@ -177,30 +202,17 @@ export default function DashboardScreen() {
     }
 
     if (selectedMetric === 'plotsOnHold') {
-      const rowsByName = new Map<string, DrilldownRow>();
-      metrics.heldProgrammes.forEach((plot) => {
-        rowsByName.set(normalisePlotName(plot.plotName), {
-          id: `hold-programme-${plot.id}`,
-          title: plot.plotName,
-          meta: plot.holdReason?.trim() || 'Programme hold active',
+      return {
+        title: 'Plots on hold',
+        subtitle: 'Canonical plots currently prevented from progressing.',
+        rows: metrics.heldSitePlots.map((plot) => ({
+          id: `hold-${plot.id}`,
+          title: `Plot ${plot.plotNo}`,
+          meta: `Held at stage ${plot.holdStage}${plot.holdReason ? ` · ${plot.holdReason}` : ''}`,
           plotId: plot.id,
-          tone: 'amber',
-        });
-      });
-      metrics.heldSitePlots.forEach((plot) => {
-        const key = normalisePlotName(plot.plotNo);
-        if (!rowsByName.has(key)) {
-          const matchingProgramme = plotProgrammes.find((item) => normalisePlotName(item.plotName) === key);
-          rowsByName.set(key, {
-            id: `hold-site-${plot.id}`,
-            title: `Plot ${plot.plotNo}`,
-            meta: `Held at stage ${plot.holdStage}${plot.holdReason ? ` · ${plot.holdReason}` : ''}`,
-            plotId: matchingProgramme?.id,
-            tone: 'amber',
-          });
-        }
-      });
-      return { title: 'Plots on hold', subtitle: 'Plots currently prevented from progressing.', rows: [...rowsByName.values()] };
+          tone: 'amber' as Tone,
+        })),
+      };
     }
 
     if (selectedMetric === 'openActions') {
@@ -278,7 +290,7 @@ export default function DashboardScreen() {
           tone: 'violet' as Tone,
         })),
     };
-  }, [selectedMetric, metrics, plotProgrammes, sitePlots, tradeContacts]);
+  }, [selectedMetric, metrics, canonicalPlots, sitePlots, tradeContacts]);
 
   const latestIssue = issueLogs[0];
   const selectMetric = (key: DashboardMetricKey) => setSelectedMetric((current) => current === key ? null : key);
@@ -399,7 +411,7 @@ export default function DashboardScreen() {
           {metrics.inProgressStages.length === 0 ? (
             <Text style={styles.emptyText}>No stages are currently marked In progress.</Text>
           ) : metrics.inProgressStages.slice(0, 6).map((stage) => {
-            const plot = plotProgrammes.find((item) => item.id === stage.plotProgrammeId);
+            const plot = canonicalPlots.find((item) => item.id === stage.plotProgrammeId);
             return (
               <View key={stage.id} style={styles.row}>
                 <View style={styles.rowMain}>
@@ -420,7 +432,7 @@ export default function DashboardScreen() {
           {metrics.openActions.length === 0 ? (
             <Text style={styles.emptyText}>No open trade actions. ✅</Text>
           ) : metrics.openActions.slice(0, 6).map((action) => {
-            const plot = plotProgrammes.find((item) => item.id === action.plotProgrammeId);
+            const plot = findCanonicalQaPlot(canonicalPlots, action.plotProgrammeId);
             return (
               <View key={action.id} style={styles.row}>
                 <View style={styles.rowMain}>
