@@ -20,6 +20,8 @@ export type TemplateActivity = ProgrammeActivity & {
   overlapLinkCode?: string;
   overlapStartFrom?: OverlapStartFrom;
   overlapLagDays?: number;
+  baseDurationDays?: number;
+  autoAddedForThreeStorey?: boolean;
 };
 
 export type PlotTemplate = {
@@ -112,6 +114,7 @@ function makeTemplate(id: string, name: string, description: string, programmeWe
     stageCount: 9,
     activities: BUILD_SEQUENCE.map((activity) => ({
       ...activity,
+      baseDurationDays: activity.durationDays,
       overlapAllowed: false,
       overlapStartFrom: 'start' as OverlapStartFrom,
       overlapLagDays: 0,
@@ -120,7 +123,78 @@ function makeTemplate(id: string, name: string, description: string, programmeWe
 }
 
 function templateActivity(order: number, code: string, trade: string, displayText: string, durationDays: number, stage: ProgrammeActivity['stage'], overlapAllowed = false, overlapLinkCode?: string, overlapStartFrom: OverlapStartFrom = 'start', overlapLagDays = 0): TemplateActivity {
-  return { order, code, trade, displayText, durationDays, relativeWeek: 1, relativeDay: 1, stage, overlapAllowed, overlapLinkCode, overlapStartFrom, overlapLagDays };
+  return { order, code, trade, displayText, durationDays, baseDurationDays: durationDays, relativeWeek: 1, relativeDay: 1, stage, overlapAllowed, overlapLinkCode, overlapStartFrom, overlapLagDays };
+}
+
+function makeFourBedroomStandardTemplate(): PlotTemplate {
+  return {
+    id: 'fourBedStandard',
+    name: '4 Bedroom Standard Programme',
+    description: 'Locked standard 4 bedroom programme supplied for this development.',
+    bedrooms: 4,
+    floors: 2,
+    isHouseType: false,
+    isSystemTemplate: true,
+    programmeWeeks: 25,
+    stageCount: 9,
+    activities: [
+      templateActivity(1, 'Foundations', 'Groundworker', 'Foundations', 5, 1),
+      templateActivity(2, 'Substructure', 'Groundworker', 'Substructure', 5, 1),
+      templateActivity(3, 'Drainage', 'Groundworker', 'Drainage', 5, 1),
+      templateActivity(4, 'QA Drainage', 'Site Team', 'QA Drainage', 1, 1),
+      templateActivity(5, 'NHBC Drainage', 'Site Team', 'NHBC Drainage', 1, 1),
+      templateActivity(6, 'Band Course', 'Groundworker', 'Band Course', 2, 2),
+      templateActivity(7, 'Slab Pour', 'Groundworker', 'Slab Pour', 5, 2),
+      templateActivity(8, 'QA Slab', 'Site Team', 'QA Slab', 2, 2),
+      templateActivity(9, '1st lift Brickwork', 'Bricklayer', '1st Lift', 7, 3),
+      templateActivity(10, 'Base Lift Scaffold', 'Scaffolder', 'Base Lift', 2, 3),
+      templateActivity(11, '2nd Lift Brickwork', 'Bricklayer', '2nd Lift', 3, 3),
+      templateActivity(12, '2nd Lift Scaffold', 'Scaffolder', '2nd Lift Scaffold', 2, 3),
+      templateActivity(13, 'Joist & Flooring', 'Carpenter', 'Joist & Flooring', 2, 3),
+      templateActivity(14, '3rd Lift Brickwork', 'Bricklayer', '3rd Lift', 7, 3),
+      templateActivity(15, '3rd & Bird Scaffold', 'Scaffolder', '3rd & Bird', 2, 3),
+      templateActivity(16, 'Wall Plate', 'Carpenter', 'Wall Plate', 2, 4),
+      templateActivity(17, 'Truss', 'Carpenter', 'Truss', 2, 5),
+      templateActivity(18, 'Gables', 'Bricklayer', 'Gables', 4, 5),
+      templateActivity(19, 'QA SS', 'Site Team', 'QA SS', 2, 5),
+      templateActivity(20, 'NHBC SS', 'Site Team', 'NHBC SS', 1, 5),
+      templateActivity(21, 'Felt and Batten', 'Roofer', 'Felt & Batten', 1, 5),
+      templateActivity(22, 'Solar PV', 'Solar Installer', 'Solar PV', 1, 5),
+      templateActivity(23, 'Roof tile', 'Roofer', 'Roof Tile', 2, 5),
+      templateActivity(24, 'Strip Scaffold', 'Scaffolder', 'Strip Scaffold', 1, 5),
+      templateActivity(25, '1st Fix Carp', 'Carpenter', '1st Fix Carp', 3, 6),
+      templateActivity(26, 'Windows', 'Window Fitter', 'Windows', 1, 6),
+      templateActivity(27, '1st fix plumbing', 'Plumber', '1st Fix Plumbing', 2, 6),
+      templateActivity(28, '1st fix electrics', 'Electrician', '1st Fix Electrics', 2, 6),
+      templateActivity(29, 'Cavity Blown Insulation', 'Insulation Installer', 'Cavity Insulation', 1, 6),
+      templateActivity(30, 'QA PP', 'Site Team', 'QA PP', 2, 6),
+      templateActivity(31, 'NHBC PP', 'Site Team', 'NHBC PP', 1, 6),
+      templateActivity(32, 'Plasterboard Tacking', 'Dry liner', 'Tacking', 2, 6),
+      templateActivity(33, 'Plasterboard Dabbing', 'Dry liner', 'Dabbing', 2, 6),
+      templateActivity(34, 'Plasterboard Taping', 'Dry liner', 'Taping', 4, 6),
+      templateActivity(35, 'Groundwork Externals', 'Groundworker', 'GW Externals', 3, 6),
+      templateActivity(36, 'Drying', 'Site Team', 'Drying', 3, 6, true, 'Groundwork Externals', 'start', 0),
+      templateActivity(37, 'Plasterboard Sand', 'Dry liner', 'Sand', 1, 6),
+      templateActivity(38, 'Mist Coat', 'Decorator', 'Mist Coat', 1, 6),
+      templateActivity(39, 'Loft insulation', 'Loft insulator', 'Loft Insulation', 1, 6),
+      templateActivity(40, '2nd fix carpentry', 'Carpenter', '2nd Fix Carp', 3, 7),
+      templateActivity(41, '2nd fix plumbing', 'Plumber', '2nd Fix Plumbing', 2, 7),
+      templateActivity(42, '2nd fix electrics', 'Electrician', '2nd Fix Electrics', 2, 7),
+      templateActivity(43, 'Kitchen Installation', 'Kitchen fitter', 'Kitchen', 1, 7),
+      templateActivity(44, 'Patch', 'Dry liner', 'Patch', 2, 8),
+      templateActivity(45, 'Pre Paint Clean', 'Cleaner', 'Pre Paint Clean', 1, 8),
+      templateActivity(46, 'Decoration', 'Decorator', 'Decoration', 7, 8),
+      templateActivity(47, 'Wall Tile', 'Tiler', 'Wall Tile', 1, 8),
+      templateActivity(48, 'Plumbing Finals', 'Plumber', 'Plumbing Finals', 2, 9),
+      templateActivity(49, 'Carpentry finals', 'Carpenter', 'Carpentry Finals', 1, 9),
+      templateActivity(50, 'Electrical finals inc PV', 'Electrician', 'Electrical Finals', 1, 9),
+      templateActivity(51, 'Appliances', 'Appliance fitter', 'Appliances', 1, 9),
+      templateActivity(52, 'Snag Patch', 'Dry liner', 'Snag Patch', 2, 9),
+      templateActivity(53, 'Dec Finals', 'Decorator', 'Dec Finals', 1, 9),
+      templateActivity(54, 'Build Clean', 'Cleaner', 'Build Clean', 1, 9),
+      templateActivity(55, 'Mastic', 'Mastic applicator', 'Mastic', 1, 9),
+    ],
+  };
 }
 
 function makeTimberFrameTemplate(): PlotTemplate {
@@ -192,6 +266,8 @@ const siteStandardTemplate: PlotTemplate = {
   isSystemTemplate: true,
 };
 
+const fourBedroomStandardTemplate = makeFourBedroomStandardTemplate();
+
 const timberFrameSystemTemplate: PlotTemplate = {
   ...makeTimberFrameTemplate(),
   isHouseType: false,
@@ -200,8 +276,13 @@ const timberFrameSystemTemplate: PlotTemplate = {
 
 export const DEFAULT_PLOT_TEMPLATES: PlotTemplate[] = [
   siteStandardTemplate,
+  fourBedroomStandardTemplate,
   timberFrameSystemTemplate,
 ];
+
+export function getStandardTemplateIdForBedrooms(bedrooms: number) {
+  return Math.round(Number(bedrooms)) === 4 ? 'fourBedStandard' : 'threeBed';
+}
 
 export const DEFAULT_TEMPLATE_PLOTS: TemplateSitePlot[] = [];
 
@@ -214,7 +295,7 @@ export function getPlotBuildOrder(plot: TemplateSitePlot, fallbackIndex = 0) { r
 export function getSortedSitePlots(plots: TemplateSitePlot[]) { return plots.slice().sort((a, b) => getPlotBuildOrder(a, 9999) - getPlotBuildOrder(b, 9999) || a.plotNo.localeCompare(b.plotNo, undefined, { numeric: true })); }
 export function getHouseTypeLabel(template: PlotTemplate) { return template.name.trim() || template.houseTypeCode?.trim() || 'House type'; }
 
-const THREE_STOREY_AUTO_CODES = new Set([
+const LEGACY_THREE_STOREY_AUTO_CODES = new Set([
   '2nd floor joists and flooring',
   '5th lift brickwork',
   '5th lift scaffold',
@@ -224,40 +305,77 @@ function reindexActivities(activities: TemplateActivity[]) {
   return activities.map((activity, index) => ({ ...activity, order: index + 1 }));
 }
 
+function ordinal(value: number) {
+  const mod100 = value % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${value}th`;
+  if (value % 10 === 1) return `${value}st`;
+  if (value % 10 === 2) return `${value}nd`;
+  if (value % 10 === 3) return `${value}rd`;
+  return `${value}th`;
+}
+
+function shouldAddThreeStoreyFixDay(activity: TemplateActivity, roofTileOrder: number) {
+  if (activity.order <= roofTileOrder) return false;
+  if (!['Carpenter', 'Plumber', 'Electrician'].includes(activity.trade)) return false;
+  return /fix|final/i.test(activity.code);
+}
+
 export function applyHouseTypeFloorConfiguration(template: PlotTemplate, floors: number): PlotTemplate {
   const normalisedFloors = Math.max(1, Math.min(3, Math.round(Number(floors) || 2)));
   const baseActivities = template.activities
-    .filter((activity) => !THREE_STOREY_AUTO_CODES.has(activity.code))
+    .filter((activity) => !activity.autoAddedForThreeStorey && !LEGACY_THREE_STOREY_AUTO_CODES.has(activity.code))
     .slice()
     .sort((a, b) => a.order - b.order)
-    .map((activity) => ({ ...activity }));
+    .map((activity) => {
+      const baseDurationDays = activity.baseDurationDays ?? activity.durationDays;
+      return { ...activity, baseDurationDays, durationDays: baseDurationDays };
+    });
 
   if (normalisedFloors !== 3) {
     return { ...template, floors: normalisedFloors, activities: reindexActivities(baseActivities) };
   }
 
-  const insertionAfter = baseActivities.findIndex((activity) => activity.code.toLowerCase().includes('4th lift scaffold'));
-  const fallbackAfter = baseActivities.findIndex((activity) => activity.code.toLowerCase().includes('4th lift brickwork'));
-  const trussIndex = baseActivities.findIndex((activity) => activity.code.toLowerCase() === 'truss');
-  const lastStructureIndex = Math.max(insertionAfter, fallbackAfter);
-  const insertAt = lastStructureIndex >= 0 ? lastStructureIndex + 1 : trussIndex >= 0 ? trussIndex : baseActivities.length;
+  const roofTileOrder = baseActivities.find((activity) => activity.code.toLowerCase() === 'roof tile')?.order ?? Number.MAX_SAFE_INTEGER;
+  const adjustedActivities = baseActivities.map((activity) =>
+    shouldAddThreeStoreyFixDay(activity, roofTileOrder)
+      ? { ...activity, durationDays: (activity.baseDurationDays ?? activity.durationDays) + 1 }
+      : activity,
+  );
+
+  const liftNumbers = adjustedActivities
+    .map((activity) => activity.code.match(/(\d+)(?:st|nd|rd|th)\s+lift\s+brickwork/i))
+    .filter((match): match is RegExpMatchArray => Boolean(match))
+    .map((match) => Number(match[1]))
+    .filter(Number.isFinite);
+  const nextLift = (liftNumbers.length ? Math.max(...liftNumbers) : 3) + 1;
+  const liftLabel = ordinal(nextLift);
+
+  const wallPlateIndex = adjustedActivities.findIndex((activity) => activity.code.toLowerCase() === 'wall plate');
+  const trussIndex = adjustedActivities.findIndex((activity) => activity.code.toLowerCase() === 'truss');
+  const insertAt = wallPlateIndex >= 0 ? wallPlateIndex : trussIndex >= 0 ? trussIndex : adjustedActivities.length;
+  const preceding = adjustedActivities[Math.max(0, insertAt - 1)];
+  const structureStage = (preceding?.stage ?? 3) as ProgrammeActivity['stage'];
 
   const extras: TemplateActivity[] = [
-    templateActivity(0, '2nd floor joists and flooring', 'Carpenter', '2F Joist', 2, 4),
-    templateActivity(0, '5th lift brickwork', 'Bricklayer', '5th BWK', 7, 4),
-    templateActivity(0, '5th lift scaffold', 'Scaffolder', '5th Scaff', 2, 4),
+    { ...templateActivity(0, '2nd floor joists and flooring', 'Carpenter', '2F Joist & Floor', 2, structureStage), autoAddedForThreeStorey: true },
+    { ...templateActivity(0, `${liftLabel} lift brickwork`, 'Bricklayer', `${liftLabel} Lift`, 7, structureStage), autoAddedForThreeStorey: true },
+    { ...templateActivity(0, `${liftLabel} lift scaffold`, 'Scaffolder', `${liftLabel} Scaffold`, 2, structureStage), autoAddedForThreeStorey: true },
   ];
 
-  const next = baseActivities.slice();
-  next.splice(insertAt < 0 ? next.length : insertAt, 0, ...extras);
+  const next = adjustedActivities.slice();
+  next.splice(insertAt, 0, ...extras);
   return { ...template, floors: normalisedFloors, activities: reindexActivities(next) };
 }
 
 export function createHouseTypeTemplate(input: { name: string; bedrooms: number; floors: number; baseTemplate?: PlotTemplate }): PlotTemplate {
-  const base = input.baseTemplate ?? DEFAULT_PLOT_TEMPLATES.find((template) => template.id === 'threeBed') ?? DEFAULT_PLOT_TEMPLATES[0];
   const name = input.name.trim();
   const bedrooms = Math.max(1, Math.min(8, Math.round(Number(input.bedrooms) || 3)));
   const floors = Math.max(1, Math.min(3, Math.round(Number(input.floors) || 2)));
+  const preferredBaseId = getStandardTemplateIdForBedrooms(bedrooms);
+  const base = input.baseTemplate
+    ?? DEFAULT_PLOT_TEMPLATES.find((template) => template.id === preferredBaseId)
+    ?? DEFAULT_PLOT_TEMPLATES.find((template) => template.id === 'threeBed')
+    ?? DEFAULT_PLOT_TEMPLATES[0];
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'house-type';
   const draft: PlotTemplate = {
     ...base,
