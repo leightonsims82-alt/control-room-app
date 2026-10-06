@@ -6,6 +6,13 @@ import { formatBritishDate, formatProgrammeDate, getProgrammeWeekForDate, parseP
 import { getPlotMetadataKey, PlotBuildRoute, readPlotMetadata, removePlotMetadata, savePlotMetadata } from '../utils/plotMetadata';
 import { getEffectiveProgrammeWeeks, getHouseTypeTemplates, getTemplateById } from '../utils/templateProgramme';
 
+type ManagePlotListener = (plotId: string) => void;
+const managePlotListeners = new Set<ManagePlotListener>();
+
+export function openMasterPlotManager(plotId: string) {
+  managePlotListeners.forEach((listener) => listener(plotId));
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 function shiftWeeks(value: string, weeks: number) {
   const date = parseProgrammeDate(value);
@@ -43,6 +50,19 @@ export function MasterPlotManager() {
     setVisible(true);
     if (sitePlots[0]) await loadPlot(selectedPlot?.id ?? sitePlots[0].id);
   };
+
+  useEffect(() => {
+    const listener: ManagePlotListener = (plotId) => {
+      setVisible(true);
+      loadPlot(plotId).catch((error) => {
+        setMessage(`Unable to open plot: ${String(error)}`);
+      });
+    };
+    managePlotListeners.add(listener);
+    return () => {
+      managePlotListeners.delete(listener);
+    };
+  });
 
   useEffect(() => {
     if (visible && selectedPlot && selectedPlot.id !== selectedId) loadPlot(selectedPlot.id).catch(() => undefined);
