@@ -21,6 +21,47 @@ export function formatBritishDate(date: Date) {
   return `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
 }
 
+export function getIsoCalendarWeek(date: Date) {
+  const working = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = working.getUTCDay() || 7;
+  working.setUTCDate(working.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(working.getUTCFullYear(), 0, 1));
+  return Math.ceil((((working.getTime() - yearStart.getTime()) / DAY_MS) + 1) / 7);
+}
+
+function getIsoCalendarWeekYear(date: Date) {
+  const working = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = working.getUTCDay() || 7;
+  working.setUTCDate(working.getUTCDate() + 4 - day);
+  return working.getUTCFullYear();
+}
+
+function getIsoWeekMonday(isoYear: number, isoWeek: number) {
+  const jan4 = new Date(Date.UTC(isoYear, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const weekOneMonday = new Date(jan4.getTime() - (jan4Day - 1) * DAY_MS);
+  return new Date(weekOneMonday.getTime() + (Math.max(1, Math.min(53, Math.round(isoWeek))) - 1) * 7 * DAY_MS);
+}
+
+export function getCalendarWeekForDate(value?: string) {
+  const date = parseProgrammeDate(value);
+  return date ? getIsoCalendarWeek(date) : undefined;
+}
+
+export function getCalendarWeekForProgrammeWeek(programmeStartDate: string | undefined, programmeWeek: number, calendarWeekOne?: number) {
+  const start = parseProgrammeDate(programmeStartDate) ?? parseProgrammeDate(DEFAULT_START_DATE)!;
+  if (!Number.isFinite(calendarWeekOne) || Number(calendarWeekOne) < 1 || Number(calendarWeekOne) > 53) {
+    return getIsoCalendarWeek(getProgrammeDate(programmeStartDate, programmeWeek));
+  }
+  const virtualStart = getIsoWeekMonday(getIsoCalendarWeekYear(start), Number(calendarWeekOne));
+  const virtualDate = new Date(virtualStart.getTime() + (Math.max(1, Math.round(programmeWeek)) - 1) * 7 * DAY_MS);
+  return getIsoCalendarWeek(virtualDate);
+}
+
+export function formatCalendarWeek(programmeStartDate: string | undefined, programmeWeek: number, calendarWeekOne?: number) {
+  return `WK${String(getCalendarWeekForProgrammeWeek(programmeStartDate, programmeWeek, calendarWeekOne)).padStart(2, '0')}`;
+}
+
 export function normaliseBritishDate(value?: string) {
   const date = parseProgrammeDate(value);
   return date ? formatBritishDate(date) : '';
@@ -60,9 +101,9 @@ export function validatePlotCompletionDate(programmeStartDate: string | undefine
   return '';
 }
 
-export function formatProgrammeDayHeader(programmeStartDate: string | undefined, week: number, dayName: string, day: number, compact = false) {
+export function formatProgrammeDayHeader(programmeStartDate: string | undefined, week: number, dayName: string, day: number, compact = false, calendarWeekOne?: number) {
   const date = formatProgrammeDate(programmeStartDate, week, day);
-  return compact ? `${dayName}\n${date}` : `WK${String(week).padStart(2, '0')} ${dayName}\n${date}`;
+  return compact ? `${dayName}\n${date}` : `${formatCalendarWeek(programmeStartDate, week, calendarWeekOne)} ${dayName}\n${date}`;
 }
 
 export function getCurrentProgrammeWeek(programmeStartDate: string | undefined) {
