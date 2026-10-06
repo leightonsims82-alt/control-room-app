@@ -11,7 +11,7 @@ const SCREEN_DAY_WIDTH = 82;
 const PRINT_DAY_WIDTH = 56;
 
 function normaliseWeek(week: number) {
-  return ((((Math.round(week) - 1) % 52) + 52) % 52) + 1;
+  return Math.max(1, Math.round(week));
 }
 
 function buildDays(startWeek: number, programmeStartDate: string) {
