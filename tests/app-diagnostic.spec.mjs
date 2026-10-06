@@ -203,6 +203,25 @@ test('feedback: accepts pasted screenshots and offers file attachment', async ({
   await expect(page.getByText('Remove', { exact: true })).toBeVisible();
 });
 
+test('site setup: changing a house type to four bedrooms loads the agreed four bedroom standard', async ({ page }) => {
+  await goto(page, '/site/setup');
+  await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Legacy Conversion QA');
+  await page.getByText('Create House Type', { exact: true }).click();
+  await page.getByText('Edit House Type', { exact: true }).click();
+
+  const editBedroomsLabel = page.getByText('Bedrooms', { exact: true }).last();
+  await editBedroomsLabel.locator('xpath=..').getByText('4', { exact: true }).click();
+
+  await expect(page.getByText('Substructure', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('QA Drainage', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('NHBC Drainage', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Groundwork Externals', { exact: true }).first()).toBeVisible();
+  await page.getByText('Save House Type', { exact: true }).click();
+
+  await expect(page.getByText('4', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Reset Programme to 4 Bedroom Standard', { exact: true })).toBeVisible();
+});
+
 test('site setup: named house type uses explicit edit and save workflow', async ({ page }) => {
   await goto(page, '/site/setup');
   await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Linngate QA');
