@@ -106,8 +106,7 @@ export default function MasterProgrammeScreen() {
   }, [holdPlotId, selectedResetPlotId, sortedPlots]);
 
   const getStageDisplayForWeek = (plot: (typeof sitePlots)[number], week: number) => {
-    const relativeWeek = week - getLinearStage1StartWeekForPlot(plot, plotTemplates, siteSetup) + 1;
-    const configuredStage = getConfiguredStageForRelativeWeek(stageDefinitions, relativeWeek);
+    const configuredStage = getConfiguredStageForProgrammeWeek(stageDefinitions, plot.stage9CompleteWeek, week);
     const stage = configuredStage?.stage;
     if (!stage) return '';
     if (!plot.holdStage || stage < plot.holdStage) return stage;
@@ -386,7 +385,7 @@ export default function MasterProgrammeScreen() {
         </Pressable>
       </SectionCard>
 
-      <SectionCard title="Master stage-number matrix" subtitle={`The first column is the current programme week. This programme uses ${stageDefinitions.length} stages.`}>
+      <SectionCard title="Master stage-number matrix" subtitle={`The final configured stage is anchored to each plot's completion week. This programme uses ${stageDefinitions.length} stages.`}>
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.tableRow}>
@@ -429,7 +428,7 @@ export default function MasterProgrammeScreen() {
                   <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.bedrooms ?? '-'}</Text>
                   <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.floors ?? '-'}</Text>
                   <Text style={[styles.holdBodyCell, styles.holdCell, plot.holdStage ? styles.holdBodyCellActive : null]}>{getPlotHoldLabel(plot)}</Text>
-                  <Text style={[styles.stageStartBody, styles.weekInputCell]}>{formatCalendarWeek(siteSetup.programmeStartDate, getStage1StartWeekForPlot(plot, plotTemplates, siteSetup), siteSetup.calendarWeekOne)}</Text>
+                  <Text style={[styles.stageStartBody, styles.weekInputCell]}>{formatCalendarWeek(siteSetup.programmeStartDate, getConfiguredStageProgrammeStartWeek(stageDefinitions, plot.stage9CompleteWeek), siteSetup.calendarWeekOne)}</Text>
                   <Text style={[styles.weekInputBody, styles.completionCell]}>{metadata?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
                   {visibleWeeks.map((week) => {
                     const stage = getStageDisplayForWeek(plot, week);
