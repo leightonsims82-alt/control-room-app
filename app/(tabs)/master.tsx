@@ -17,7 +17,8 @@ import {
 import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, validatePlotCompletionDate } from '../../utils/programmeDates';
 import {
   ConfiguredProgrammeStage,
-  getConfiguredStageForRelativeWeek,
+  getConfiguredStageForProgrammeWeek,
+  getConfiguredStageProgrammeStartWeek,
   readStageConfiguration,
 } from '../../utils/stageConfiguration';
 import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber } from '../../utils/siteProgrammeEngine';
@@ -25,12 +26,10 @@ import {
   getEffectiveProgrammeWeeks,
   getHouseTypeLabel,
   getHouseTypeTemplates,
-  getLinearStage1StartWeekForPlot,
   getPlotBuildOrder,
   getPlotHoldDetail,
   getPlotHoldLabel,
   getSortedSitePlots,
-  getStage1StartWeekForPlot,
   getTemplateById,
   getTemplateForPlot,
 } from '../../utils/templateProgramme';
