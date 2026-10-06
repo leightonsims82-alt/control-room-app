@@ -72,7 +72,7 @@ export default function MasterProgrammeScreen() {
   const selectedProgrammeWeeks = selectedProgrammeTemplate
     ? getEffectiveProgrammeWeeks(selectedProgrammeTemplate, siteSetup)
     : Math.max(1, siteSetup.defaultProgrammeWeeks || 23);
-  const nextCompletionWeek = (sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.stage9CompleteWeek)) : 22) + 1;
+  const nextCompletionWeek = (sitePlots.length ? Math.max(...sitePlots.map((plot) => getPlotCompletionProgrammeWeek(plot, siteSetup))) : 22) + 1;
   const nextCompletionHint = formatProgrammeDate(siteSetup.programmeStartDate, nextCompletionWeek);
   const nextStartHint = formatProgrammeDate(siteSetup.programmeStartDate, Math.max(1, nextCompletionWeek - selectedProgrammeWeeks + 1));
 
