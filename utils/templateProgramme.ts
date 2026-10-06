@@ -238,7 +238,9 @@ export function applyHouseTypeFloorConfiguration(template: PlotTemplate, floors:
 
   const insertionAfter = baseActivities.findIndex((activity) => activity.code.toLowerCase().includes('4th lift scaffold'));
   const fallbackAfter = baseActivities.findIndex((activity) => activity.code.toLowerCase().includes('4th lift brickwork'));
-  const insertAt = Math.max(insertionAfter, fallbackAfter) >= 0 ? Math.max(insertionAfter, fallbackAfter) + 1 : Math.max(0, baseActivities.findIndex((activity) => activity.code.toLowerCase() === 'truss'));
+  const trussIndex = baseActivities.findIndex((activity) => activity.code.toLowerCase() === 'truss');
+  const lastStructureIndex = Math.max(insertionAfter, fallbackAfter);
+  const insertAt = lastStructureIndex >= 0 ? lastStructureIndex + 1 : trussIndex >= 0 ? trussIndex : baseActivities.length;
 
   const extras: TemplateActivity[] = [
     templateActivity(0, '2nd floor joists and flooring', 'Carpenter', '2F Joist', 2, 4),
