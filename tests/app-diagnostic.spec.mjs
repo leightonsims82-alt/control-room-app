@@ -366,6 +366,52 @@ test('master: named house type and construction route are separate selections', 
   await expect(page.getByText('Property Size', { exact: true })).toHaveCount(0);
 });
 
+test('calendar weeks: Master uses ISO week numbers and Site Setup can override Week 1', async ({ page }) => {
+  const calendar = await page.evaluate(() => {
+    const now = new Date();
+    const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const day = utc.getUTCDay() || 7;
+    const monday = new Date(utc.getTime() - (day - 1) * 86400000);
+    const dd = String(monday.getUTCDate()).padStart(2, '0');
+    const mm = String(monday.getUTCMonth() + 1).padStart(2, '0');
+    const yyyy = monday.getUTCFullYear();
+
+    const working = new Date(monday.getTime());
+    const workingDay = working.getUTCDay() || 7;
+    working.setUTCDate(working.getUTCDate() + 4 - workingDay);
+    const yearStart = new Date(Date.UTC(working.getUTCFullYear(), 0, 1));
+    const isoWeek = Math.ceil((((working.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return { startDate: `${dd}/${mm}/${yyyy}`, isoWeek };
+  });
+
+  await page.addInitScript(({ startDate }) => {
+    localStorage.setItem('programme-buddy:programme-setup:v1', JSON.stringify({
+      siteName: 'Calendar QA',
+      defaultProgrammeWeeks: 25,
+      stageCount: 9,
+      workingWeek: '5 days - Monday to Friday',
+      includeSaturday: false,
+      includeSunday: false,
+      programmeStartDate: startDate,
+    }));
+  }, calendar);
+
+  await goto(page, '/master');
+  await expect(page.getByText(`WK${String(calendar.isoWeek).padStart(2, '0')}`, { exact: false }).first()).toBeVisible();
+
+  await goto(page, '/site/setup');
+  const calendarWeekField = page.getByText('Calendar week for Week 1', { exact: true }).locator('xpath=..').locator('input');
+  await expect(calendarWeekField).toHaveValue(String(calendar.isoWeek));
+  await calendarWeekField.fill('7');
+  await page.getByText('Save Site Settings', { exact: true }).click();
+
+  const storedWeek = await page.evaluate(() => JSON.parse(localStorage.getItem('programme-buddy:programme-setup:v1') || '{}').calendarWeekOne);
+  expect(storedWeek).toBe(7);
+
+  await goto(page, '/master');
+  await expect(page.getByText('WK07', { exact: false }).first()).toBeVisible();
+});
+
 test('master: legacy 11-stage data is migrated and only 9 stages are shown', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('programme-buddy:programme-setup:v1', JSON.stringify({
