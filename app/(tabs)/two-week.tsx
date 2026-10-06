@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
-import { formatProgrammeDate, getCurrentProgrammeWeek } from '../../utils/programmeDates';
+import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek } from '../../utils/programmeDates';
 import { getActivitiesForTemplateDay, getHouseTypeTemplates, getTemplateForPlot, isProgrammeWorkingDay, normaliseProgrammeWeek, orderedActivities, SiteProgrammeSetup, TemplateActivity, TemplateSitePlot } from '../../utils/templateProgramme';
 
 const PROGRAMME_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -15,7 +15,7 @@ const WEEK_WIDTH = DAY_WIDTH * 7;
 
 type ProgrammeRow = { plot: TemplateSitePlot; dailyActivities: TemplateActivity[][] };
 
-function formatWeekLabel(week: number) { return `WK${String(normaliseProgrammeWeek(week)).padStart(2, '0')}`; }
+function formatWeekLabel(week: number, siteSetup: SiteProgrammeSetup) { return formatCalendarWeek(siteSetup.programmeStartDate, week, siteSetup.calendarWeekOne); }
 function plotNoSortValue(plotNo: string) { const parsed = Number(plotNo.replace(/[^0-9.]/g, '')); return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER; }
 
 function getProgrammeDayFromAbsoluteIndex(absoluteDayIndex: number) {
@@ -141,7 +141,7 @@ export default function TwoWeekProgrammeScreen() {
       <View style={styles.controlPanel}>
         <View style={styles.weekControls}>
           <Pressable style={styles.weekButton} onPress={() => { setMoveMessage(''); setStartWeek((week) => normaliseProgrammeWeek(week - 1)); }}><Ionicons name="chevron-back" size={16} color="#ffffff" /><Text style={styles.weekButtonText}>Previous week</Text></Pressable>
-          <View style={styles.weekCentre}><Text style={styles.weekLabel}>{formatWeekLabel(weekGroups[0])} + {formatWeekLabel(weekGroups[1])}</Text><Text style={styles.weekDateLabel}>{twoWeekDates}</Text></View>
+          <View style={styles.weekCentre}><Text style={styles.weekLabel}>{formatWeekLabel(weekGroups[0], siteSetup)} + {formatWeekLabel(weekGroups[1], siteSetup)}</Text><Text style={styles.weekDateLabel}>{twoWeekDates}</Text></View>
           <Pressable style={styles.weekButton} onPress={() => { setMoveMessage(''); setStartWeek((week) => normaliseProgrammeWeek(week + 1)); }}><Text style={styles.weekButtonText}>Next week</Text><Ionicons name="chevron-forward" size={16} color="#ffffff" /></Pressable>
         </View>
         {moveMessage ? <Text style={styles.moveNotice}>{moveMessage}</Text> : null}
@@ -175,7 +175,7 @@ export default function TwoWeekProgrammeScreen() {
             <View style={styles.programmeHeader}><Text style={styles.programmeTitle}>Main 2 Week Programme</Text><Text style={styles.programmeSubtitle}>{programmeRows.length} plot{programmeRows.length === 1 ? '' : 's'} shown between {twoWeekDates}</Text></View>
             <ScrollView horizontal showsHorizontalScrollIndicator>
               <View style={styles.tableWrap}>
-                <View style={styles.weekHeaderRow}><Text style={[styles.weekHeaderBlank, styles.plotCell]} /><Text style={[styles.weekHeaderBlank, styles.typeCell]} />{weekGroups.map((week, index) => <Text key={`${week}-${index}`} style={styles.weekGroup}>{formatWeekLabel(week)}</Text>)}</View>
+                <View style={styles.weekHeaderRow}><Text style={[styles.weekHeaderBlank, styles.plotCell]} /><Text style={[styles.weekHeaderBlank, styles.typeCell]} />{weekGroups.map((week, index) => <Text key={`${week}-${index}`} style={styles.weekGroup}>{formatWeekLabel(week, siteSetup)}</Text>)}</View>
                 <View style={styles.dateHeaderRow}><Text style={[styles.headerCell, styles.plotCell]}>Plot</Text><Text style={[styles.headerCell, styles.typeCell]}>Type</Text>{windowDays.map((item) => <View key={item.key} style={[styles.dayHeader, item.nonWorking ? styles.weekendHeader : null]}><Text style={styles.dayHeaderName}>{item.dayName}</Text><Text style={styles.dayHeaderDate}>{item.date}</Text></View>)}</View>
                 {programmeRows.map((row, rowIndex) => {
                   const template = getTemplateForPlot(row.plot, plotTemplates);

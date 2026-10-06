@@ -4,6 +4,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } fro
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { exportMainTwoWeekPdf, exportMasterProgrammePdf, exportTradeProgrammesPdf } from '../../utils/programmePdfExport';
+import { formatCalendarWeek } from '../../utils/programmeDates';
 
 function splitEmails(value: string) {
   return value
@@ -31,6 +32,7 @@ export default function ExportsScreen() {
 
   const parsedStartWeekCandidate = Math.round(Number(startWeek));
   const parsedStartWeek = Number.isFinite(parsedStartWeekCandidate) && parsedStartWeekCandidate > 0 ? parsedStartWeekCandidate : 1;
+  const issueCalendarWeek = formatCalendarWeek(siteSetup.programmeStartDate, parsedStartWeek, siteSetup.calendarWeekOne);
   const smTeamRecipients = [smEmail.trim(), ...splitEmails(assistantEmails)].filter(Boolean);
   const tradeRecipients = tradeContacts.filter((contact) => contact.supervisorEmail.trim());
   const selectedOutputs = [
@@ -56,20 +58,20 @@ export default function ExportsScreen() {
 
   const exportSmPdfPack = () => {
     let opened = false;
-    if (sendMaster) opened = exportMasterProgrammePdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, plots: sitePlots, templates: plotTemplates }) || opened;
-    if (sendMainTwoWeek) opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates }) || opened;
-    if (sendTradeProgrammesToSmTeam) opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates, trades: allTradeNames }) || opened;
+    if (sendMaster) opened = exportMasterProgrammePdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, plots: sitePlots, templates: plotTemplates }) || opened;
+    if (sendMainTwoWeek) opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates }) || opened;
+    if (sendTradeProgrammesToSmTeam) opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates, trades: allTradeNames }) || opened;
     setStatus(opened ? 'PDF export opened — use Save as PDF in the print window' : 'Allow pop-ups to export PDF');
   };
 
   const exportTradePdfPack = () => {
     const trades = tradeNamesWithEmails.length ? tradeNamesWithEmails : allTradeNames;
-    const opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates, trades });
+    const opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates, trades });
     setStatus(opened ? 'Trade PDF export opened — use Save as PDF in the print window' : 'Allow pop-ups to export PDF');
   };
 
   const exportMainPdf = () => {
-    const opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates });
+    const opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates });
     setStatus(opened ? 'Main 2-week PDF export opened' : 'Allow pop-ups to export PDF');
   };
 
@@ -82,7 +84,7 @@ export default function ExportsScreen() {
     const outputs = selectedOutputs.length ? selectedOutputs.join(', ') : 'No outputs selected';
     mailto(
       recipients,
-      `${siteSetup.siteName} programme issue - WK${startWeek}`,
+      `${siteSetup.siteName} programme issue - ${issueCalendarWeek}`,
       `Please find the programme issue for ${siteSetup.siteName}.\n\nOutputs selected: ${outputs}.\n\nExport the selected PDF from Programme Buddy and attach it to this email.`,
     );
     await recordIssue({
@@ -105,7 +107,7 @@ export default function ExportsScreen() {
     tradeRecipients.forEach((contact) => {
       mailto(
         [contact.supervisorEmail],
-        `${siteSetup.siteName} - ${contact.trade} 2-week programme - WK${startWeek}`,
+        `${siteSetup.siteName} - ${contact.trade} 2-week programme - ${issueCalendarWeek}`,
         `Please find your ${contact.trade} 2-week programme for ${siteSetup.siteName}.\n\nYou are only being issued your trade-specific programme.\n\nExport the ${contact.trade} PDF from Programme Buddy and attach it to this email.`,
       );
     });

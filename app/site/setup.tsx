@@ -6,7 +6,7 @@ import { AppScreen } from '../../components/AppScreen';
 import { ProgrammeDatePicker } from '../../components/ProgrammeDatePicker';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
-import { getProgrammeStartDateValue, normaliseBritishDate, validateWeekOneDate } from '../../utils/programmeDates';
+import { getCalendarWeekForDate, getProgrammeStartDateValue, normaliseBritishDate, validateWeekOneDate } from '../../utils/programmeDates';
 import { ConfiguredProgrammeStage, readStageConfiguration, saveStageConfiguration } from '../../utils/stageConfiguration';
 import { PROGRAMME_STAGE_SEQUENCE } from '../../utils/siteProgrammeEngine';
 import { applyHouseTypeFloorConfiguration, getEffectiveProgrammeWeeks, getHouseTypeLabel, getHouseTypeTemplates, getStandardTemplateIdForBedrooms, PlotTemplate, TemplateActivity } from '../../utils/templateProgramme';
@@ -36,6 +36,7 @@ export default function SiteSetupScreen() {
   const router = useRouter();
   const { siteSetup, plotTemplates, isSitePlannerLoaded, updateSiteSetup, addPlotTemplate, updatePlotTemplate } = useSitePlanner();
   const [weekOneDate, setWeekOneDate] = useState(getProgrammeStartDateValue(siteSetup.programmeStartDate));
+  const [calendarWeekOneInput, setCalendarWeekOneInput] = useState(String(siteSetup.calendarWeekOne ?? getCalendarWeekForDate(getProgrammeStartDateValue(siteSetup.programmeStartDate)) ?? 1));
   const [workingDays, setWorkingDays] = useState<5 | 6 | 7>(siteSetup.includeSunday ? 7 : siteSetup.includeSaturday ? 6 : 5);
   const [stageDefinitions, setStageDefinitions] = useState<ConfiguredProgrammeStage[]>(PROGRAMME_STAGE_SEQUENCE.slice(0, LOCKED_STAGE_COUNT).map((stage) => ({ ...stage })));
   const [lockedThreeBed, setLockedThreeBed] = useState<PlotTemplate | null>(null);
@@ -73,9 +74,11 @@ export default function SiteSetupScreen() {
   }, [isSitePlannerLoaded]);
 
   useEffect(() => {
-    setWeekOneDate(getProgrammeStartDateValue(siteSetup.programmeStartDate));
+    const savedWeekOneDate = getProgrammeStartDateValue(siteSetup.programmeStartDate);
+    setWeekOneDate(savedWeekOneDate);
+    setCalendarWeekOneInput(String(siteSetup.calendarWeekOne ?? getCalendarWeekForDate(savedWeekOneDate) ?? 1));
     setWorkingDays(siteSetup.includeSunday ? 7 : siteSetup.includeSaturday ? 6 : 5);
-  }, [siteSetup.programmeStartDate, siteSetup.includeSaturday, siteSetup.includeSunday]);
+  }, [siteSetup.programmeStartDate, siteSetup.calendarWeekOne, siteSetup.includeSaturday, siteSetup.includeSunday]);
 
   const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
   const selectedTemplate = houseTypes.find((template) => template.id === selectedTemplateId) ?? houseTypes[0];
@@ -98,9 +101,14 @@ export default function SiteSetupScreen() {
     setSaving(true);
     try {
       const stages = stageDefinitions.slice(0, LOCKED_STAGE_COUNT).map((stage, index) => ({ ...stage, stage: index + 1 }));
+      const derivedCalendarWeek = getCalendarWeekForDate(weekOneDate) ?? 1;
+      const parsedCalendarWeek = Math.round(Number(calendarWeekOneInput));
+      const calendarWeekOne = Number.isFinite(parsedCalendarWeek) && parsedCalendarWeek >= 1 && parsedCalendarWeek <= 53 ? parsedCalendarWeek : derivedCalendarWeek;
+      setCalendarWeekOneInput(String(calendarWeekOne));
       await saveStageConfiguration(stages);
       await updateSiteSetup({
         programmeStartDate: normaliseBritishDate(weekOneDate),
+        calendarWeekOne,
         stageCount: LOCKED_STAGE_COUNT,
         workingWeek: workingDays === 7 ? '7 days - Monday to Sunday' : workingDays === 6 ? '6 days - Monday to Saturday' : '5 days - Monday to Friday',
         includeSaturday: workingDays >= 6,
@@ -303,8 +311,24 @@ export default function SiteSetupScreen() {
         <View style={styles.settingsGrid}>
           <View style={styles.field}>
             <Text style={styles.label}>Week 1 commencement</Text>
-            <ProgrammeDatePicker value={weekOneDate} onChange={(value) => { setWeekOneDate(value); setWeekOneDateError(''); }} error={Boolean(weekOneDateError)} />
+            <ProgrammeDatePicker value={weekOneDate} onChange={(value) => {
+              setWeekOneDate(value);
+              const calendarWeek = getCalendarWeekForDate(value);
+              if (calendarWeek) setCalendarWeekOneInput(String(calendarWeek));
+              setWeekOneDateError('');
+            }} error={Boolean(weekOneDateError)} />
             {weekOneDateError ? <Text style={styles.error}>{weekOneDateError}</Text> : null}
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Calendar week for Week 1</Text>
+            <TextInput
+              value={calendarWeekOneInput}
+              onChangeText={setCalendarWeekOneInput}
+              keyboardType="number-pad"
+              placeholder="1-53"
+              style={styles.input}
+            />
+            <Text style={styles.fieldHint}>Defaults to the ISO calendar week for the commencement date. Edit this only if the site uses a different week-number convention.</Text>
           </View>
           <View style={styles.field}>
             <Text style={styles.label}>Working week</Text>
