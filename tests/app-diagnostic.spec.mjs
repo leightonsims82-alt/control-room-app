@@ -277,7 +277,7 @@ test('site setup: explicit save actions persist house type details', async ({ pa
   await expect(page.getByText('Save house type changes', { exact: true })).toBeVisible();
   await expect(page.getByText(/not stored until you press Save House Type/i)).toBeVisible();
 
-  const nameInput = page.locator('input').filter({ hasValue: 'Save Action QA' }).first();
+  const nameInput = await inputWithValue(page, 'Save Action QA');
   await nameInput.fill('Save Action QA Updated');
   const saveButtons = page.getByText('Save House Type', { exact: true });
   await saveButtons.last().click();
