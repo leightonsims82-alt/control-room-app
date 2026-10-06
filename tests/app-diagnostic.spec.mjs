@@ -146,10 +146,10 @@ test('site setup: four bedroom house type uses the agreed four bedroom programme
 
   await page.getByText('Create House Type', { exact: true }).click();
   await expect(page.getByText('Four Bed QA', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Substructure', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('QA Drainage', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('NHBC Drainage', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Groundwork Externals', { exact: true }).first()).toBeVisible();
+  await expect(await inputWithValue(page, 'Substructure')).toBeVisible();
+  await expect(await inputWithValue(page, 'QA Drainage')).toBeVisible();
+  await expect(await inputWithValue(page, 'NHBC Drainage')).toBeVisible();
+  await expect(await inputWithValue(page, 'Groundwork Externals')).toBeVisible();
 
   await page.getByText('Edit House Type', { exact: true }).click();
   const foundationRow = (await inputWithValue(page, 'Foundations')).locator('xpath=..');
