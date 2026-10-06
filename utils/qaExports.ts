@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
-import { DefectAction, InspectionRecord, PlotProgramme } from '../types/models';
+import { DefectAction, InspectionRecord } from '../types/models';
+import { CanonicalQaPlot, findCanonicalQaPlot } from './canonicalQaProgramme';
 
 function csvCell(value: unknown) {
   const text = String(value ?? '');
@@ -22,12 +23,15 @@ function downloadCsv(filename: string, rows: unknown[][]) {
   return true;
 }
 
-export function exportActionLogCsv(actions: DefectAction[], plots: PlotProgramme[]) {
-  const plotName = (plotId: string) => plots.find((plot) => plot.id === plotId)?.plotName ?? plotId;
+export function exportActionLogCsv(actions: DefectAction[], plots: CanonicalQaPlot[]) {
+  const plotFor = (plotId: string) => findCanonicalQaPlot(plots, plotId);
   const rows: unknown[][] = [
-    ['Plot', 'Stage', 'Trade', 'Type', 'Priority', 'Status', 'Description', 'Required action', 'Sent to trade', 'Fixed', 'Created', 'Closed'],
-    ...actions.map((action) => [
-      plotName(action.plotProgrammeId),
+    ['Plot', 'Plot completion', 'Stage', 'Trade', 'Type', 'Priority', 'Status', 'Description', 'Required action', 'Sent to trade', 'Fixed', 'Created', 'Closed'],
+    ...actions.map((action) => {
+      const plot = plotFor(action.plotProgrammeId);
+      return [
+      plot?.plotName ?? action.plotProgrammeId,
+      plot?.plotCompletionDate ?? '',
       action.stage,
       action.trade,
       action.type,
@@ -39,20 +43,23 @@ export function exportActionLogCsv(actions: DefectAction[], plots: PlotProgramme
       action.fixed,
       new Date(action.createdAt).toLocaleString('en-GB'),
       action.closedAt ? new Date(action.closedAt).toLocaleString('en-GB') : '',
-    ]),
+    ];
+    }),
   ];
   return downloadCsv(`siteprog-action-log-${new Date().toISOString().slice(0, 10)}.csv`, rows);
 }
 
-export function exportInspectionLogCsv(inspections: InspectionRecord[], plots: PlotProgramme[]) {
-  const plotName = (plotId: string) => plots.find((plot) => plot.id === plotId)?.plotName ?? plotId;
+export function exportInspectionLogCsv(inspections: InspectionRecord[], plots: CanonicalQaPlot[]) {
+  const plotFor = (plotId: string) => findCanonicalQaPlot(plots, plotId);
   const rows: unknown[][] = [
-    ['Plot', 'Inspection', 'Status', 'Started', 'Completed', 'Checks', 'Failed checks', 'Photos'],
+    ['Plot', 'Plot completion', 'Inspection', 'Status', 'Started', 'Completed', 'Checks', 'Failed checks', 'Photos'],
     ...inspections.map((inspection) => {
       const failed = inspection.items.filter((item) => item.compliant === 'No').length;
       const photos = inspection.items.filter((item) => item.imageUri || item.fixedImageUri).length;
+      const plot = plotFor(inspection.plotProgrammeId);
       return [
-        plotName(inspection.plotProgrammeId),
+        plot?.plotName ?? inspection.plotProgrammeId,
+        plot?.plotCompletionDate ?? '',
         inspection.templateName,
         inspection.status,
         new Date(inspection.startedAt).toLocaleString('en-GB'),
