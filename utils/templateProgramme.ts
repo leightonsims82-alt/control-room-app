@@ -41,6 +41,7 @@ export type PlotTemplate = {
   programmeWeeks: number;
   stageCount: number;
   activities: TemplateActivity[];
+  threeStoreyActivityOverrides?: TemplateActivity[];
 };
 
 export type SiteProgrammeSetup = {
@@ -308,12 +309,6 @@ export function getPlotBuildOrder(plot: TemplateSitePlot, fallbackIndex = 0) { r
 export function getSortedSitePlots(plots: TemplateSitePlot[]) { return plots.slice().sort((a, b) => getPlotBuildOrder(a, 9999) - getPlotBuildOrder(b, 9999) || a.plotNo.localeCompare(b.plotNo, undefined, { numeric: true })); }
 export function getHouseTypeLabel(template: PlotTemplate) { return template.name.trim() || template.houseTypeCode?.trim() || 'House type'; }
 
-const LEGACY_THREE_STOREY_AUTO_CODES = new Set([
-  '2nd floor joists and flooring',
-  '5th lift brickwork',
-  '5th lift scaffold',
-]);
-
 function reindexActivities(activities: TemplateActivity[]) {
   return activities.map((activity, index) => ({ ...activity, order: index + 1 }));
 }
@@ -335,8 +330,15 @@ function shouldAddThreeStoreyFixDay(activity: TemplateActivity, roofTileOrder: n
 
 export function applyHouseTypeFloorConfiguration(template: PlotTemplate, floors: number): PlotTemplate {
   const normalisedFloors = Math.max(1, Math.min(3, Math.round(Number(floors) || 2)));
+  const currentThreeStoreyExtras = template.activities
+    .filter((activity) => activity.autoAddedForThreeStorey)
+    .map((activity) => ({ ...activity }));
+  const preservedThreeStoreyExtras = currentThreeStoreyExtras.length
+    ? currentThreeStoreyExtras
+    : (template.threeStoreyActivityOverrides ?? []).map((activity) => ({ ...activity }));
+
   const baseActivities: TemplateActivity[] = template.activities
-    .filter((activity) => !activity.autoAddedForThreeStorey && !LEGACY_THREE_STOREY_AUTO_CODES.has(activity.code))
+    .filter((activity) => !activity.autoAddedForThreeStorey)
     .slice()
     .sort((a, b) => a.order - b.order)
     .map((activity) => ({
@@ -346,7 +348,12 @@ export function applyHouseTypeFloorConfiguration(template: PlotTemplate, floors:
     }));
 
   if (normalisedFloors !== 3) {
-    return { ...template, floors: normalisedFloors, activities: reindexActivities(baseActivities) };
+    return {
+      ...template,
+      floors: normalisedFloors,
+      activities: reindexActivities(baseActivities),
+      threeStoreyActivityOverrides: preservedThreeStoreyExtras.length ? preservedThreeStoreyExtras : template.threeStoreyActivityOverrides,
+    };
   }
 
   const roofTileOrder = baseActivities.find((activity) => activity.code.toLowerCase() === 'roof tile')?.order ?? Number.MAX_SAFE_INTEGER;
@@ -370,15 +377,23 @@ export function applyHouseTypeFloorConfiguration(template: PlotTemplate, floors:
   const preceding = adjustedActivities[Math.max(0, insertAt - 1)];
   const structureStage = (preceding?.stage ?? 3) as ProgrammeActivity['stage'];
 
-  const extras: TemplateActivity[] = [
+  const generatedExtras: TemplateActivity[] = [
     { ...templateActivity(0, '2nd floor joists and flooring', 'Carpenter', '2F Joist & Floor', 2, structureStage), autoAddedForThreeStorey: true },
     { ...templateActivity(0, `${liftLabel} lift brickwork`, 'Bricklayer', `${liftLabel} Lift`, 7, structureStage), autoAddedForThreeStorey: true },
     { ...templateActivity(0, `${liftLabel} lift scaffold`, 'Scaffolder', `${liftLabel} Scaffold`, 2, structureStage), autoAddedForThreeStorey: true },
   ];
+  const extras = preservedThreeStoreyExtras.length === 3
+    ? preservedThreeStoreyExtras.map((activity) => ({ ...activity, autoAddedForThreeStorey: true }))
+    : generatedExtras;
 
   const next = adjustedActivities.slice();
   next.splice(insertAt, 0, ...extras);
-  return { ...template, floors: normalisedFloors, activities: reindexActivities(next) };
+  return {
+    ...template,
+    floors: normalisedFloors,
+    activities: reindexActivities(next),
+    threeStoreyActivityOverrides: extras.map((activity) => ({ ...activity })),
+  };
 }
 
 export function createHouseTypeTemplate(input: { name: string; bedrooms: number; floors: number; baseTemplate?: PlotTemplate }): PlotTemplate {
