@@ -470,8 +470,8 @@ export function getStage1StartWeekForPlot(plot: TemplateSitePlot, templates: Plo
   return normaliseProgrammeWeek(getLinearStage1StartWeekForPlot(plot, templates, setup));
 }
 
-export function getStageNumberForPlotWeek(plot: TemplateSitePlot, week: number, templates: PlotTemplate[]) {
-  const relativeWeek = week - getStage1StartWeekForPlot(plot, templates) + 1;
+export function getStageNumberForPlotWeek(plot: TemplateSitePlot, week: number, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
+  const relativeWeek = week - getStage1StartWeekForPlot(plot, templates, setup) + 1;
   if (relativeWeek < 1 || relativeWeek > 23) return '';
   const stage = getStageNumberForRelativeWeek(relativeWeek);
   if (!plot.holdStage || !stage || stage < plot.holdStage) return stage;
@@ -485,7 +485,7 @@ export function getMilestoneForPlotWeek(plot: TemplateSitePlot, week: number, te
   const displayWeek = normaliseProgrammeWeek(week);
   for (let stage = 1; stage <= template.stageCount; stage += 1) {
     const weeksFromHandover = Math.round(((template.stageCount - stage) * (effectiveWeeks - 1)) / Math.max(1, template.stageCount - 1));
-    const milestoneWeek = normaliseProgrammeWeek(plot.stage9CompleteWeek - weeksFromHandover);
+    const milestoneWeek = normaliseProgrammeWeek(getPlotCompletionProgrammeWeek(plot, setup) - weeksFromHandover);
     if (milestoneWeek === displayWeek) return String(stage);
   }
   return '';
