@@ -33,6 +33,7 @@ export type PlotTemplate = {
   floors?: number;
   isHouseType?: boolean;
   isSystemTemplate?: boolean;
+  standardVersion?: number;
   description: string;
   programmeWeeks: number;
   stageCount: number;
@@ -134,6 +135,7 @@ function makeFourBedroomStandardTemplate(): PlotTemplate {
     floors: 2,
     isHouseType: false,
     isSystemTemplate: true,
+    standardVersion: 1,
     programmeWeeks: 25,
     stageCount: 9,
     activities: [
