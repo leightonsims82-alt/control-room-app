@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek } from '../../utils/programmeDates';
-import { getActivitiesForTemplateDay, getHouseTypeTemplates, getTemplateForPlot, isProgrammeWorkingDay, normaliseProgrammeWeek, orderedActivities, SiteProgrammeSetup, TemplateActivity, TemplateSitePlot } from '../../utils/templateProgramme';
+import { getActivitiesForTemplateDay, getHouseTypeTemplates, getPlotCompletionProgrammeWeek, getTemplateForPlot, isProgrammeWorkingDay, normaliseProgrammeWeek, orderedActivities, SiteProgrammeSetup, TemplateActivity, TemplateSitePlot } from '../../utils/templateProgramme';
 
 const PROGRAMME_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const DAY_WIDTH = 98;
@@ -78,7 +78,7 @@ export default function TwoWeekProgrammeScreen() {
   const windowDays = useMemo(() => buildTwoWeekWindow(startWeek, viewDayOffset, siteSetup), [startWeek, viewDayOffset, siteSetup]);
   const twoWeekDates = formatDateRange(windowDays);
   const weekGroups = [windowDays[0].week, windowDays[7].week];
-  const orderedSitePlots = useMemo(() => sitePlots.slice().sort((a, b) => a.stage9CompleteWeek - b.stage9CompleteWeek || plotNoSortValue(a.plotNo) - plotNoSortValue(b.plotNo)), [sitePlots]);
+  const orderedSitePlots = useMemo(() => sitePlots.slice().sort((a, b) => getPlotCompletionProgrammeWeek(a, siteSetup) - getPlotCompletionProgrammeWeek(b, siteSetup) || plotNoSortValue(a.plotNo) - plotNoSortValue(b.plotNo)), [sitePlots, siteSetup]);
   const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
 
   const programmeRows = useMemo<ProgrammeRow[]>(() => orderedSitePlots.map((plot) => {
