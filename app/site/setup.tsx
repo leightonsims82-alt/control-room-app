@@ -19,6 +19,10 @@ function orderedActivities(activities: TemplateActivity[]) {
   return activities.slice().sort((a, b) => a.order - b.order).map((activity, index) => ({ ...activity, order: index + 1 }));
 }
 
+function resequenceActivities(activities: TemplateActivity[]) {
+  return activities.map((activity, index) => ({ ...activity, order: index + 1 }));
+}
+
 function cloneTemplate(template: PlotTemplate): PlotTemplate {
   return { ...template, activities: template.activities.map((activity) => ({ ...activity })) };
 }
@@ -220,7 +224,7 @@ export default function SiteSetupScreen() {
       const target = index + direction;
       if (index < 0 || target < 0 || target >= activities.length) return current;
       [activities[index], activities[target]] = [activities[target], activities[index]];
-      return { ...current, activities: orderedActivities(activities) };
+      return { ...current, activities: resequenceActivities(activities) };
     });
   };
 
@@ -240,7 +244,7 @@ export default function SiteSetupScreen() {
         stage: Math.min(LOCKED_STAGE_COUNT, toPositiveInt(String(seed.stage), 1)) as TemplateActivity['stage'],
       };
       activities.splice(index + 1, 0, newActivity);
-      return { ...current, activities: orderedActivities(activities) };
+      return { ...current, activities: resequenceActivities(activities) };
     });
   };
 
