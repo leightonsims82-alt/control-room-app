@@ -168,7 +168,7 @@ test('site setup: create a named 3-storey house type and add the automatic struc
   const createSection = storeysLabel.locator('xpath=..');
   await createSection.getByText('3', { exact: true }).click();
 
-  await page.getByText('Create House Type', { exact: true }).click();
+  await page.getByText('Save New House Type', { exact: true }).click();
   await expect(page.getByText('Warrley QA', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('2nd floor joists and flooring', { exact: true })).toBeVisible();
   await expect(page.getByText('5th lift brickwork', { exact: true })).toBeVisible();
@@ -183,12 +183,12 @@ test('site setup: four bedroom house type uses the agreed four bedroom programme
   const bedroomPicker = bedroomsLabel.locator('xpath=..');
   await bedroomPicker.getByText('4', { exact: true }).click();
 
-  await page.getByText('Create House Type', { exact: true }).click();
+  await page.getByText('Save New House Type', { exact: true }).click();
   await expect(page.getByText('Four Bed QA', { exact: true }).first()).toBeVisible();
-  await expect(await inputWithValue(page, 'Substructure')).toBeVisible();
-  await expect(await inputWithValue(page, 'QA Drainage')).toBeVisible();
-  await expect(await inputWithValue(page, 'NHBC Drainage')).toBeVisible();
-  await expect(await inputWithValue(page, 'Groundwork Externals')).toBeVisible();
+  await expect(page.getByText('Substructure', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('QA Drainage', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('NHBC Drainage', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Groundwork Externals', { exact: true }).first()).toBeVisible();
 
   await page.getByText('Edit House Type', { exact: true }).click();
   const foundationRow = (await inputWithValue(page, 'Foundations')).locator('xpath=..');
@@ -208,7 +208,7 @@ test('site setup: three storey four bed adds extra structure and fix days', asyn
   const storeysLabel = page.getByText('Storeys', { exact: true }).first();
   await storeysLabel.locator('xpath=..').getByText('3', { exact: true }).click();
 
-  await page.getByText('Create House Type', { exact: true }).click();
+  await page.getByText('Save New House Type', { exact: true }).click();
   await expect(page.getByText('2nd floor joists and flooring', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('4th lift brickwork', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('4th lift scaffold', { exact: true }).first()).toBeVisible();
@@ -251,17 +251,17 @@ test('feedback: accepts pasted screenshots and offers file attachment', async ({
 test('site setup: changing a house type to four bedrooms loads the agreed four bedroom standard', async ({ page }) => {
   await goto(page, '/site/setup');
   await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Legacy Conversion QA');
-  await page.getByText('Create House Type', { exact: true }).click();
+  await page.getByText('Save New House Type', { exact: true }).click();
   await page.getByText('Edit House Type', { exact: true }).click();
 
   const editBedroomsLabel = page.getByText('Bedrooms', { exact: true }).last();
   await editBedroomsLabel.locator('xpath=..').getByText('4', { exact: true }).click();
 
-  await expect(page.getByText('Substructure', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('QA Drainage', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('NHBC Drainage', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Groundwork Externals', { exact: true }).first()).toBeVisible();
-  await page.getByText('Save House Type', { exact: true }).click();
+  await expect(await inputWithValue(page, 'Substructure')).toBeVisible();
+  await expect(await inputWithValue(page, 'QA Drainage')).toBeVisible();
+  await expect(await inputWithValue(page, 'NHBC Drainage')).toBeVisible();
+  await expect(await inputWithValue(page, 'Groundwork Externals')).toBeVisible();
+  await page.getByText('Save House Type', { exact: true }).first().click();
 
   await expect(page.getByText('4', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Reset Programme to 4 Bedroom Standard', { exact: true })).toBeVisible();
@@ -287,7 +287,7 @@ test('site setup: explicit save actions persist house type details', async ({ pa
 test('site setup: named house type uses explicit edit and save workflow', async ({ page }) => {
   await goto(page, '/site/setup');
   await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Linngate QA');
-  await page.getByText('Create House Type', { exact: true }).click();
+  await page.getByText('Save New House Type', { exact: true }).click();
   await expect(page.getByText('Linngate QA', { exact: true }).first()).toBeVisible();
 
   const edit = page.getByText('Edit House Type', { exact: true });
@@ -302,7 +302,7 @@ test('site setup: named house type uses explicit edit and save workflow', async 
 test('site setup: activity up and down arrows really reorder fixes', async ({ page }) => {
   await goto(page, '/site/setup');
   await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Arrow QA');
-  await page.getByText('Create House Type', { exact: true }).click();
+  await page.getByText('Save New House Type', { exact: true }).click();
   await page.getByText('Edit House Type', { exact: true }).click();
 
   const foundation = await inputWithValue(page, 'Foundation');
@@ -327,7 +327,7 @@ test('site setup: activity up and down arrows really reorder fixes', async ({ pa
 test('master: named house type and construction route are separate selections', async ({ page }) => {
   await goto(page, '/site/setup');
   await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Warrley QA');
-  await page.getByText('Create House Type', { exact: true }).click();
+  await page.getByText('Save New House Type', { exact: true }).click();
 
   await goto(page, '/master');
   await expect(page.getByText('Warrley QA', { exact: true }).first()).toBeVisible();
