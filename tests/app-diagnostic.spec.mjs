@@ -453,6 +453,80 @@ test('site setup: Save Site Settings gives visible confirmation', async ({ page 
   await expect(page.getByText(/Site programme settings saved/i)).toBeVisible({ timeout: 10000 });
 });
 
+test('master: different exact completion dates drive different stage positions even when legacy week values are stale', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('programme-buddy:existing-plots-cleared:2026-10-01-v1', new Date().toISOString());
+    localStorage.setItem('programme-buddy:house-types-reset:v2', 'done');
+    localStorage.setItem('programme-buddy:programme-setup:v1', JSON.stringify({
+      siteName: 'Date Source QA',
+      defaultProgrammeWeeks: 25,
+      stageCount: 9,
+      workingWeek: '5 days - Monday to Friday',
+      includeSaturday: false,
+      includeSunday: false,
+      programmeStartDate: '05/01/2026'
+    }));
+    localStorage.setItem('programme-buddy:plots:v1', JSON.stringify([
+      {
+        id: 'plot-date-153',
+        plotNo: '153',
+        buildOrder: 1,
+        stage9CompleteWeek: 1,
+        templateId: 'threeBed',
+        houseTypeId: 'threeBed',
+        constructionMethod: 'traditional'
+      },
+      {
+        id: 'plot-date-154',
+        plotNo: '154',
+        buildOrder: 2,
+        stage9CompleteWeek: 1,
+        templateId: 'threeBed',
+        houseTypeId: 'threeBed',
+        constructionMethod: 'traditional'
+      }
+    ]));
+    localStorage.setItem('programme-buddy:plot-metadata:v1', JSON.stringify({
+      '153': {
+        plotNo: '153',
+        houseTypeName: 'QA House',
+        houseTypeId: 'threeBed',
+        buildRoute: 'Traditional',
+        programmeGenerationBasis: 'completion',
+        plotCompletionDate: '04/12/2026'
+      },
+      '154': {
+        plotNo: '154',
+        houseTypeName: 'QA House',
+        houseTypeId: 'threeBed',
+        buildRoute: 'Traditional',
+        programmeGenerationBasis: 'completion',
+        plotCompletionDate: '11/12/2026'
+      }
+    }));
+  });
+
+  await goto(page, '/master');
+  const completion153 = page.getByText('04/12/2026', { exact: true });
+  const completion154 = page.getByText('11/12/2026', { exact: true });
+  await expect(completion153).toBeVisible();
+  await expect(completion154).toBeVisible();
+
+  const row153 = completion153.locator('xpath=..');
+  const row154 = completion154.locator('xpath=..');
+  const stage9Box153 = await row153.getByText('9', { exact: true }).boundingBox();
+  const stage9Box154 = await row154.getByText('9', { exact: true }).boundingBox();
+  expect(stage9Box153).not.toBeNull();
+  expect(stage9Box154).not.toBeNull();
+  expect((stage9Box154?.x ?? 0) - (stage9Box153?.x ?? 0)).toBeGreaterThan(50);
+
+  const storedPlots = await page.evaluate(() => JSON.parse(localStorage.getItem('programme-buddy:plots:v1') || '[]'));
+  expect(storedPlots.find((plot) => plot.plotNo === '153')?.plotCompletionDate).toBe('04/12/2026');
+  expect(storedPlots.find((plot) => plot.plotNo === '154')?.plotCompletionDate).toBe('11/12/2026');
+  expect(storedPlots.find((plot) => plot.plotNo === '153')?.stage9CompleteWeek)
+    .not.toBe(storedPlots.find((plot) => plot.plotNo === '154')?.stage9CompleteWeek);
+});
+
 test('master: exact plot completion date is preserved instead of the week Monday', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('programme-buddy:existing-plots-cleared:2026-10-01-v1', new Date().toISOString());
@@ -534,6 +608,49 @@ test('master: matrix Manage button opens the selected plot editor', async ({ pag
   await expect(page.getByText('Manage plots', { exact: true }).last()).toBeVisible();
   await expect(page.getByText('153', { exact: true }).last()).toBeVisible();
   await expect(page.getByText('Save Plot Changes', { exact: true })).toBeVisible();
+});
+
+test('master: editing a completion date immediately changes the programme date source', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('programme-buddy:existing-plots-cleared:2026-10-01-v1', new Date().toISOString());
+    localStorage.setItem('programme-buddy:house-types-reset:v2', 'done');
+    localStorage.setItem('programme-buddy:plots:v1', JSON.stringify([
+      {
+        id: 'plot-edit-date-153',
+        plotNo: '153',
+        buildOrder: 1,
+        stage9CompleteWeek: 48,
+        plotCompletionDate: '04/12/2026',
+        templateId: 'threeBed',
+        houseTypeId: 'threeBed',
+        constructionMethod: 'traditional'
+      }
+    ]));
+    localStorage.setItem('programme-buddy:plot-metadata:v1', JSON.stringify({
+      '153': {
+        plotNo: '153',
+        houseTypeName: 'QA House',
+        houseTypeId: 'threeBed',
+        buildRoute: 'Traditional',
+        programmeGenerationBasis: 'completion',
+        plotCompletionDate: '04/12/2026'
+      }
+    }));
+  });
+
+  await goto(page, '/master');
+  await page.getByRole('button', { name: 'Manage Plot 153' }).click();
+  const completionInput = page.getByPlaceholder('DD/MM/YYYY');
+  await completionInput.fill('11/12/2026');
+  await page.getByText('Save Plot Changes', { exact: true }).click();
+  await expect(page.getByText(/updated successfully/i)).toBeVisible();
+  await page.getByText('×', { exact: true }).click();
+
+  await expect(page.getByText('11/12/2026', { exact: true })).toBeVisible();
+  await expect(page.getByText('04/12/2026', { exact: true })).toHaveCount(0);
+
+  const storedPlot = await page.evaluate(() => JSON.parse(localStorage.getItem('programme-buddy:plots:v1') || '[]')[0]);
+  expect(storedPlot.plotCompletionDate).toBe('11/12/2026');
 });
 
 test('master: Manage plots button opens and closes its modal', async ({ page }) => {
