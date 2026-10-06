@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
+import { ProgrammeDatePicker } from '../../components/ProgrammeDatePicker';
 import { useSitePlanner } from '../../data/sitePlannerStore';
-import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek } from '../../utils/programmeDates';
-import { getActivitiesForTemplateDay, getHouseTypeTemplates, getPlotCompletionProgrammeWeek, getTemplateForPlot, isProgrammeWorkingDay, normaliseProgrammeWeek, SiteProgrammeSetup, TemplateActivity, TemplateSitePlot } from '../../utils/templateProgramme';
+import { formatBritishDate, formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate } from '../../utils/programmeDates';
+import { getActivitiesForTemplateDay, getHouseTypeTemplates, getPlotCompletionProgrammeWeek, getProgrammeWorkingDayIndexForDate, getTemplateActivityRangeForPlot, getTemplateForPlot, isProgrammeWorkingDay, normaliseProgrammeWeek, orderedActivities, SiteProgrammeSetup, TemplateActivity, TemplateSitePlot } from '../../utils/templateProgramme';
 
 const PROGRAMME_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const DAY_WIDTH = 98;
@@ -17,6 +18,11 @@ type ProgrammeRow = { plot: TemplateSitePlot; dailyActivities: TemplateActivity[
 
 function formatWeekLabel(week: number, siteSetup: SiteProgrammeSetup) { return formatCalendarWeek(siteSetup.programmeStartDate, week, siteSetup.calendarWeekOne); }
 function plotNoSortValue(plotNo: string) { const parsed = Number(plotNo.replace(/[^0-9.]/g, '')); return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER; }
+
+function todayBritishDate() {
+  const now = new Date();
+  return formatBritishDate(new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())));
+}
 
 function getProgrammeDayFromAbsoluteIndex(absoluteDayIndex: number) {
   const week = normaliseProgrammeWeek(Math.floor(absoluteDayIndex / 7) + 1);
@@ -71,15 +77,36 @@ function simplifyActivity(text: string) {
 }
 
 export default function TwoWeekProgrammeScreen() {
-  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, setActivityDelay, adjustActivityMove } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, setActivityDelay, adjustActivityMove, resetActivityMovesForPlot } = useSitePlanner();
   const [startWeek, setStartWeek] = useState(() => normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate)));
   const [viewDayOffset, setViewDayOffset] = useState(0);
   const [moveMessage, setMoveMessage] = useState('');
+  const [progressPlotId, setProgressPlotId] = useState('');
+  const [progressActivityCode, setProgressActivityCode] = useState('');
+  const [actualProgressDate, setActualProgressDate] = useState(todayBritishDate());
   const windowDays = useMemo(() => buildTwoWeekWindow(startWeek, viewDayOffset, siteSetup), [startWeek, viewDayOffset, siteSetup]);
   const twoWeekDates = formatDateRange(windowDays);
   const weekGroups = [windowDays[0].week, windowDays[7].week];
   const orderedSitePlots = useMemo(() => sitePlots.slice().sort((a, b) => getPlotCompletionProgrammeWeek(a, siteSetup) - getPlotCompletionProgrammeWeek(b, siteSetup) || plotNoSortValue(a.plotNo) - plotNoSortValue(b.plotNo)), [sitePlots, siteSetup]);
   const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
+  const progressPlot = orderedSitePlots.find((plot) => plot.id === progressPlotId) ?? orderedSitePlots[0];
+  const progressTemplate = progressPlot ? getTemplateForPlot(progressPlot, plotTemplates) : undefined;
+  const progressActivities = useMemo(() => progressTemplate ? orderedActivities(progressTemplate) : [], [progressTemplate]);
+
+  useEffect(() => {
+    if (!progressPlotId && orderedSitePlots[0]?.id) setProgressPlotId(orderedSitePlots[0].id);
+    if (progressPlotId && !orderedSitePlots.some((plot) => plot.id === progressPlotId)) setProgressPlotId(orderedSitePlots[0]?.id ?? '');
+  }, [orderedSitePlots, progressPlotId]);
+
+  useEffect(() => {
+    if (!progressActivities.length) {
+      setProgressActivityCode('');
+      return;
+    }
+    if (!progressActivities.some((activity) => activity.code === progressActivityCode)) {
+      setProgressActivityCode(progressActivities[0].code);
+    }
+  }, [progressActivities, progressActivityCode]);
 
   const programmeRows = useMemo<ProgrammeRow[]>(() => orderedSitePlots.map((plot) => {
     const dailyActivities = windowDays.map((item) => getActivitiesForTemplateDay(plot, item.week, item.day, activityDelays, plotTemplates, siteSetup, activityMoves));
@@ -113,6 +140,40 @@ export default function TwoWeekProgrammeScreen() {
     setMoveMessage(`Plot ${plot.plotNo}: ${activity.displayText || activity.code} and all following work moved ${magnitude} working day${magnitude === 1 ? '' : 's'} ${direction}. Current adjustment from this fix: ${nextValue > 0 ? '+' : ''}${nextValue} day${Math.abs(nextValue) === 1 ? '' : 's'}.`);
   };
 
+  const setActualProgress = async () => {
+    if (!progressPlot || !progressActivityCode) {
+      setMoveMessage('Choose a plot and its actual current activity first.');
+      return;
+    }
+    const targetDay = getProgrammeWorkingDayIndexForDate(siteSetup.programmeStartDate, actualProgressDate, siteSetup);
+    if (targetDay === null) {
+      setMoveMessage('Actual progress date must be a valid working day for this site.');
+      return;
+    }
+    const range = getTemplateActivityRangeForPlot(progressPlot, progressActivityCode, activityDelays, plotTemplates, siteSetup, activityMoves);
+    if (!range) {
+      setMoveMessage('Unable to locate that activity in the selected plot programme.');
+      return;
+    }
+    const changeDays = targetDay - range.start;
+    if (changeDays) {
+      await adjustActivityMove({ plotId: progressPlot.id, activityCode: progressActivityCode, changeDays });
+    }
+    const activity = progressActivities.find((item) => item.code === progressActivityCode);
+    setMoveMessage(`Plot ${progressPlot.plotNo}: ${activity?.displayText || progressActivityCode} is now anchored to ${actualProgressDate}. All following work has been recalculated from that live position.`);
+    const actualWeek = getProgrammeWeekForDate(siteSetup.programmeStartDate, actualProgressDate);
+    if (actualWeek) {
+      setStartWeek(actualWeek);
+      setViewDayOffset(0);
+    }
+  };
+
+  const resetActualProgress = async () => {
+    if (!progressPlot) return;
+    await resetActivityMovesForPlot(progressPlot.id);
+    setMoveMessage(`Plot ${progressPlot.plotNo}: live programme movement reset to the planned programme.`);
+  };
+
   const resetWindow = () => { setStartWeek(normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate))); setViewDayOffset(0); setMoveMessage(''); };
 
   return (
@@ -144,6 +205,46 @@ export default function TwoWeekProgrammeScreen() {
         </View>
         <View style={styles.summaryStrip}><MiniStat label="Active plots" value={sitePlots.length} /><MiniStat label="View" value="All trades" /><MiniStat label="Window" value="14 days" /></View>
       </View>
+
+      {sitePlots.length ? (
+        <View style={styles.actualProgressPanel}>
+          <View style={styles.actualProgressHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.actualProgressTitle}>Actual site progress</Text>
+              <Text style={styles.actualProgressText}>Use this when the real build is ahead of or behind the generated plan. Pick the plot and the activity actually starting on the selected date; Programme Buddy moves that activity and every following activity to match.</Text>
+            </View>
+            <Pressable accessibilityRole="button" style={styles.resetLiveButton} onPress={resetActualProgress}><Text style={styles.resetLiveButtonText}>Reset selected plot</Text></Pressable>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.progressChipRow}>
+              {orderedSitePlots.map((plot) => {
+                const active = plot.id === progressPlot?.id;
+                return <Pressable key={plot.id} accessibilityRole="button" accessibilityLabel={`Select Plot ${plot.plotNo} actual progress`} onPress={() => { setProgressPlotId(plot.id); setProgressActivityCode(''); }} style={[styles.progressChip, active ? styles.progressChipActive : null]}><Text style={[styles.progressChipText, active ? styles.progressChipTextActive : null]}>Plot {plot.plotNo}</Text></Pressable>;
+              })}
+            </View>
+          </ScrollView>
+
+          <View style={styles.actualProgressDateRow}>
+            <View style={styles.actualDateField}>
+              <Text style={styles.actualProgressLabel}>Actual date</Text>
+              <ProgrammeDatePicker value={actualProgressDate} onChange={setActualProgressDate} minimumDate={siteSetup.programmeStartDate} />
+            </View>
+            <View style={{ flex: 2, minWidth: 260 }}>
+              <Text style={styles.actualProgressLabel}>Actual current activity</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator>
+                <View style={styles.progressChipRow}>
+                  {progressActivities.map((activity) => {
+                    const active = activity.code === progressActivityCode;
+                    return <Pressable key={activity.code} accessibilityRole="button" accessibilityLabel={`Select actual activity ${activity.displayText || activity.code}`} onPress={() => setProgressActivityCode(activity.code)} style={[styles.activityChoiceChip, active ? styles.activityChoiceChipActive : null]}><Text style={[styles.activityChoiceText, active ? styles.activityChoiceTextActive : null]}>{activity.displayText || activity.code}</Text></Pressable>;
+                  })}
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Set selected plot actual progress" style={styles.applyActualButton} onPress={setActualProgress}><Text style={styles.applyActualButtonText}>Set Actual Progress & Recalculate Remaining Programme</Text></Pressable>
+        </View>
+      ) : null}
 
       {sitePlots.length === 0 ? (
         <View style={styles.emptyCard}>
@@ -213,6 +314,26 @@ const styles = StyleSheet.create({
   currentWeekButton: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#eff6ff', borderRadius: 999, borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 12, paddingVertical: 8 },
   currentWeekButtonText: { color: '#1d4ed8', fontSize: 12, fontWeight: '900' },
   viewNote: { color: '#64748b', fontSize: 12, fontWeight: '800', textAlign: 'center' },
+  actualProgressPanel: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74', borderRadius: 18, padding: 14, gap: 12 },
+  actualProgressHeader: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' },
+  actualProgressTitle: { color: '#9a3412', fontSize: 18, fontWeight: '900' },
+  actualProgressText: { color: '#9a3412', fontSize: 12, lineHeight: 18, fontWeight: '700', marginTop: 3 },
+  actualProgressLabel: { color: '#7c2d12', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', marginBottom: 6 },
+  actualProgressDateRow: { flexDirection: 'row', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' },
+  actualDateField: { minWidth: 220, flex: 1 },
+  progressChipRow: { flexDirection: 'row', gap: 7, paddingVertical: 2 },
+  progressChip: { borderWidth: 1, borderColor: '#fdba74', backgroundColor: '#ffffff', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  progressChipActive: { backgroundColor: '#9a3412', borderColor: '#9a3412' },
+  progressChipText: { color: '#9a3412', fontWeight: '900', fontSize: 12 },
+  progressChipTextActive: { color: '#ffffff' },
+  activityChoiceChip: { borderWidth: 1, borderColor: '#fed7aa', backgroundColor: '#ffffff', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  activityChoiceChipActive: { backgroundColor: '#7c2d12', borderColor: '#7c2d12' },
+  activityChoiceText: { color: '#7c2d12', fontWeight: '800', fontSize: 11 },
+  activityChoiceTextActive: { color: '#ffffff' },
+  applyActualButton: { alignSelf: 'flex-start', backgroundColor: '#9a3412', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 },
+  applyActualButtonText: { color: '#ffffff', fontWeight: '900', fontSize: 12 },
+  resetLiveButton: { borderWidth: 1, borderColor: '#fdba74', backgroundColor: '#ffffff', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  resetLiveButtonText: { color: '#9a3412', fontWeight: '900', fontSize: 11 },
   summaryStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   miniStat: { flex: 1, minWidth: 120, backgroundColor: '#f8fafc', borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', padding: 12 },
   miniStatValue: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
