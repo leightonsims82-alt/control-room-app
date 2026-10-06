@@ -59,6 +59,7 @@ export default function ProgrammeIssueCentre() {
       delays: activityDelays,
       moves: activityMoves,
       templates: plotTemplates,
+      siteSetup,
     });
     setNotice(opened
       ? 'Current 2-week programme opened. Choose Save as PDF in the print window.'
