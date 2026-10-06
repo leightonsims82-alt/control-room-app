@@ -52,6 +52,7 @@ export default function TradesScreen() {
   const {
     sitePlots,
     activityDelays,
+    activityMoves,
     tradeContacts,
     plotTemplates,
     siteSetup,
@@ -87,6 +88,7 @@ export default function TradesScreen() {
       activityDelays,
       plotTemplates,
       siteSetup,
+      activityMoves,
     ).filter((activity) => activity.trade.toLowerCase() === selectedTrade.toLowerCase()));
 
     const cells = activitiesByDay.map((activities) => activities.map((activity) => activity.displayText).join('\n'));
@@ -100,6 +102,7 @@ export default function TradesScreen() {
     sitePlots,
     days,
     activityDelays,
+    activityMoves,
     plotTemplates,
     siteSetup,
     selectedTrade,
