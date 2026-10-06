@@ -527,12 +527,30 @@ export function getActivityMoveDays(plotId: string, activityCode: string, moves:
   return moves.find((move) => move.plotId === plotId && move.activityCode === activityCode)?.deltaDays ?? 0;
 }
 
-function activityRange(plot: TemplateSitePlot, template: PlotTemplate, activity: TemplateActivity, delays: ActivityDelay[], setup?: Partial<SiteProgrammeSetup>, moves: ActivityMove[] = []) {
+function getCanonicalProgrammeBaseOffset(plot: TemplateSitePlot, template: PlotTemplate, setup?: Partial<SiteProgrammeSetup>) {
+  const ranges = getTemplateActivityRanges(template);
+  const firstStart = ranges.length ? Math.min(...ranges.map((range) => range.start)) : 1;
+  const lastFinish = ranges.length ? Math.max(...ranges.map((range) => range.finish)) : Math.max(1, template.programmeWeeks * workingDaysPerWeek(setup));
+
+  if (plot.plotCompletionDate && setup?.programmeStartDate) {
+    const completionIndex = getProgrammeWorkingDayIndexForDate(setup.programmeStartDate, plot.plotCompletionDate, setup);
+    if (completionIndex !== null) return completionIndex - lastFinish;
+  }
+
+  if (plot.plotStartDate && setup?.programmeStartDate) {
+    const startIndex = getProgrammeWorkingDayIndexForDate(setup.programmeStartDate, plot.plotStartDate, setup);
+    if (startIndex !== null) return startIndex - firstStart;
+  }
+
   const linearStage1Week = getLinearStage1StartWeekForPlot(plot, [template], setup);
+  return firstProgrammeDayIndexForWeek(linearStage1Week, setup) - firstStart;
+}
+
+function activityRange(plot: TemplateSitePlot, template: PlotTemplate, activity: TemplateActivity, delays: ActivityDelay[], setup?: Partial<SiteProgrammeSetup>, moves: ActivityMove[] = []) {
   const scheduled = getTemplateActivityRanges(template).find((item) => item.activity.code === activity.code);
   const relativeStart = scheduled?.start ?? 1;
   const relativeFinish = scheduled?.finish ?? relativeStart;
-  const baseOffset = firstProgrammeDayIndexForWeek(linearStage1Week, setup) - 1;
+  const baseOffset = getCanonicalProgrammeBaseOffset(plot, template, setup);
   const moveOffset = moveOffsetBeforeOrAt(plot.id, activity.order, moves, template.activities);
   return {
     start: Math.max(1, baseOffset + relativeStart + delayBefore(plot.id, activity.order, delays, template.activities) + moveOffset),
