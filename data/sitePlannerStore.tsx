@@ -189,7 +189,7 @@ function normalisePlots(stored: TemplateSitePlot[]) {
 const LEGACY_PROPERTY_TEMPLATE_IDS = new Set(['apartment', 'twoBed', 'fourBed', 'fiveBed']);
 
 function normaliseTemplate(template: PlotTemplate) {
-  const isSystemTemplate = template.isSystemTemplate ?? (template.id === 'threeBed' || template.id === 'timberFrame');
+  const isSystemTemplate = template.isSystemTemplate ?? (template.id === 'threeBed' || template.id === 'fourBedStandard' || template.id === 'timberFrame');
   const isHouseType = template.isHouseType ?? (!isSystemTemplate && !LEGACY_PROPERTY_TEMPLATE_IDS.has(template.id));
   return {
     ...template,
@@ -442,7 +442,8 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   };
 
   const addPlotTemplate = async (input: { name: string; bedrooms: number; floors: number; baseTemplateId?: string }) => {
-    const baseTemplate = plotTemplates.find((template) => template.id === input.baseTemplateId)
+    const standardTemplateId = Math.round(Number(input.bedrooms)) === 4 ? 'fourBedStandard' : (input.baseTemplateId ?? 'threeBed');
+    const baseTemplate = plotTemplates.find((template) => template.id === standardTemplateId)
       ?? plotTemplates.find((template) => template.id === 'threeBed')
       ?? plotTemplates[0];
     const nextTemplate = createHouseTypeTemplate({ ...input, baseTemplate });
