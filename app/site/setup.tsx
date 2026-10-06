@@ -355,7 +355,7 @@ export default function SiteSetupScreen() {
           <Pressable disabled={saving} style={styles.primaryButton} onPress={createHouseType}><Text style={styles.primaryButtonText}>{saving ? 'Creating…' : 'Create House Type'}</Text></Pressable>
         </View>
 
-        {newFloors === 3 ? <View style={styles.messageBox}><Text style={styles.messageText}>Three-storey rule: adds another set of joists/flooring, one additional brickwork lift and scaffold lift before the roof sequence. After Roof Tile, carpentry, plumbing and electrical fix/final activities each gain 1 day.</Text></View> : null}
+        {newFloors === 3 ? <View style={styles.messageBox}><Text style={styles.messageText}>Three-storey rule: adds another set of joists/flooring, one additional brickwork lift and scaffold lift before the roof sequence. After Roof Tile, carpentry, plumbing and electrical 1st/2nd fix activities each gain 1 day.</Text></View> : null}
 
         {houseTypes.length ? <>
           <View>
@@ -375,7 +375,7 @@ export default function SiteSetupScreen() {
               <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>Calculated weeks</Text><Text style={styles.calculatedValue}>{calculatedWeeks}</Text></View>
             </View>
 
-            {displayTemplate.floors === 3 ? <View style={styles.lockedBanner}><Text style={styles.lockedTitle}>3-storey programme rule active</Text><Text style={styles.lockedText}>Includes an additional set of joists/flooring, one extra brickwork/scaffold lift, and +1 day to carpentry, plumbing and electrical fix/final activities after Roof Tile.</Text></View> : null}
+            {displayTemplate.floors === 3 ? <View style={styles.lockedBanner}><Text style={styles.lockedTitle}>3-storey programme rule active</Text><Text style={styles.lockedText}>Includes an additional set of joists/flooring, one extra brickwork/scaffold lift, and +1 day to carpentry, plumbing and electrical 1st/2nd fix activities after Roof Tile.</Text></View> : null}
 
             {selectedNeedsClassification && !draft ? <View style={styles.warningBanner}>
               <Text style={styles.warningTitle}>⚠ This house type still has the old unclassified programme</Text>

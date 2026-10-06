@@ -179,10 +179,16 @@ test('site setup: three storey four bed adds extra structure and fix days', asyn
   const firstPlumbRow = (await inputWithValue(page, '1st fix plumbing')).locator('xpath=..');
   const firstElecRow = (await inputWithValue(page, '1st fix electrics')).locator('xpath=..');
   const secondCarpRow = (await inputWithValue(page, '2nd fix carpentry')).locator('xpath=..');
+  const carpFinalRow = (await inputWithValue(page, 'Carpentry finals')).locator('xpath=..');
+  const plumbFinalRow = (await inputWithValue(page, 'Plumbing Finals')).locator('xpath=..');
+  const elecFinalRow = (await inputWithValue(page, 'Electrical finals inc PV')).locator('xpath=..');
   expect(await firstCarpRow.locator('input').last().inputValue()).toBe('4');
   expect(await firstPlumbRow.locator('input').last().inputValue()).toBe('3');
   expect(await firstElecRow.locator('input').last().inputValue()).toBe('3');
   expect(await secondCarpRow.locator('input').last().inputValue()).toBe('4');
+  expect(await carpFinalRow.locator('input').last().inputValue()).toBe('1');
+  expect(await plumbFinalRow.locator('input').last().inputValue()).toBe('2');
+  expect(await elecFinalRow.locator('input').last().inputValue()).toBe('1');
 });
 
 test('feedback: accepts pasted screenshots and offers file attachment', async ({ page }) => {
