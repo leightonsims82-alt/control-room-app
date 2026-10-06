@@ -30,12 +30,6 @@ for (const file of codeFiles) {
 
   const rules = [
     {
-      id: 'numeric-coercion-during-typing',
-      severity: 'high',
-      re: /onChangeText\s*=\s*\{(?:(?!<TextInput\b)[\s\S]){0,300}?(?:toPositiveInt|parseInt|parseFloat|Number|Math\.max)\s*\(/g,
-      message: 'Numeric TextInput appears to coerce text to a number inside onChangeText. This can turn an empty edit into 1 or otherwise fight the user while typing. Keep a string draft and validate/convert on blur or save.'
-    },
-    {
       id: 'fallback-to-one',
       severity: 'high',
       re: /(?:Number|parseInt|parseFloat)\([^\n;]{0,120}\)\s*(?:\|\||\?\?)\s*1\b/g,
@@ -84,8 +78,8 @@ for (const file of codeFiles) {
     return false;
   };
   const visit = (node) => {
-    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && tagName(node) === 'Pressable') {
-      if (!hasAttribute(node, 'onPress') && !delegatedToLink(node)) {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      if (tagName(node) === 'Pressable' && !hasAttribute(node, 'onPress') && !delegatedToLink(node)) {
         findings.push({
           id: 'pressable-without-onpress',
           severity: 'warning',
@@ -94,6 +88,26 @@ for (const file of codeFiles) {
           message: 'Pressable has no onPress and is not delegated through <Link asChild>.',
           excerpt: node.getText(source).replace(/\s+/g, ' ').slice(0, 240)
         });
+      }
+
+      if (tagName(node) === 'TextInput') {
+        const keyboard = node.attributes.properties.find((property) => ts.isJsxAttribute(property) && property.name.getText(source) === 'keyboardType');
+        const keyboardText = keyboard?.getText(source) ?? '';
+        const numeric = /number-pad|numeric|decimal-pad/.test(keyboardText);
+        if (numeric) {
+          const change = node.attributes.properties.find((property) => ts.isJsxAttribute(property) && property.name.getText(source) === 'onChangeText');
+          const changeText = change?.getText(source) ?? '';
+          if (/(?:toPositiveInt|parseInt|parseFloat|\bNumber|Math\.max)\s*\(/.test(changeText)) {
+            findings.push({
+              id: 'numeric-coercion-during-typing',
+              severity: 'high',
+              file: file.replaceAll('\\', '/'),
+              line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+              message: 'Numeric TextInput coerces text to a number inside onChangeText. Keep a string draft and convert on blur/save.',
+              excerpt: changeText.replace(/\s+/g, ' ').slice(0, 240)
+            });
+          }
+        }
       }
     }
     ts.forEachChild(node, visit);
