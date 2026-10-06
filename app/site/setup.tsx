@@ -352,7 +352,7 @@ export default function SiteSetupScreen() {
               {[1, 2, 3].map((count) => <Pressable key={count} onPress={() => setNewFloors(count)} style={[styles.chip, newFloors === count ? styles.chipActive : null]}><Text style={[styles.chipText, newFloors === count ? styles.chipTextActive : null]}>{count}</Text></Pressable>)}
             </View>
           </View>
-          <Pressable disabled={saving} style={styles.primaryButton} onPress={createHouseType}><Text style={styles.primaryButtonText}>{saving ? 'Creating…' : 'Create House Type'}</Text></Pressable>
+          <Pressable disabled={saving} style={styles.primaryButton} onPress={createHouseType}><Text style={styles.primaryButtonText}>{saving ? 'Saving…' : 'Save New House Type'}</Text></Pressable>
         </View>
 
         {newFloors === 3 ? <View style={styles.messageBox}><Text style={styles.messageText}>Three-storey rule: adds another set of joists/flooring, one additional brickwork lift and scaffold lift before the roof sequence. After Roof Tile, carpentry, plumbing and electrical 1st/2nd fix activities each gain 1 day.</Text></View> : null}
@@ -416,6 +416,17 @@ export default function SiteSetupScreen() {
                 </View>)}
               </View>
             </ScrollView>
+
+            {draft ? <View style={styles.saveBar}>
+              <View style={styles.saveBarCopy}>
+                <Text style={styles.saveBarTitle}>Save house type changes</Text>
+                <Text style={styles.saveBarText}>The house type details and programme changes above are not stored until you press Save House Type.</Text>
+              </View>
+              <View style={styles.actionRow}>
+                <Pressable disabled={saving} style={styles.primaryButton} onPress={saveTemplate}><Text style={styles.primaryButtonText}>{saving ? 'Saving…' : 'Save House Type'}</Text></Pressable>
+                <Pressable disabled={saving} style={styles.secondaryButton} onPress={cancelEditTemplate}><Text style={styles.secondaryButtonText}>Cancel</Text></Pressable>
+              </View>
+            </View> : null}
           </> : null}
         </> : <View style={styles.messageBox}><Text style={styles.messageText}>No house types have been created yet. Create Warrley, Linngate or any other development house type above.</Text></View>}
       </SectionCard>
@@ -461,6 +472,10 @@ const styles = StyleSheet.create({
   lockedTitle: { color: '#166534', fontWeight: '900', fontSize: 14 },
   lockedText: { color: '#166534', fontWeight: '700', fontSize: 12, lineHeight: 18 },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  saveBar: { marginTop: 14, borderWidth: 1, borderColor: '#93c5fd', backgroundColor: '#eff6ff', borderRadius: 12, padding: 14, gap: 10, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' },
+  saveBarCopy: { flex: 1, minWidth: 260 },
+  saveBarTitle: { color: '#0f172a', fontWeight: '900', fontSize: 14 },
+  saveBarText: { color: '#475569', fontWeight: '700', fontSize: 12, lineHeight: 17, marginTop: 3 },
   activityTable: { minWidth: 1010 },
   activityRow: { flexDirection: 'row', alignItems: 'stretch' },
   seqCol: { width: 55 }, taskCol: { width: 250 }, tradeCol: { width: 190 }, displayCol: { width: 180 }, smallCol: { width: 80 }, actionCol: { width: 175 },
