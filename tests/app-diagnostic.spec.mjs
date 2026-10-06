@@ -453,6 +453,47 @@ test('site setup: Save Site Settings gives visible confirmation', async ({ page 
   await expect(page.getByText(/Site programme settings saved/i)).toBeVisible({ timeout: 10000 });
 });
 
+test('master: exact plot completion date is preserved instead of the week Monday', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('programme-buddy:existing-plots-cleared:2026-10-01-v1', new Date().toISOString());
+    localStorage.setItem('programme-buddy:house-types-reset:v2', 'done');
+    localStorage.setItem('programme-buddy:programme-setup:v1', JSON.stringify({
+      siteName: 'Exact Date QA',
+      defaultProgrammeWeeks: 25,
+      stageCount: 9,
+      workingWeek: '5 days - Monday to Friday',
+      includeSaturday: false,
+      includeSunday: false,
+      programmeStartDate: '05/01/2026'
+    }));
+    localStorage.setItem('programme-buddy:plots:v1', JSON.stringify([
+      {
+        id: 'plot-exact-154',
+        plotNo: '154',
+        buildOrder: 1,
+        stage9CompleteWeek: 49,
+        templateId: 'threeBed',
+        houseTypeId: 'threeBed',
+        constructionMethod: 'traditional'
+      }
+    ]));
+    localStorage.setItem('programme-buddy:plot-metadata:v1', JSON.stringify({
+      '154': {
+        plotNo: '154',
+        houseTypeName: 'QA House',
+        houseTypeId: 'threeBed',
+        buildRoute: 'Traditional',
+        programmeGenerationBasis: 'completion',
+        plotCompletionDate: '11/12/2026'
+      }
+    }));
+  });
+
+  await goto(page, '/master');
+  await expect(page.getByText('11/12/2026', { exact: true })).toBeVisible();
+  await expect(page.getByText('07/12/2026', { exact: true })).toHaveCount(0);
+});
+
 test('master: matrix Manage button opens the selected plot editor', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('programme-buddy:existing-plots-cleared:2026-10-01-v1', new Date().toISOString());
