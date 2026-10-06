@@ -318,7 +318,7 @@ function ordinal(value: number) {
 function shouldAddThreeStoreyFixDay(activity: TemplateActivity, roofTileOrder: number) {
   if (activity.order <= roofTileOrder) return false;
   if (!['Carpenter', 'Plumber', 'Electrician'].includes(activity.trade)) return false;
-  return /fix|final/i.test(activity.code);
+  return /\b(?:1st|2nd)\s+fix\b/i.test(activity.code);
 }
 
 export function applyHouseTypeFloorConfiguration(template: PlotTemplate, floors: number): PlotTemplate {
