@@ -48,6 +48,7 @@ export type SiteProgrammeSetup = {
   includeSaturday: boolean;
   includeSunday: boolean;
   programmeStartDate: string;
+  calendarWeekOne?: number;
 };
 
 export const DEFAULT_SITE_PROGRAMME_SETUP: SiteProgrammeSetup = {
