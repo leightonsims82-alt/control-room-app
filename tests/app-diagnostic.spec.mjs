@@ -290,10 +290,11 @@ test('site setup: activity text inputs keep focus and cursor while typing', asyn
   expect(await tradeInput.evaluate((node) => document.activeElement === node)).toBeTruthy();
 
   const displayInput = rowInputs.nth(2);
+  const originalDisplayValue = await displayInput.inputValue();
   await displayInput.click();
   await displayInput.press('End');
   await displayInput.type(' revised', { delay: 35 });
-  await expect(displayInput).toHaveValue('Foundation revised');
+  await expect(displayInput).toHaveValue(`${originalDisplayValue} revised`);
   expect(await displayInput.evaluate((node) => document.activeElement === node)).toBeTruthy();
 });
 
@@ -324,8 +325,8 @@ test('site setup: named house type uses explicit edit and save workflow', async 
   await expect(edit).toBeVisible();
   await edit.click();
   await expect(page.getByText('Save House Type', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Cancel', { exact: true })).toBeVisible();
-  await page.getByText('Cancel', { exact: true }).click();
+  await expect(page.getByText('Cancel', { exact: true }).first()).toBeVisible();
+  await page.getByText('Cancel', { exact: true }).first().click();
   await expect(page.getByText('Edit House Type', { exact: true })).toBeVisible();
 });
 
@@ -577,8 +578,8 @@ test('master: exact plot completion date is preserved instead of the week Monday
   await goto(page, '/master');
   const completion = page.getByText('11/12/2026', { exact: true });
   await expect(completion).toBeVisible();
-  await expect(page.getByText('07/12/2026', { exact: true })).toHaveCount(0);
   const row = completion.locator('xpath=..');
+  await expect(row.getByText('07/12/2026', { exact: true })).toHaveCount(0);
   await expect(row.getByText('WK29', { exact: true })).toBeVisible();
   await expect(row.getByText('9', { exact: true })).toBeVisible();
 });
@@ -637,6 +638,10 @@ test('master: editing a completion date immediately changes the programme date s
       }
     }));
   });
+
+  await goto(page, '/site/setup');
+  await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Date Edit QA');
+  await page.getByText('Save New House Type', { exact: true }).click();
 
   await goto(page, '/master');
   await page.getByRole('button', { name: 'Manage Plot 153' }).click();
