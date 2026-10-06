@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import ts from 'typescript';
 
 const roots = ['app', 'components', 'data', 'utils'];
 const codeFiles = [];
@@ -67,21 +68,37 @@ for (const file of codeFiles) {
     }
   }
 
-  // Flag Pressables with no obvious onPress in the opening tag. Some may be intentional,
-  // so these are warnings rather than hard failures.
-  for (const match of text.matchAll(/<Pressable\b([\s\S]*?)>/g)) {
-    const opening = match[0];
-    if (!/\bonPress\s*=/.test(opening)) {
-      findings.push({
-        id: 'pressable-without-onpress',
-        severity: 'warning',
-        file: file.replaceAll('\\', '/'),
-        line: lineOf(text, match.index ?? 0),
-        message: 'Pressable has no onPress in its opening tag; verify it is intentionally non-interactive.',
-        excerpt: opening.replace(/\s+/g, ' ').slice(0, 240)
-      });
+  // Parse JSX rather than regex-matching arrow expressions that contain ">".
+  // A Pressable may legitimately delegate its action to an ancestor <Link asChild>.
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const tagName = (node) => node.tagName?.getText(source);
+  const hasAttribute = (node, name) => node.attributes?.properties?.some((property) =>
+    ts.isJsxAttribute(property) && property.name.getText(source) === name
+  );
+  const delegatedToLink = (node) => {
+    let current = node.parent;
+    while (current) {
+      if (ts.isJsxElement(current) && tagName(current.openingElement) === 'Link' && hasAttribute(current.openingElement, 'asChild')) return true;
+      current = current.parent;
     }
-  }
+    return false;
+  };
+  const visit = (node) => {
+    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && tagName(node) === 'Pressable') {
+      if (!hasAttribute(node, 'onPress') && !delegatedToLink(node)) {
+        findings.push({
+          id: 'pressable-without-onpress',
+          severity: 'warning',
+          file: file.replaceAll('\\', '/'),
+          line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+          message: 'Pressable has no onPress and is not delegated through <Link asChild>.',
+          excerpt: node.getText(source).replace(/\s+/g, ' ').slice(0, 240)
+        });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
 }
 
 const report = {
@@ -103,5 +120,5 @@ for (const finding of findings) {
   console.log(`[${finding.severity.toUpperCase()}] ${finding.id} ${finding.file}:${finding.line} — ${finding.message}`);
 }
 
-// Do not abort here: browser diagnostics should still run so we get one complete report.
-process.exitCode = 0;
+// High-severity static findings fail the audit gate.
+process.exitCode = report.summary.high > 0 ? 1 : 0;
