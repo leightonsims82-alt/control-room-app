@@ -189,7 +189,7 @@ function normalisePlots(stored: TemplateSitePlot[]) {
 const LEGACY_PROPERTY_TEMPLATE_IDS = new Set(['apartment', 'twoBed', 'fourBed', 'fiveBed']);
 
 function normaliseTemplate(template: PlotTemplate) {
-  const isSystemTemplate = template.isSystemTemplate ?? template.id === 'threeBed' || template.id === 'timberFrame';
+  const isSystemTemplate = template.isSystemTemplate ?? (template.id === 'threeBed' || template.id === 'timberFrame');
   const isHouseType = template.isHouseType ?? (!isSystemTemplate && !LEGACY_PROPERTY_TEMPLATE_IDS.has(template.id));
   return {
     ...template,
