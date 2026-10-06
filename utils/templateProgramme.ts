@@ -31,6 +31,7 @@ export type PlotTemplate = {
   floors?: number;
   isHouseType?: boolean;
   isSystemTemplate?: boolean;
+  agreedStageScheduleVersion?: number;
   description: string;
   programmeWeeks: number;
   stageCount: number;
@@ -187,6 +188,7 @@ function makeTimberFrameTemplate(): PlotTemplate {
 const siteStandardTemplate: PlotTemplate = {
   ...makeTemplate('threeBed', 'Site Standard Programme', 'Locked baseline programme used when creating house types', 25),
   bedrooms: 3,
+  agreedStageScheduleVersion: 1,
   floors: 2,
   isHouseType: false,
   isSystemTemplate: true,
@@ -213,6 +215,88 @@ export function getPlotHoldDetail(plot: TemplateSitePlot) { return plot.holdStag
 export function getPlotBuildOrder(plot: TemplateSitePlot, fallbackIndex = 0) { return Number.isFinite(plot.buildOrder) && Number(plot.buildOrder) > 0 ? Number(plot.buildOrder) : fallbackIndex + 1; }
 export function getSortedSitePlots(plots: TemplateSitePlot[]) { return plots.slice().sort((a, b) => getPlotBuildOrder(a, 9999) - getPlotBuildOrder(b, 9999) || a.plotNo.localeCompare(b.plotNo, undefined, { numeric: true })); }
 export function getHouseTypeLabel(template: PlotTemplate) { return template.name.trim() || template.houseTypeCode?.trim() || 'House type'; }
+
+
+const AGREED_STAGE_SCHEDULE_VERSION = 1;
+
+function activitySearchText(activity: TemplateActivity) {
+  return `${activity.code} ${activity.displayText} ${activity.trade}`.trim().toLowerCase();
+}
+
+function findFirstActivityIndex(activities: TemplateActivity[], matcher: (activity: TemplateActivity) => boolean) {
+  return activities.findIndex(matcher);
+}
+
+/**
+ * Restores the stage allocation used by the locked traditional programme:
+ * 1 Foundations/drainage, 2 slab, 4 superstructure to wall plate,
+ * 5 roof, 6 first fix/pre-plaster, 7 second fix, 8 decoration,
+ * 9 finals/handover. Stage 3 is intentionally unused by the activity schedule.
+ *
+ * This only changes activity.stage. It never changes row order, task names,
+ * trades, displays or durations.
+ */
+export function applyAgreedTraditionalStageSchedule(template: PlotTemplate): PlotTemplate {
+  if (template.id === 'timberFrame' || template.constructionMethod === 'timberFrame') {
+    return { ...template, agreedStageScheduleVersion: AGREED_STAGE_SCHEDULE_VERSION };
+  }
+
+  const activities = template.activities.slice().sort((a, b) => a.order - b.order).map((activity) => ({ ...activity }));
+  if (!activities.length) return { ...template, agreedStageScheduleVersion: AGREED_STAGE_SCHEDULE_VERSION };
+
+  const trussIndex = findFirstActivityIndex(activities, (activity) => /\btruss\b/.test(activitySearchText(activity)));
+  const firstFixIndex = findFirstActivityIndex(activities, (activity) => {
+    const text = activitySearchText(activity);
+    return /\bwindows?\b/.test(text)
+      || /\b1st\s*(fix\s*)?carp/.test(text)
+      || /\bfirst\s*fix\s*carp/.test(text);
+  });
+  const secondFixIndex = findFirstActivityIndex(activities, (activity) => {
+    const text = activitySearchText(activity);
+    return /\b2nd\s*(fix\s*)?carp/.test(text)
+      || /\bsecond\s*fix\s*carp/.test(text);
+  });
+  const patchIndex = findFirstActivityIndex(activities, (activity) => activity.code.trim().toLowerCase() === 'patch');
+  const finalsIndex = findFirstActivityIndex(activities, (activity) => {
+    const text = activitySearchText(activity);
+    return /carpentry\s*final/.test(text) || /finals\s*carp/.test(text) || /carp\s*final/.test(text);
+  });
+
+  const safeTruss = trussIndex >= 0 ? trussIndex : activities.length;
+  const safeFirstFix = firstFixIndex >= 0 ? firstFixIndex : activities.length;
+  const safeSecondFix = secondFixIndex >= 0 ? secondFixIndex : activities.length;
+  const safePatch = patchIndex >= 0 ? patchIndex : activities.length;
+  const safeFinals = finalsIndex >= 0 ? finalsIndex : activities.length;
+
+  const migrated = activities.map((activity, index) => {
+    const text = activitySearchText(activity);
+    const code = activity.code.trim().toLowerCase();
+
+    let stage: ProgrammeStageNumber;
+    if (/\bfoundation\b|\bfnd\b|\bdrainage\b|\bdng\b/.test(text)) stage = 1;
+    else if (code === 'slab' || /\bslab\b|\boversite\b/.test(text)) stage = 2;
+    else if (index < safeTruss) stage = 4;
+    else if (index < safeFirstFix) stage = 5;
+    else if (index < safeSecondFix) stage = 6;
+    else if (index < safePatch) stage = 7;
+    else if (index < safeFinals) stage = 8;
+    else stage = 9;
+
+    return { ...activity, stage };
+  });
+
+  return {
+    ...template,
+    agreedStageScheduleVersion: AGREED_STAGE_SCHEDULE_VERSION,
+    activities: migrated,
+  };
+}
+
+export function needsAgreedStageScheduleMigration(template: PlotTemplate) {
+  return template.id !== 'timberFrame'
+    && template.constructionMethod !== 'timberFrame'
+    && template.agreedStageScheduleVersion !== AGREED_STAGE_SCHEDULE_VERSION;
+}
 
 const THREE_STOREY_AUTO_CODES = new Set([
   '2nd floor joists and flooring',
@@ -259,8 +343,9 @@ export function createHouseTypeTemplate(input: { name: string; bedrooms: number;
   const bedrooms = Math.max(1, Math.min(8, Math.round(Number(input.bedrooms) || 3)));
   const floors = Math.max(1, Math.min(3, Math.round(Number(input.floors) || 2)));
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'house-type';
+  const migratedBase = applyAgreedTraditionalStageSchedule(base);
   const draft: PlotTemplate = {
-    ...base,
+    ...migratedBase,
     id: `house-${slug}-${Date.now()}`,
     name,
     houseTypeCode: name,
@@ -270,7 +355,8 @@ export function createHouseTypeTemplate(input: { name: string; bedrooms: number;
     isSystemTemplate: false,
     constructionMethod: undefined,
     description: `${bedrooms} bedroom · ${floors} storey house type`,
-    activities: base.activities.map((activity) => ({ ...activity })),
+    agreedStageScheduleVersion: AGREED_STAGE_SCHEDULE_VERSION,
+    activities: migratedBase.activities.map((activity) => ({ ...activity })),
   };
   return applyHouseTypeFloorConfiguration(draft, floors);
 }
