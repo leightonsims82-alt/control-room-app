@@ -80,6 +80,7 @@ export default function SiteSetupScreen() {
   const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
   const selectedTemplate = houseTypes.find((template) => template.id === selectedTemplateId) ?? houseTypes[0];
   const displayTemplate = draft ?? selectedTemplate;
+  const selectedNeedsClassification = Boolean(selectedTemplate && (!selectedTemplate.bedrooms || !selectedTemplate.floors));
   const calculatedWeeks = displayTemplate ? getEffectiveProgrammeWeeks(displayTemplate, { ...siteSetup, includeSaturday: workingDays >= 6, includeSunday: workingDays >= 7 }) : 0;
 
   useEffect(() => {
@@ -131,6 +132,37 @@ export default function SiteSetupScreen() {
     setMessage('Template edit cancelled. Nothing was saved.');
   };
 
+  const standardForBedrooms = (bedrooms: number) => {
+    const standardId = getStandardTemplateIdForBedrooms(bedrooms);
+    return standardId === 'threeBed'
+      ? lockedThreeBed
+      : plotTemplates.find((template) => template.id === standardId) ?? null;
+  };
+
+  const applyBedroomStandardToDraft = (bedrooms: number) => {
+    setDraft((current) => {
+      if (!current) return current;
+      const standard = standardForBedrooms(bedrooms);
+      if (!standard) return { ...current, bedrooms };
+      const floors = current.floors ?? 2;
+      return applyHouseTypeFloorConfiguration({
+        ...cloneTemplate(standard),
+        id: current.id,
+        name: current.name,
+        houseTypeCode: current.name,
+        bedrooms,
+        floors,
+        isHouseType: true,
+        isSystemTemplate: false,
+        constructionMethod: undefined,
+        description: `${bedrooms} bedroom · ${floors} storey house type`,
+        standardVersion: standard.standardVersion,
+        activities: standard.activities.map((activity) => ({ ...activity })),
+      }, floors);
+    });
+    setMessage(`${bedrooms} Bedroom standard loaded into the draft. Press Save House Type to commit it.`);
+  };
+
   const saveTemplate = async () => {
     if (!draft) return;
     setSaving(true);
@@ -161,10 +193,7 @@ export default function SiteSetupScreen() {
   const resetSelectedToSiteStandard = () => {
     if (!selectedTemplate) return;
     const bedroomCount = selectedTemplate.bedrooms ?? 3;
-    const standardId = getStandardTemplateIdForBedrooms(bedroomCount);
-    const standard = standardId === 'threeBed'
-      ? lockedThreeBed
-      : plotTemplates.find((template) => template.id === standardId);
+    const standard = standardForBedrooms(bedroomCount);
     if (!standard) return;
     const reset = applyHouseTypeFloorConfiguration({
       ...cloneTemplate(standard),
@@ -339,8 +368,8 @@ export default function SiteSetupScreen() {
           {displayTemplate ? <>
             <View style={styles.templateSummary}>
               <View><Text style={styles.label}>House type</Text><Text style={styles.summaryValue}>{getHouseTypeLabel(displayTemplate)}</Text></View>
-              <View><Text style={styles.label}>Bedrooms</Text><Text style={styles.summaryValue}>{displayTemplate.bedrooms ?? '-'}</Text></View>
-              <View><Text style={styles.label}>Storeys</Text><Text style={styles.summaryValue}>{displayTemplate.floors ?? '-'}</Text></View>
+              <View><Text style={styles.label}>Bedrooms</Text><Text style={styles.summaryValue}>{displayTemplate.bedrooms ?? 'Not set'}</Text></View>
+              <View><Text style={styles.label}>Storeys</Text><Text style={styles.summaryValue}>{displayTemplate.floors ?? 'Not set'}</Text></View>
               <View><Text style={styles.label}>Target weeks</Text><Text style={styles.summaryValue}>{displayTemplate.programmeWeeks}</Text></View>
               <View><Text style={styles.label}>Stages</Text><Text style={styles.summaryValue}>9</Text></View>
               <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>Calculated weeks</Text><Text style={styles.calculatedValue}>{calculatedWeeks}</Text></View>
@@ -348,16 +377,21 @@ export default function SiteSetupScreen() {
 
             {displayTemplate.floors === 3 ? <View style={styles.lockedBanner}><Text style={styles.lockedTitle}>3-storey programme rule active</Text><Text style={styles.lockedText}>Includes an additional set of joists/flooring, one extra brickwork/scaffold lift, and +1 day to carpentry, plumbing and electrical fix/final activities after Roof Tile.</Text></View> : null}
 
+            {selectedNeedsClassification && !draft ? <View style={styles.warningBanner}>
+              <Text style={styles.warningTitle}>⚠ This house type still has the old unclassified programme</Text>
+              <Text style={styles.warningText}>It was created before bedroom and storey data were added, so the app cannot know whether to apply the 3 Bedroom or 4 Bedroom standard. Click Complete House Type Setup, choose the correct bedroom count and storeys, then save. Selecting 4 bedrooms will immediately load the agreed 4 Bedroom programme.</Text>
+            </View> : null}
+
             <View style={styles.actionRow}>
-              {!draft ? <Pressable style={styles.primaryButton} onPress={beginEditTemplate}><Text style={styles.primaryButtonText}>Edit House Type</Text></Pressable> : null}
-              {!draft ? <Pressable style={styles.secondaryButton} onPress={resetSelectedToSiteStandard}><Text style={styles.secondaryButtonText}>Reset Programme to Site Standard</Text></Pressable> : null}
+              {!draft ? <Pressable style={styles.primaryButton} onPress={beginEditTemplate}><Text style={styles.primaryButtonText}>{selectedNeedsClassification ? 'Complete House Type Setup' : 'Edit House Type'}</Text></Pressable> : null}
+              {!draft && !selectedNeedsClassification ? <Pressable style={styles.secondaryButton} onPress={resetSelectedToSiteStandard}><Text style={styles.secondaryButtonText}>Reset Programme to {selectedTemplate?.bedrooms === 4 ? '4 Bedroom' : '3 Bedroom'} Standard</Text></Pressable> : null}
               {draft ? <Pressable disabled={saving} style={styles.primaryButton} onPress={saveTemplate}><Text style={styles.primaryButtonText}>{saving ? 'Saving…' : 'Save House Type'}</Text></Pressable> : null}
               {draft ? <Pressable style={styles.secondaryButton} onPress={cancelEditTemplate}><Text style={styles.secondaryButtonText}>Cancel</Text></Pressable> : null}
             </View>
 
             {draft ? <View style={styles.settingsGrid}>
               <View style={styles.field}><Text style={styles.label}>House type name</Text><TextInput value={draft.name} onChangeText={(value) => patchDraftDetails({ name: value, houseTypeCode: value })} style={styles.input} /></View>
-              <View style={styles.field}><Text style={styles.label}>Bedrooms</Text><View style={styles.chips}>{[1,2,3,4,5,6].map((count) => <Pressable key={count} onPress={() => patchDraftDetails({ bedrooms: count })} style={[styles.chip, draft.bedrooms === count ? styles.chipActive : null]}><Text style={[styles.chipText, draft.bedrooms === count ? styles.chipTextActive : null]}>{count}</Text></Pressable>)}</View></View>
+              <View style={styles.field}><Text style={styles.label}>Bedrooms</Text><View style={styles.chips}>{[1,2,3,4,5,6].map((count) => <Pressable key={count} onPress={() => applyBedroomStandardToDraft(count)} style={[styles.chip, draft.bedrooms === count ? styles.chipActive : null]}><Text style={[styles.chipText, draft.bedrooms === count ? styles.chipTextActive : null]}>{count}</Text></Pressable>)}</View><Text style={styles.fieldHint}>Changing bedrooms reloads the matching standard programme. 4 Bedroom uses your new agreed schedule; all other current sizes use the existing 3 Bedroom standard until you define another standard.</Text></View>
               <View style={styles.field}><Text style={styles.label}>Storeys</Text><View style={styles.chips}>{[1,2,3].map((count) => <Pressable key={count} onPress={() => patchDraftDetails({ floors: count })} style={[styles.chip, draft.floors === count ? styles.chipActive : null]}><Text style={[styles.chipText, draft.floors === count ? styles.chipTextActive : null]}>{count}</Text></Pressable>)}</View></View>
             </View> : null}
 
@@ -438,6 +472,10 @@ const styles = StyleSheet.create({
   addButtonText: { color: '#166534', fontWeight: '900' },
   removeButton: { backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5 },
   removeButtonText: { color: '#b91c1c', fontWeight: '900' },
+  warningBanner: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74', borderRadius: 12, padding: 13, gap: 4 },
+  warningTitle: { color: '#9a3412', fontWeight: '900', fontSize: 14 },
+  warningText: { color: '#9a3412', fontWeight: '700', fontSize: 12, lineHeight: 18 },
+  fieldHint: { color: '#64748b', fontSize: 11, lineHeight: 16, fontWeight: '700' },
   messageBox: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12 },
   messageText: { color: '#334155', fontWeight: '800' },
 });
