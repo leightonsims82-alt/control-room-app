@@ -1,5 +1,7 @@
 name: Legacy House Type Diagnostic
 
+# feature diagnostic
+
 # Full regression gate after programme repairs.
 on:
   workflow_dispatch:
