@@ -381,11 +381,18 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           setProgrammeNotes(storedNotes);
           programmeNotesRef.current = storedNotes;
           const houseTypesReset = await AsyncStorage.getItem(HOUSE_TYPES_RESET_KEY);
-          const mergedTemplates = mergeDefaultTemplates(storedTemplates.length ? storedTemplates : DEFAULT_PLOT_TEMPLATES);
+          const templatesForMigration = houseTypesReset === 'done'
+            ? storedTemplates
+            : storedTemplates.filter((template) => !(
+                ['custom-cambridge', 'custom-ashford'].includes(template.id)
+                || (['cambridge', 'ashford'].includes(template.name.trim().toLowerCase()) && template.description === 'legacy')
+              ));
+          const mergedTemplates = mergeDefaultTemplates(templatesForMigration.length ? templatesForMigration : DEFAULT_PLOT_TEMPLATES);
           setPlotTemplates(mergedTemplates);
           await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(mergedTemplates));
           if (houseTypesReset !== 'done') {
-            // Marker retained only for compatibility. Never clear or replace saved house types automatically.
+            // Targeted one-time migration: remove only the two known obsolete development templates.
+            // All other saved/customised house types remain untouched.
             await AsyncStorage.setItem(HOUSE_TYPES_RESET_KEY, 'done');
           }
           setSiteSetupState(migratedSiteSetup);
