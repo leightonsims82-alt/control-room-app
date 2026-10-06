@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { houseTypes as demoHouseTypes, plotProgrammes as demoPlots, plotStages as demoStages } from './demoData';
 import { getInspectionTemplateForStage } from '../utils/inspectionTemplateResolver';
 import { DabsBriefingItem, UpdateDabsBriefingItemInput } from '../types/dabs';
@@ -169,10 +169,15 @@ function createBlankDabsItem(plot: PlotProgramme, briefingDate: string, stage?: 
 
 export function ProgrammeDataProvider({ children }: PropsWithChildren) {
   const [plotProgrammes, setPlotProgrammes] = useState<PlotProgramme[]>(demoPlots);
+  const plotProgrammesRef = useRef<PlotProgramme[]>(demoPlots);
   const [plotStages, setPlotStages] = useState<PlotStage[]>(demoStages);
+  const plotStagesRef = useRef<PlotStage[]>(demoStages);
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);
+  const inspectionsRef = useRef<InspectionRecord[]>([]);
   const [defects, setDefects] = useState<DefectAction[]>([]);
+  const defectsRef = useRef<DefectAction[]>([]);
   const [dabsBriefings, setDabsBriefings] = useState<DabsBriefingItem[]>([]);
+  const dabsBriefingsRef = useRef<DabsBriefingItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -187,6 +192,11 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
           readArray<DabsBriefingItem>(DABS_KEY, []),
         ]);
         if (mounted) {
+          plotProgrammesRef.current = plots;
+          plotStagesRef.current = stages;
+          inspectionsRef.current = storedInspections;
+          defectsRef.current = storedDefects;
+          dabsBriefingsRef.current = storedDabs;
           setPlotProgrammes(plots);
           setPlotStages(stages);
           setInspections(storedInspections);
@@ -229,8 +239,10 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
       jurisdiction: input.jurisdiction ?? 'England',
       foundationType: input.foundationType ?? 'Unknown',
     };
-    const nextPlots = [...plotProgrammes, newPlot];
-    const nextStages = [...plotStages, ...generatedStages];
+    const nextPlots = [...plotProgrammesRef.current, newPlot];
+    const nextStages = [...plotStagesRef.current, ...generatedStages];
+    plotProgrammesRef.current = nextPlots;
+    plotStagesRef.current = nextStages;
     setPlotProgrammes(nextPlots);
     setPlotStages(nextStages);
     await Promise.all([
@@ -241,20 +253,21 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
   };
 
   const updateStageStatus = async (stageId: string, status: StageStatus) => {
-    const nextStages = plotStages.map((stage) => (stage.id === stageId ? { ...stage, status } : stage));
+    const nextStages = plotStagesRef.current.map((stage) => (stage.id === stageId ? { ...stage, status } : stage));
+    plotStagesRef.current = nextStages;
     setPlotStages(nextStages);
     await AsyncStorage.setItem(STAGES_KEY, JSON.stringify(nextStages));
   };
 
   const startInspectionForStage = async (stageId: string) => {
-    const stage = plotStages.find((item) => item.id === stageId);
+    const stage = plotStagesRef.current.find((item) => item.id === stageId);
     if (!stage) return undefined;
-    const buildType = getBuildTypeForStage(stage, plotProgrammes);
-    const foundationType = getFoundationTypeForStage(stage, plotProgrammes);
+    const buildType = getBuildTypeForStage(stage, plotProgrammesRef.current);
+    const foundationType = getFoundationTypeForStage(stage, plotProgrammesRef.current);
     const template = getInspectionTemplateForStage(stage.stageName, buildType, foundationType);
     if (!template) return undefined;
 
-    const existing = inspections.find((inspection) => inspection.plotStageId === stageId);
+    const existing = inspectionsRef.current.find((inspection) => inspection.plotStageId === stageId);
     if (existing) return existing;
 
     const inspection: InspectionRecord = {
@@ -268,8 +281,10 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
       items: createChecklistItems(stage, buildType, foundationType),
     };
 
-    const nextInspections = [...inspections, inspection];
-    const nextStages = plotStages.map((item) => (item.id === stageId ? { ...item, inspectionStatus: 'Inspection in progress' as InspectionStatus } : item));
+    const nextInspections = [...inspectionsRef.current, inspection];
+    const nextStages = plotStagesRef.current.map((item) => (item.id === stageId ? { ...item, inspectionStatus: 'Inspection in progress' as InspectionStatus } : item));
+    inspectionsRef.current = nextInspections;
+    plotStagesRef.current = nextStages;
     setInspections(nextInspections);
     setPlotStages(nextStages);
     await Promise.all([
@@ -280,39 +295,43 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
   };
 
   const updateInspectionItem = async (inspectionId: string, itemId: string, input: UpdateInspectionItemInput) => {
-    const nextInspections = inspections.map((inspection) => {
+    const nextInspections = inspectionsRef.current.map((inspection) => {
       if (inspection.id !== inspectionId) return inspection;
       const nextItems = inspection.items.map((item) => (item.id === itemId ? { ...item, ...input } : item));
       return { ...inspection, status: getInspectionStatusFromItems(nextItems), items: nextItems };
     });
+    inspectionsRef.current = nextInspections;
     setInspections(nextInspections);
     await AsyncStorage.setItem(INSPECTIONS_KEY, JSON.stringify(nextInspections));
   };
 
   const completeInspection = async (inspectionId: string) => {
-    const inspection = inspections.find((item) => item.id === inspectionId);
+    const inspection = inspectionsRef.current.find((item) => item.id === inspectionId);
     if (!inspection) return;
-    const stage = plotStages.find((item) => item.id === inspection.plotStageId);
+    const stage = plotStagesRef.current.find((item) => item.id === inspection.plotStageId);
     if (!stage) return;
 
     const completedStatus = getInspectionStatusFromItems(inspection.items);
     const failedItems = inspection.items.filter((item) => item.compliant === 'No');
-    const nextDefects = [...defects];
+    const nextDefects = [...defectsRef.current];
 
     failedItems.forEach((item) => {
       const existingDefect = nextDefects.find((defect) => defect.checklistItemId === item.id);
       if (!existingDefect) nextDefects.push(createDefectFromItem(stage, inspection, item));
     });
 
-    const nextInspections = inspections.map((item) =>
+    const nextInspections = inspectionsRef.current.map((item) =>
       item.id === inspectionId
         ? { ...item, status: completedStatus, completedAt: new Date().toISOString() }
         : item,
     );
-    const nextStages = plotStages.map((item) =>
+    const nextStages = plotStagesRef.current.map((item) =>
       item.id === inspection.plotStageId ? { ...item, inspectionStatus: completedStatus } : item,
     );
 
+    inspectionsRef.current = nextInspections;
+    defectsRef.current = nextDefects;
+    plotStagesRef.current = nextStages;
     setInspections(nextInspections);
     setDefects(nextDefects);
     setPlotStages(nextStages);
@@ -324,28 +343,30 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
   };
 
   const updateDefect = async (defectId: string, input: UpdateDefectInput) => {
-    const nextDefects = defects.map((defect) => {
+    const nextDefects = defectsRef.current.map((defect) => {
       if (defect.id !== defectId) return defect;
       const closedAt = input.status === 'Verified fixed' ? new Date().toISOString() : defect.closedAt;
       return { ...defect, ...input, closedAt };
     });
+    defectsRef.current = nextDefects;
     setDefects(nextDefects);
     await AsyncStorage.setItem(DEFECTS_KEY, JSON.stringify(nextDefects));
   };
 
   const upsertDabsBriefing = async (plotProgrammeId: string, briefingDate: string, input: UpdateDabsBriefingItemInput) => {
-    const plot = plotProgrammes.find((item) => item.id === plotProgrammeId);
+    const plot = plotProgrammesRef.current.find((item) => item.id === plotProgrammeId);
     if (!plot) return;
-    const stage = input.plotStageId ? plotStages.find((item) => item.id === input.plotStageId) : plotStages.find((item) => item.plotProgrammeId === plotProgrammeId && item.status !== 'Complete');
-    const existing = dabsBriefings.find((item) => item.plotProgrammeId === plotProgrammeId && item.briefingDate === briefingDate);
+    const stage = input.plotStageId ? plotStagesRef.current.find((item) => item.id === input.plotStageId) : plotStagesRef.current.find((item) => item.plotProgrammeId === plotProgrammeId && item.status !== 'Complete');
+    const existing = dabsBriefingsRef.current.find((item) => item.plotProgrammeId === plotProgrammeId && item.briefingDate === briefingDate);
     const updated: DabsBriefingItem = {
       ...(existing ?? createBlankDabsItem(plot, briefingDate, stage)),
       ...input,
       updatedAt: new Date().toISOString(),
     };
     const nextDabs = existing
-      ? dabsBriefings.map((item) => (item.id === existing.id ? updated : item))
-      : [...dabsBriefings, updated];
+      ? dabsBriefingsRef.current.map((item) => (item.id === existing.id ? updated : item))
+      : [...dabsBriefingsRef.current, updated];
+    dabsBriefingsRef.current = nextDabs;
     setDabsBriefings(nextDabs);
     await AsyncStorage.setItem(DABS_KEY, JSON.stringify(nextDabs));
   };
