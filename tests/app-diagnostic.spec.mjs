@@ -267,6 +267,36 @@ test('site setup: changing a house type to four bedrooms loads the agreed four b
   await expect(page.getByText('Reset Programme to 4 Bedroom Standard', { exact: true })).toBeVisible();
 });
 
+test('site setup: activity text inputs keep focus and cursor while typing', async ({ page }) => {
+  await goto(page, '/site/setup');
+  await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Cursor QA');
+  await page.getByText('Save New House Type', { exact: true }).click();
+  await page.getByText('Edit House Type', { exact: true }).click();
+
+  const taskInput = await inputWithValue(page, 'Foundation');
+  await taskInput.click();
+  await taskInput.press('End');
+  await taskInput.type(' revised', { delay: 35 });
+  await expect(taskInput).toHaveValue('Foundation revised');
+  expect(await taskInput.evaluate((node) => document.activeElement === node)).toBeTruthy();
+
+  const taskRow = taskInput.locator('xpath=..');
+  const rowInputs = taskRow.locator('input');
+  const tradeInput = rowInputs.nth(1);
+  await tradeInput.click();
+  await tradeInput.press('End');
+  await tradeInput.type(' team', { delay: 35 });
+  await expect(tradeInput).toHaveValue('Groundworks team');
+  expect(await tradeInput.evaluate((node) => document.activeElement === node)).toBeTruthy();
+
+  const displayInput = rowInputs.nth(2);
+  await displayInput.click();
+  await displayInput.press('End');
+  await displayInput.type(' revised', { delay: 35 });
+  await expect(displayInput).toHaveValue('Foundation revised');
+  expect(await displayInput.evaluate((node) => document.activeElement === node)).toBeTruthy();
+});
+
 test('site setup: explicit save actions persist house type details', async ({ page }) => {
   await goto(page, '/site/setup');
   await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Save Action QA');
