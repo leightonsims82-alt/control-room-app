@@ -15,6 +15,7 @@ export type SiteProgFeedback = {
   synced: boolean;
   screenshotPath?: string;
   screenshotDataUrl?: string;
+  deliveryWarning?: string;
 };
 
 async function saveLocal(item: SiteProgFeedback) {
@@ -60,11 +61,13 @@ export async function submitSiteProgFeedback(input: {
 
   const id = `feedback-${Date.now()}`;
   let screenshotPath: string | undefined;
+  let screenshotUploadFailed = false;
 
   if (supabase && input.screenshotDataUrl) {
     try {
       screenshotPath = await uploadScreenshot(input.screenshotDataUrl, id);
     } catch (error) {
+      screenshotUploadFailed = true;
       console.warn('Unable to upload feedback screenshot', error);
     }
   }
@@ -90,12 +93,32 @@ export async function submitSiteProgFeedback(input: {
     });
 
     if (!error) {
+      if (screenshotUploadFailed) {
+        const partialItem = {
+          ...item,
+          synced: false,
+          deliveryWarning: 'Feedback text was sent, but the screenshot could not be uploaded. A local copy with the screenshot has been kept.',
+        };
+        await saveLocal(partialItem);
+        return partialItem;
+      }
       const syncedItem = { ...item, synced: true };
       await saveLocal(syncedItem);
       return syncedItem;
     }
+
+    const localItem = {
+      ...item,
+      deliveryWarning: 'Cloud delivery failed. Your feedback has been saved on this device.',
+    };
+    await saveLocal(localItem);
+    return localItem;
   }
 
-  await saveLocal(item);
-  return item;
+  const localItem = {
+    ...item,
+    deliveryWarning: 'Cloud feedback is not connected. Your feedback has been saved on this device.',
+  };
+  await saveLocal(localItem);
+  return localItem;
 }
