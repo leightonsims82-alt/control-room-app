@@ -81,3 +81,14 @@ export function getConfiguredStageForRelativeWeek(stages: ConfiguredProgrammeSta
     .filter((stage) => relativeWeek >= stage.startWeek && relativeWeek <= stage.finishWeek)
     .sort((first, second) => second.stage - first.stage)[0];
 }
+
+export function getConfiguredStageProgrammeStartWeek(stages: ConfiguredProgrammeStage[], completionWeek: number) {
+  const finalFinishWeek = stages.length ? Math.max(...stages.map((stage) => stage.finishWeek)) : 1;
+  return Math.max(1, Math.round(completionWeek) - finalFinishWeek + 1);
+}
+
+export function getConfiguredStageForProgrammeWeek(stages: ConfiguredProgrammeStage[], completionWeek: number, programmeWeek: number) {
+  const stageStartWeek = getConfiguredStageProgrammeStartWeek(stages, completionWeek);
+  const relativeWeek = Math.round(programmeWeek) - stageStartWeek + 1;
+  return getConfiguredStageForRelativeWeek(stages, relativeWeek);
+}

@@ -487,11 +487,26 @@ test('master: exact plot completion date is preserved instead of the week Monday
         plotCompletionDate: '11/12/2026'
       }
     }));
+    localStorage.setItem('programme-buddy:stage-configuration:v1', JSON.stringify([
+      { stage: 1, label: 'Foundations', startWeek: 1, finishWeek: 2 },
+      { stage: 2, label: 'Slab / oversite', startWeek: 3, finishWeek: 8 },
+      { stage: 3, label: 'Superstructure', startWeek: 9, finishWeek: 12 },
+      { stage: 4, label: 'Roof covering', startWeek: 13, finishWeek: 14 },
+      { stage: 5, label: 'Pre-plaster', startWeek: 15, finishWeek: 16 },
+      { stage: 6, label: 'Drylinings', startWeek: 17, finishWeek: 18 },
+      { stage: 7, label: '2nd fix', startWeek: 19, finishWeek: 20 },
+      { stage: 8, label: 'Patching', startWeek: 21, finishWeek: 21 },
+      { stage: 9, label: 'Finals', startWeek: 22, finishWeek: 22 }
+    ]));
   });
 
   await goto(page, '/master');
-  await expect(page.getByText('11/12/2026', { exact: true })).toBeVisible();
+  const completion = page.getByText('11/12/2026', { exact: true });
+  await expect(completion).toBeVisible();
   await expect(page.getByText('07/12/2026', { exact: true })).toHaveCount(0);
+  const row = completion.locator('xpath=..');
+  await expect(row.getByText('WK29', { exact: true })).toBeVisible();
+  await expect(row.getByText('9', { exact: true })).toBeVisible();
 });
 
 test('master: matrix Manage button opens the selected plot editor', async ({ page }) => {
