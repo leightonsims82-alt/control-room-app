@@ -7,7 +7,8 @@ export type PlotBuildRoute = 'Traditional' | 'Timber Frame';
 export type PlotMetadata = {
   plotNo: string;
   houseTypeName: string;
-  bedroomTemplateId: string;
+  houseTypeId?: string;
+  bedroomTemplateId?: string;
   buildRoute: PlotBuildRoute;
   programmeGenerationBasis?: 'start' | 'completion';
   plotStartDate?: string;
