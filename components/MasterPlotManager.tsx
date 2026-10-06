@@ -4,7 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useSitePlanner } from '../data/sitePlannerStore';
 import { formatBritishDate, formatProgrammeDate, getProgrammeWeekForDate, parseProgrammeDate, validatePlotCompletionDate } from '../utils/programmeDates';
 import { getPlotMetadataKey, PlotBuildRoute, readPlotMetadata, removePlotMetadata, savePlotMetadata } from '../utils/plotMetadata';
-import { getEffectiveProgrammeWeeks, getHouseTypeLabel, getTemplateById } from '../utils/templateProgramme';
+import { getEffectiveProgrammeWeeks, getHouseTypeTemplates, getTemplateById } from '../utils/templateProgramme';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 function shiftWeeks(value: string, weeks: number) {
@@ -16,15 +16,15 @@ export function MasterPlotManager() {
   const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot } = useSitePlanner();
   const [visible, setVisible] = useState(false);
   const [selectedId, setSelectedId] = useState('');
-  const [houseTypeName, setHouseTypeName] = useState('');
   const [buildRoute, setBuildRoute] = useState<PlotBuildRoute>('Traditional');
-  const [templateId, setTemplateId] = useState('threeBed');
+  const [houseTypeId, setHouseTypeId] = useState('');
   const [completionDate, setCompletionDate] = useState('');
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const bedroomTemplates = useMemo(() => plotTemplates.filter((template) => template.id !== 'timberFrame'), [plotTemplates]);
+  const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
   const selectedPlot = sitePlots.find((plot) => plot.id === selectedId) ?? sitePlots[0];
+  const selectedHouseType = houseTypes.find((template) => template.id === houseTypeId) ?? houseTypes[0];
 
   const loadPlot = async (plotId: string) => {
     const plot = sitePlots.find((item) => item.id === plotId) ?? sitePlots[0];
@@ -32,9 +32,8 @@ export function MasterPlotManager() {
     const metadata = await readPlotMetadata();
     const detail = metadata[getPlotMetadataKey(plot.plotNo)];
     setSelectedId(plot.id);
-    setHouseTypeName(detail?.houseTypeName ?? '');
-    setBuildRoute(detail?.buildRoute ?? (plot.templateId === 'timberFrame' ? 'Timber Frame' : 'Traditional'));
-    setTemplateId(detail?.bedroomTemplateId ?? (plot.templateId === 'timberFrame' ? 'threeBed' : plot.templateId ?? 'threeBed'));
+    setBuildRoute(detail?.buildRoute ?? (plot.constructionMethod === 'timberFrame' ? 'Timber Frame' : 'Traditional'));
+    setHouseTypeId(plot.houseTypeId ?? detail?.houseTypeId ?? detail?.bedroomTemplateId ?? (plot.templateId === 'timberFrame' ? '' : plot.templateId ?? ''));
     setCompletionDate(detail?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek));
     setMessage('');
     setConfirmDelete(false);
@@ -57,14 +56,22 @@ export function MasterPlotManager() {
     if (!completionWeek) { setMessage('Unable to calculate the programme week for that date.'); return; }
     setSaving(true);
     try {
-      const programmeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : templateId;
-      await upsertSitePlot({ plotNo: selectedPlot.plotNo, buildOrder: selectedPlot.buildOrder, stage9CompleteWeek: completionWeek, templateId: programmeTemplateId });
+      if (!selectedHouseType) { setMessage('Create and select a house type before saving this plot.'); return; }
+      const programmeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : selectedHouseType.id;
+      await upsertSitePlot({
+        plotNo: selectedPlot.plotNo,
+        buildOrder: selectedPlot.buildOrder,
+        stage9CompleteWeek: completionWeek,
+        templateId: selectedHouseType.id,
+        houseTypeId: selectedHouseType.id,
+        constructionMethod: buildRoute === 'Timber Frame' ? 'timberFrame' : 'traditional',
+      });
       const programmeTemplate = getTemplateById(programmeTemplateId, plotTemplates);
       const programmeWeeks = getEffectiveProgrammeWeeks(programmeTemplate, siteSetup);
       await savePlotMetadata({
         plotNo: selectedPlot.plotNo,
-        houseTypeName,
-        bedroomTemplateId: templateId,
+        houseTypeName: selectedHouseType.name,
+        houseTypeId: selectedHouseType.id,
         buildRoute,
         programmeGenerationBasis: 'completion',
         plotStartDate: shiftWeeks(completionDate, -(programmeWeeks - 1)),
@@ -103,11 +110,11 @@ export function MasterPlotManager() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.plotChips}>{sitePlots.map((plot) => <Pressable key={plot.id} onPress={() => loadPlot(plot.id)} style={[styles.chip, selectedPlot?.id === plot.id ? styles.chipActive : null]}><Text style={[styles.chipText, selectedPlot?.id === plot.id ? styles.chipTextActive : null]}>Plot {plot.plotNo}</Text></Pressable>)}</ScrollView>
           <View style={styles.formGrid}>
             <View style={styles.field}><Text style={styles.label}>Plot</Text><Text style={styles.readonly}>{selectedPlot?.plotNo}</Text></View>
-            <View style={styles.field}><Text style={styles.label}>House type</Text><TextInput value={houseTypeName} onChangeText={setHouseTypeName} style={styles.input} /></View>
+            <View style={styles.field}><Text style={styles.label}>House type</Text><Text style={styles.readonly}>{selectedHouseType?.name ?? 'Select below'}</Text></View>
             <View style={styles.field}><Text style={styles.label}>Completion date</Text><TextInput value={completionDate} onChangeText={setCompletionDate} placeholder="DD/MM/YYYY" style={styles.input} /></View>
           </View>
           <View style={styles.field}><Text style={styles.label}>Build route</Text><View style={styles.routeRow}>{(['Traditional','Timber Frame'] as PlotBuildRoute[]).map((route) => <Pressable key={route} onPress={() => setBuildRoute(route)} style={[styles.chip, buildRoute === route ? styles.chipActive : null]}><Text style={[styles.chipText, buildRoute === route ? styles.chipTextActive : null]}>{route}</Text></Pressable>)}</View></View>
-          <View style={styles.field}><Text style={styles.label}>Property size</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.routeRow}>{bedroomTemplates.map((template) => <Pressable key={template.id} onPress={() => setTemplateId(template.id)} style={[styles.chip, templateId === template.id ? styles.chipActive : null]}><Text style={[styles.chipText, templateId === template.id ? styles.chipTextActive : null]}>{getHouseTypeLabel(template)}</Text></Pressable>)}</ScrollView></View>
+          <View style={styles.field}><Text style={styles.label}>House type</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.routeRow}>{houseTypes.map((template) => <Pressable key={template.id} onPress={() => setHouseTypeId(template.id)} style={[styles.chip, selectedHouseType?.id === template.id ? styles.chipActive : null]}><Text style={[styles.chipText, selectedHouseType?.id === template.id ? styles.chipTextActive : null]}>{template.name}</Text></Pressable>)}</ScrollView>{selectedHouseType ? <Text style={styles.subtitle}>{selectedHouseType.bedrooms ?? '-'} bedrooms · {selectedHouseType.floors ?? '-'} storeys</Text> : <Text style={styles.subtitle}>Create a house type in Site Setup first.</Text>}</View>
           {message ? <Text style={styles.message}>{message}</Text> : null}
           <View style={styles.actions}><Pressable disabled={saving} style={styles.saveButton} onPress={saveChanges}><Text style={styles.saveText}>{saving ? 'Saving…' : 'Save Plot Changes'}</Text></Pressable><Pressable disabled={saving} style={[styles.deleteButton, confirmDelete ? styles.deleteConfirm : null]} onPress={deletePlot}><Text style={styles.deleteText}>{confirmDelete ? `Confirm Delete Plot ${selectedPlot?.plotNo}` : 'Delete Plot'}</Text></Pressable></View>
         </> : <View style={styles.empty}><Text style={styles.emptyTitle}>No plots saved</Text><Text style={styles.subtitle}>Add a plot from the Master Programme first.</Text></View>}
