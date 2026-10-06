@@ -9,7 +9,7 @@ import { useSitePlanner } from '../../data/sitePlannerStore';
 import { getProgrammeStartDateValue, normaliseBritishDate, validateWeekOneDate } from '../../utils/programmeDates';
 import { ConfiguredProgrammeStage, readStageConfiguration, saveStageConfiguration } from '../../utils/stageConfiguration';
 import { PROGRAMME_STAGE_SEQUENCE } from '../../utils/siteProgrammeEngine';
-import { applyHouseTypeFloorConfiguration, getEffectiveProgrammeWeeks, getHouseTypeLabel, getHouseTypeTemplates, PlotTemplate, TemplateActivity } from '../../utils/templateProgramme';
+import { applyHouseTypeFloorConfiguration, getEffectiveProgrammeWeeks, getHouseTypeLabel, getHouseTypeTemplates, getStandardTemplateIdForBedrooms, PlotTemplate, TemplateActivity } from '../../utils/templateProgramme';
 
 const LOCKED_STANDARD_KEY = 'programme-buddy:locked-three-bed-standard:v1';
 const LOCKED_STAGE_COUNT = 9;
@@ -159,13 +159,19 @@ export default function SiteSetupScreen() {
   };
 
   const resetSelectedToSiteStandard = () => {
-    if (!lockedThreeBed || !selectedTemplate) return;
+    if (!selectedTemplate) return;
+    const bedroomCount = selectedTemplate.bedrooms ?? 3;
+    const standardId = getStandardTemplateIdForBedrooms(bedroomCount);
+    const standard = standardId === 'threeBed'
+      ? lockedThreeBed
+      : plotTemplates.find((template) => template.id === standardId);
+    if (!standard) return;
     const reset = applyHouseTypeFloorConfiguration({
-      ...cloneTemplate(lockedThreeBed),
+      ...cloneTemplate(standard),
       id: selectedTemplate.id,
       name: selectedTemplate.name,
       houseTypeCode: selectedTemplate.name,
-      bedrooms: selectedTemplate.bedrooms ?? 3,
+      bedrooms: bedroomCount,
       floors: selectedTemplate.floors ?? 2,
       isHouseType: true,
       isSystemTemplate: false,
@@ -173,7 +179,7 @@ export default function SiteSetupScreen() {
       description: selectedTemplate.description,
     }, selectedTemplate.floors ?? 2);
     setDraft(reset);
-    setMessage('House type programme reset from the locked site standard. Press Save House Type to commit it.');
+    setMessage(`House type programme reset from the ${bedroomCount === 4 ? '4 Bedroom' : '3 Bedroom'} standard. Press Save House Type to commit it.`);
   };
 
   const createHouseType = async () => {
@@ -188,12 +194,12 @@ export default function SiteSetupScreen() {
         name,
         bedrooms: newBedrooms,
         floors: newFloors,
-        baseTemplateId: 'threeBed',
+        baseTemplateId: getStandardTemplateIdForBedrooms(newBedrooms),
       });
       setSelectedTemplateId(created.id);
       setDraft(null);
       setNewHouseTypeName('');
-      setMessage(`${created.name} created from the locked site standard.${created.floors === 3 ? ' Three-storey brickwork and joist activities were added automatically.' : ''}`);
+      setMessage(`${created.name} created from the ${created.bedrooms === 4 ? '4 Bedroom' : '3 Bedroom'} standard.${created.floors === 3 ? ' Three-storey joists, an extra brickwork/scaffold lift and additional fix durations were added automatically.' : ''}`);
     } finally {
       setSaving(false);
     }
@@ -294,10 +300,10 @@ export default function SiteSetupScreen() {
         <Pressable disabled={saving} style={styles.primaryButton} onPress={saveSiteSettings}><Text style={styles.primaryButtonText}>{saving ? 'Saving…' : 'Save Site Settings'}</Text></Pressable>
       </SectionCard>
 
-      <SectionCard title="House types" subtitle="Create the named house types used on this development. Every house type starts from your locked site-standard programme. Construction type is selected separately when a plot is added.">
+      <SectionCard title="House types" subtitle="Create the named house types used on this development. Construction type is selected separately when a plot is added.">
         <View style={styles.lockedBanner}>
-          <Text style={styles.lockedTitle}>🔒 Site-standard programme locked</Text>
-          <Text style={styles.lockedText}>Your original 3 Bedroom programme is now used only as the protected baseline. It is no longer a selectable property size. New house types copy this programme automatically.</Text>
+          <Text style={styles.lockedTitle}>🔒 Standard programmes protected</Text>
+          <Text style={styles.lockedText}>3 Bedroom house types keep your existing agreed programme. 4 Bedroom house types use the new agreed 4 Bedroom programme. These standards are copied into the named house type and are not shown as selectable property sizes.</Text>
         </View>
 
         <View style={styles.settingsGrid}>
@@ -320,7 +326,7 @@ export default function SiteSetupScreen() {
           <Pressable disabled={saving} style={styles.primaryButton} onPress={createHouseType}><Text style={styles.primaryButtonText}>{saving ? 'Creating…' : 'Create House Type'}</Text></Pressable>
         </View>
 
-        {newFloors === 3 ? <View style={styles.messageBox}><Text style={styles.messageText}>Three-storey rule: the programme will automatically add a second set of joists/flooring, 5th lift brickwork and 5th lift scaffold before the roof sequence.</Text></View> : null}
+        {newFloors === 3 ? <View style={styles.messageBox}><Text style={styles.messageText}>Three-storey rule: adds another set of joists/flooring, one additional brickwork lift and scaffold lift before the roof sequence. After Roof Tile, carpentry, plumbing and electrical fix/final activities each gain 1 day.</Text></View> : null}
 
         {houseTypes.length ? <>
           <View>
@@ -340,7 +346,7 @@ export default function SiteSetupScreen() {
               <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>Calculated weeks</Text><Text style={styles.calculatedValue}>{calculatedWeeks}</Text></View>
             </View>
 
-            {displayTemplate.floors === 3 ? <View style={styles.lockedBanner}><Text style={styles.lockedTitle}>3-storey programme rule active</Text><Text style={styles.lockedText}>Includes second-floor joists/flooring, 5th lift brickwork and 5th lift scaffold automatically.</Text></View> : null}
+            {displayTemplate.floors === 3 ? <View style={styles.lockedBanner}><Text style={styles.lockedTitle}>3-storey programme rule active</Text><Text style={styles.lockedText}>Includes an additional set of joists/flooring, one extra brickwork/scaffold lift, and +1 day to carpentry, plumbing and electrical fix/final activities after Roof Tile.</Text></View> : null}
 
             <View style={styles.actionRow}>
               {!draft ? <Pressable style={styles.primaryButton} onPress={beginEditTemplate}><Text style={styles.primaryButtonText}>Edit House Type</Text></Pressable> : null}
