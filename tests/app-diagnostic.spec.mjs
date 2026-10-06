@@ -100,27 +100,54 @@ test('site setup: number fields must not turn into 1 while typing', async ({ pag
   }
 });
 
-test('site setup: template edit buttons change mode correctly', async ({ page }) => {
+test('site setup: create a named 3-storey house type and add the automatic structure activities', async ({ page }) => {
   await goto(page, '/site/setup');
-  const fourBed = page.getByText('4 Bedroom', { exact: true });
-  if (await fourBed.count()) {
-    await fourBed.first().click();
-    const edit = page.getByText('Edit Template', { exact: true });
-    await expect(edit).toBeVisible();
-    await edit.click();
-    await expect(page.getByText('Save Template', { exact: true })).toBeVisible();
-    await expect(page.getByText('Cancel', { exact: true })).toBeVisible();
-    await page.getByText('Cancel', { exact: true }).click();
-    await expect(page.getByText('Edit Template', { exact: true })).toBeVisible();
-  }
+
+  await expect(page.getByText('3 Bedroom', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('4 Bedroom', { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Site-standard programme locked/i)).toBeVisible();
+
+  const name = page.getByPlaceholder('e.g. Warrley or Linngate');
+  await expect(name).toBeVisible();
+  await name.fill('Warrley QA');
+
+  const storeysLabel = page.getByText('Storeys', { exact: true }).first();
+  await expect(storeysLabel).toBeVisible();
+  const createSection = storeysLabel.locator('xpath=..');
+  await createSection.getByText('3', { exact: true }).click();
+
+  await page.getByText('Create House Type', { exact: true }).click();
+  await expect(page.getByText('Warrley QA', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('2nd floor joists and flooring', { exact: true })).toBeVisible();
+  await expect(page.getByText('5th lift brickwork', { exact: true })).toBeVisible();
+  await expect(page.getByText('5th lift scaffold', { exact: true })).toBeVisible();
 });
 
-test('site setup: locked 3 Bedroom standard is visibly protected', async ({ page }) => {
+test('site setup: named house type uses explicit edit and save workflow', async ({ page }) => {
   await goto(page, '/site/setup');
-  const threeBed = page.getByText('3 Bedroom', { exact: true });
-  if (await threeBed.count()) await threeBed.first().click();
-  await expect(page.getByText(/Standard 3 Bedroom.*locked/i)).toBeVisible();
-  await expect(page.getByText('Edit Template', { exact: true })).toHaveCount(0);
+  await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Linngate QA');
+  await page.getByText('Create House Type', { exact: true }).click();
+  await expect(page.getByText('Linngate QA', { exact: true }).first()).toBeVisible();
+
+  const edit = page.getByText('Edit House Type', { exact: true });
+  await expect(edit).toBeVisible();
+  await edit.click();
+  await expect(page.getByText('Save House Type', { exact: true })).toBeVisible();
+  await expect(page.getByText('Cancel', { exact: true })).toBeVisible();
+  await page.getByText('Cancel', { exact: true }).click();
+  await expect(page.getByText('Edit House Type', { exact: true })).toBeVisible();
+});
+
+test('master: named house type and construction route are separate selections', async ({ page }) => {
+  await goto(page, '/site/setup');
+  await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Warrley QA');
+  await page.getByText('Create House Type', { exact: true }).click();
+
+  await goto(page, '/master');
+  await expect(page.getByText('Warrley QA', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Traditional', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Timber Frame', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Property Size', { exact: true })).toHaveCount(0);
 });
 
 test('site setup: Save Site Settings gives visible confirmation', async ({ page }) => {
