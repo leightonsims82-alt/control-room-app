@@ -23,6 +23,7 @@ import {
 } from '../../utils/stageConfiguration';
 import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber } from '../../utils/siteProgrammeEngine';
 import {
+  getActivitiesForTemplateDay,
   getEffectiveProgrammeWeeks,
   getHouseTypeLabel,
   getHouseTypeTemplates,
@@ -39,7 +40,7 @@ type ResetMode = 'all' | 'single';
 type ProgrammeGenerationBasis = 'start' | 'completion';
 
 export default function MasterProgrammeScreen() {
-  const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
   const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
   const currentProgrammeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
@@ -106,8 +107,12 @@ export default function MasterProgrammeScreen() {
   }, [holdPlotId, selectedResetPlotId, sortedPlots]);
 
   const getStageDisplayForWeek = (plot: (typeof sitePlots)[number], week: number) => {
+    const liveStages = Array.from({ length: 7 }, (_, index) => index + 1)
+      .flatMap((day) => getActivitiesForTemplateDay(plot, week, day, activityDelays, plotTemplates, siteSetup, activityMoves))
+      .map((activity) => Number(activity.stage))
+      .filter((stage) => Number.isFinite(stage) && stage >= 1 && stage <= 9);
     const configuredStage = getConfiguredStageForProgrammeWeek(stageDefinitions, getPlotCompletionProgrammeWeek(plot, siteSetup), week);
-    const stage = configuredStage?.stage;
+    const stage = liveStages.length ? Math.max(...liveStages) : configuredStage?.stage;
     if (!stage) return '';
     if (!plot.holdStage || stage < plot.holdStage) return stage;
     return stage === plot.holdStage ? `${stage}H` : `H${plot.holdStage}`;
