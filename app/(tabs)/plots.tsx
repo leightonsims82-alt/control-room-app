@@ -5,7 +5,7 @@ import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { DAY_NAMES, WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
 import { formatProgrammeDate } from '../../utils/programmeDates';
-import { getPlotBreakdownTemplateText, getStage1StartWeekForPlot, getTemplateForPlot } from '../../utils/templateProgramme';
+import { getHouseTypeTemplates, getPlotBreakdownTemplateText, getStage1StartWeekForPlot, getTemplateForPlot } from '../../utils/templateProgramme';
 
 const ALL_TYPES = 'All plot types';
 const DAY_WIDTH = 82;
@@ -14,8 +14,9 @@ const WEEK_WIDTH = DAY_WIDTH * 5;
 export default function PlotsScreen() {
   const { sitePlots, activityDelays, plotTemplates, siteSetup } = useSitePlanner();
   const [selectedTemplateId, setSelectedTemplateId] = useState(ALL_TYPES);
-  const filteredPlots = selectedTemplateId === ALL_TYPES ? sitePlots : sitePlots.filter((plot) => plot.templateId === selectedTemplateId);
-  const templateFilters = [ALL_TYPES, ...plotTemplates.map((template) => template.id)];
+  const houseTypes = getHouseTypeTemplates(plotTemplates);
+  const filteredPlots = selectedTemplateId === ALL_TYPES ? sitePlots : sitePlots.filter((plot) => (plot.houseTypeId ?? plot.templateId) === selectedTemplateId);
+  const templateFilters = [ALL_TYPES, ...houseTypes.map((template) => template.id)];
 
   return (
     <AppScreen>
@@ -34,7 +35,7 @@ export default function PlotsScreen() {
           <View style={styles.filterRow}>
             {templateFilters.map((filter) => {
               const active = selectedTemplateId === filter;
-              const label = filter === ALL_TYPES ? ALL_TYPES : plotTemplates.find((template) => template.id === filter)?.name ?? filter;
+              const label = filter === ALL_TYPES ? ALL_TYPES : houseTypes.find((template) => template.id === filter)?.name ?? filter;
               return (
                 <Pressable key={filter} style={[styles.filterPill, active && styles.filterPillActive]} onPress={() => setSelectedTemplateId(filter)}>
                   <Text style={[styles.filterPillText, active && styles.filterPillTextActive]}>{label}</Text>
@@ -71,10 +72,11 @@ export default function PlotsScreen() {
 
               {filteredPlots.map((plot, rowIndex) => {
                 const template = getTemplateForPlot(plot, plotTemplates);
+                const houseType = houseTypes.find((item) => item.id === (plot.houseTypeId ?? plot.templateId));
                 return (
                   <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                     <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
-                    <Text style={[styles.bodyCell, styles.templateCell]}>{template.name}</Text>
+                    <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.name ?? template.name}</Text>
                     <Text style={[styles.bodyCell, styles.stageCell]}>{formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
                     <Text style={[styles.stageStartCell, styles.stageCell]}>{getStage1StartWeekForPlot(plot, plotTemplates)}</Text>
                     {WEEK_NUMBERS.flatMap((week) =>
