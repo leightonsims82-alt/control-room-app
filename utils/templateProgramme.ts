@@ -20,8 +20,8 @@ export type TemplateActivity = ProgrammeActivity & {
   overlapLinkCode?: string;
   overlapStartFrom?: OverlapStartFrom;
   overlapLagDays?: number;
-  baseDurationDays?: number;
   autoAddedForThreeStorey?: boolean;
+  autoThreeStoreyFixDay?: boolean;
 };
 
 export type PlotTemplate = {
@@ -114,7 +114,6 @@ function makeTemplate(id: string, name: string, description: string, programmeWe
     stageCount: 9,
     activities: BUILD_SEQUENCE.map((activity) => ({
       ...activity,
-      baseDurationDays: activity.durationDays,
       overlapAllowed: false,
       overlapStartFrom: 'start' as OverlapStartFrom,
       overlapLagDays: 0,
@@ -123,7 +122,7 @@ function makeTemplate(id: string, name: string, description: string, programmeWe
 }
 
 function templateActivity(order: number, code: string, trade: string, displayText: string, durationDays: number, stage: ProgrammeActivity['stage'], overlapAllowed = false, overlapLinkCode?: string, overlapStartFrom: OverlapStartFrom = 'start', overlapLagDays = 0): TemplateActivity {
-  return { order, code, trade, displayText, durationDays, baseDurationDays: durationDays, relativeWeek: 1, relativeDay: 1, stage, overlapAllowed, overlapLinkCode, overlapStartFrom, overlapLagDays };
+  return { order, code, trade, displayText, durationDays, relativeWeek: 1, relativeDay: 1, stage, overlapAllowed, overlapLinkCode, overlapStartFrom, overlapLagDays };
 }
 
 function makeFourBedroomStandardTemplate(): PlotTemplate {
