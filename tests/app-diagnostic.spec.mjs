@@ -113,6 +113,45 @@ test('site setup: number fields must not turn into 1 while typing', async ({ pag
   }
 });
 
+test('site setup: removes previously saved legacy house types', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('programme-buddy:plot-templates:v1', JSON.stringify([
+      {
+        id: 'custom-cambridge',
+        name: 'Cambridge',
+        houseTypeCode: 'Cambridge',
+        isHouseType: true,
+        isSystemTemplate: false,
+        programmeWeeks: 23,
+        stageCount: 9,
+        description: 'legacy',
+        activities: [],
+      },
+      {
+        id: 'custom-ashford',
+        name: 'Ashford',
+        houseTypeCode: 'Ashford',
+        isHouseType: true,
+        isSystemTemplate: false,
+        programmeWeeks: 23,
+        stageCount: 9,
+        description: 'legacy',
+        activities: [],
+      },
+    ]));
+    localStorage.removeItem('programme-buddy:house-types-reset:v2');
+  });
+
+  await goto(page, '/site/setup');
+  await expect(page.getByText('Cambridge', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Ashford', { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/No house types have been created yet/i)).toBeVisible();
+
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('programme-buddy:plot-templates:v1') || '[]'));
+  expect(stored.some((template) => template?.name === 'Cambridge' || template?.name === 'Ashford')).toBeFalsy();
+  expect(await page.evaluate(() => localStorage.getItem('programme-buddy:house-types-reset:v2'))).toBe('done');
+});
+
 test('site setup: create a named 3-storey house type and add the automatic structure activities', async ({ page }) => {
   await goto(page, '/site/setup');
 
