@@ -267,6 +267,23 @@ test('site setup: changing a house type to four bedrooms loads the agreed four b
   await expect(page.getByText('Reset Programme to 4 Bedroom Standard', { exact: true })).toBeVisible();
 });
 
+test('site setup: explicit save actions persist house type details', async ({ page }) => {
+  await goto(page, '/site/setup');
+  await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Save Action QA');
+  await page.getByText('Save New House Type', { exact: true }).click();
+  await expect(page.getByText('Save Action QA', { exact: true }).first()).toBeVisible();
+
+  await page.getByText('Edit House Type', { exact: true }).click();
+  await expect(page.getByText('Save house type changes', { exact: true })).toBeVisible();
+  await expect(page.getByText(/not stored until you press Save House Type/i)).toBeVisible();
+
+  const nameInput = await inputWithValue(page, 'Save Action QA');
+  await nameInput.fill('Save Action QA Updated');
+  const saveButtons = page.getByText('Save House Type', { exact: true });
+  await saveButtons.last().click();
+  await expect(page.getByText('Save Action QA Updated', { exact: true }).first()).toBeVisible();
+});
+
 test('site setup: named house type uses explicit edit and save workflow', async ({ page }) => {
   await goto(page, '/site/setup');
   await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Linngate QA');
