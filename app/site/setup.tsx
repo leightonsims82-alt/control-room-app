@@ -32,6 +32,31 @@ function toPositiveInt(value: string, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function StageWeekInput({ value, onCommit, style }: { value: number; onCommit: (value: number) => void; style: any }) {
+  const [draftValue, setDraftValue] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setDraftValue(String(value));
+  }, [value, focused]);
+
+  return (
+    <TextInput
+      value={draftValue}
+      keyboardType="number-pad"
+      onFocus={() => setFocused(true)}
+      onChangeText={(text) => setDraftValue(text.replace(/[^0-9]/g, ''))}
+      onBlur={() => {
+        const next = toPositiveInt(draftValue, value);
+        setFocused(false);
+        setDraftValue(String(next));
+        onCommit(next);
+      }}
+      style={style}
+    />
+  );
+}
+
 export default function SiteSetupScreen() {
   const router = useRouter();
   const { siteSetup, plotTemplates, isSitePlannerLoaded, updateSiteSetup, addPlotTemplate, updatePlotTemplate } = useSitePlanner();
@@ -190,6 +215,28 @@ export default function SiteSetupScreen() {
         setMessage('House type name is required.');
         return;
       }
+      const activityNames = cleaned.activities.map((activity) => activity.code.trim());
+      if (activityNames.some((name) => !name)) {
+        setMessage('Every activity must have a Task name before the house type can be saved.');
+        return;
+      }
+      const seenNames = new Set<string>();
+      const duplicateActivity = activityNames.find((name) => {
+        const key = name.toLowerCase();
+        if (seenNames.has(key)) return true;
+        seenNames.add(key);
+        return false;
+      });
+      if (duplicateActivity) {
+        setMessage(`Activity Task names must be unique. "${duplicateActivity}" appears more than once.`);
+        return;
+      }
+      cleaned.activities = cleaned.activities.map((activity) => ({
+        ...activity,
+        code: activity.code.trim(),
+        trade: activity.trade.trim(),
+        displayText: activity.displayText.trim(),
+      }));
       await updatePlotTemplate(cleaned);
       setDraft(null);
       setMessage(`${getHouseTypeLabel(cleaned)} saved successfully.`);
@@ -345,8 +392,8 @@ export default function SiteSetupScreen() {
             {stageDefinitions.slice(0, LOCKED_STAGE_COUNT).map((stage) => <View key={stage.stage} style={styles.stageRow}>
               <Text style={[styles.td, styles.stageNo]}>{stage.stage}</Text>
               <TextInput value={stage.label} onChangeText={(value) => updateStage(stage.stage, { label: value })} style={[styles.input, styles.stageLabel]} />
-              <TextInput defaultValue={String(stage.startWeek)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => updateStage(stage.stage, { startWeek: toPositiveInt(nativeEvent.text, stage.startWeek) })} style={[styles.input, styles.stageWeek]} />
-              <TextInput defaultValue={String(stage.finishWeek)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => updateStage(stage.stage, { finishWeek: toPositiveInt(nativeEvent.text, stage.finishWeek) })} style={[styles.input, styles.stageWeek]} />
+              <StageWeekInput value={stage.startWeek} onCommit={(value) => updateStage(stage.stage, { startWeek: value })} style={[styles.input, styles.stageWeek]} />
+              <StageWeekInput value={stage.finishWeek} onCommit={(value) => updateStage(stage.stage, { finishWeek: value })} style={[styles.input, styles.stageWeek]} />
             </View>)}
           </View>
         </ScrollView>
