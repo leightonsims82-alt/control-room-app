@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
-import { getPlotMetadataKey, PlotMetadataMap, readPlotMetadata } from '../../utils/plotMetadata';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { DAY_NAMES, WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
 import { formatCalendarWeek, formatProgrammeDate } from '../../utils/programmeDates';
@@ -15,11 +14,6 @@ const WEEK_WIDTH = DAY_WIDTH * 5;
 export default function PlotsScreen() {
   const { sitePlots, activityDelays, plotTemplates, siteSetup } = useSitePlanner();
   const [selectedTemplateId, setSelectedTemplateId] = useState(ALL_TYPES);
-  const [plotMetadata, setPlotMetadata] = useState<PlotMetadataMap>({});
-
-  useEffect(() => {
-    readPlotMetadata().then(setPlotMetadata).catch(() => setPlotMetadata({}));
-  }, []);
   const houseTypes = getHouseTypeTemplates(plotTemplates);
   const filteredPlots = selectedTemplateId === ALL_TYPES ? sitePlots : sitePlots.filter((plot) => (plot.houseTypeId ?? plot.templateId) === selectedTemplateId);
   const templateFilters = [ALL_TYPES, ...houseTypes.map((template) => template.id)];
@@ -79,12 +73,11 @@ export default function PlotsScreen() {
               {filteredPlots.map((plot, rowIndex) => {
                 const template = getTemplateForPlot(plot, plotTemplates);
                 const houseType = houseTypes.find((item) => item.id === (plot.houseTypeId ?? plot.templateId));
-                const metadata = plotMetadata[getPlotMetadataKey(plot.plotNo)];
                 return (
                   <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                     <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
                     <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.name ?? template.name}</Text>
-                    <Text style={[styles.bodyCell, styles.stageCell]}>{metadata?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
+                    <Text style={[styles.bodyCell, styles.stageCell]}>{plot.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
                     <Text style={[styles.stageStartCell, styles.stageCell]}>{formatCalendarWeek(siteSetup.programmeStartDate, getStage1StartWeekForPlot(plot, plotTemplates, siteSetup), siteSetup.calendarWeekOne)}</Text>
                     {WEEK_NUMBERS.flatMap((week) =>
                       DAY_NAMES.map((_, dayIndex) => {

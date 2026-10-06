@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 import { INSPECTION_RESULTS_KEY, INSPECTION_STORY_KEY } from '../utils/inspectionRecords';
-import { getProgrammeStartDateValue } from '../utils/programmeDates';
+import { getProgrammeStartDateValue, getProgrammeWeekForDate } from '../utils/programmeDates';
+import { getPlotMetadataKey, readPlotMetadata } from '../utils/plotMetadata';
 import { ActivityDelay, ProgrammeStageNumber, TRADE_ORDER } from '../utils/siteProgrammeEngine';
 import {
   ActivityMove,
@@ -70,6 +71,8 @@ export type SitePlotInput = {
   plotNo: string;
   buildOrder?: number;
   stage9CompleteWeek: number;
+  plotStartDate?: string;
+  plotCompletionDate?: string;
   templateId: string;
   houseTypeId?: string;
   constructionMethod?: ConstructionMethod;
@@ -242,6 +245,8 @@ function cleanPlotInput(input: SitePlotInput, fallbackBuildOrder: number): SiteP
     plotNo,
     buildOrder: Number.isFinite(input.buildOrder) && input.buildOrder && input.buildOrder > 0 ? input.buildOrder : fallbackBuildOrder,
     stage9CompleteWeek,
+    plotStartDate: input.plotStartDate,
+    plotCompletionDate: input.plotCompletionDate,
     templateId: houseTypeId,
     houseTypeId,
     constructionMethod: input.constructionMethod ?? 'traditional',
@@ -260,6 +265,8 @@ function applyPlotInputs(currentPlots: TemplateSitePlot[], inputs: SitePlotInput
           plotNo: cleaned.plotNo,
           buildOrder: cleaned.buildOrder,
           stage9CompleteWeek: cleaned.stage9CompleteWeek,
+          plotStartDate: cleaned.plotStartDate ?? existing.plotStartDate,
+          plotCompletionDate: cleaned.plotCompletionDate ?? existing.plotCompletionDate,
           templateId: cleaned.templateId,
           houseTypeId: cleaned.houseTypeId,
           constructionMethod: cleaned.constructionMethod,
@@ -269,6 +276,8 @@ function applyPlotInputs(currentPlots: TemplateSitePlot[], inputs: SitePlotInput
           plotNo: cleaned.plotNo,
           buildOrder: cleaned.buildOrder,
           stage9CompleteWeek: cleaned.stage9CompleteWeek,
+          plotStartDate: cleaned.plotStartDate,
+          plotCompletionDate: cleaned.plotCompletionDate,
           templateId: cleaned.templateId,
           houseTypeId: cleaned.houseTypeId,
           constructionMethod: cleaned.constructionMethod,
@@ -306,7 +315,19 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           readObject<SiteProgrammeSetup>(SITE_PROGRAMME_SETUP_KEY, DEFAULT_SITE_PROGRAMME_SETUP),
         ]);
         if (mounted) {
-          setSitePlots(getSortedSitePlots(normalisePlots(storedPlots)));
+          const migratedSiteSetup = { ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup, stageCount: 9, programmeStartDate: getProgrammeStartDateValue(storedSiteSetup.programmeStartDate) };
+          const storedMetadata = await readPlotMetadata();
+          const migratedPlots = normalisePlots(storedPlots).map((plot) => {
+            const detail = storedMetadata[getPlotMetadataKey(plot.plotNo)];
+            const plotCompletionDate = plot.plotCompletionDate ?? detail?.plotCompletionDate;
+            const plotStartDate = plot.plotStartDate ?? detail?.plotStartDate;
+            const stage9CompleteWeek = plotCompletionDate
+              ? (getProgrammeWeekForDate(migratedSiteSetup.programmeStartDate, plotCompletionDate) ?? plot.stage9CompleteWeek)
+              : plot.stage9CompleteWeek;
+            return { ...plot, plotStartDate, plotCompletionDate, stage9CompleteWeek };
+          });
+          setSitePlots(getSortedSitePlots(migratedPlots));
+          await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(getSortedSitePlots(migratedPlots)));
           setActivityDelays(storedDelays);
           setActivityMoves(storedMoves);
           setTradeContacts(mergeDefaultTradeContacts(storedContacts));
@@ -322,7 +343,6 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           if (houseTypesReset !== 'done') {
             await AsyncStorage.setItem(HOUSE_TYPES_RESET_KEY, 'done');
           }
-          const migratedSiteSetup = { ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup, stageCount: 9, programmeStartDate: getProgrammeStartDateValue(storedSiteSetup.programmeStartDate) };
           setSiteSetupState(migratedSiteSetup);
           await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(migratedSiteSetup));
         }

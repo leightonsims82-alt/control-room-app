@@ -14,7 +14,7 @@ import {
   removePlotMetadata,
   savePlotMetadata,
 } from '../../utils/plotMetadata';
-import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, validatePlotCompletionDate } from '../../utils/programmeDates';
+import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, shiftProgrammeDateWeeks, validatePlotCompletionDate } from '../../utils/programmeDates';
 import {
   ConfiguredProgrammeStage,
   getConfiguredStageForProgrammeWeek,
@@ -27,6 +27,7 @@ import {
   getHouseTypeLabel,
   getHouseTypeTemplates,
   getPlotBuildOrder,
+  getPlotCompletionProgrammeWeek,
   getPlotHoldDetail,
   getPlotHoldLabel,
   getSortedSitePlots,
@@ -71,7 +72,7 @@ export default function MasterProgrammeScreen() {
   const selectedProgrammeWeeks = selectedProgrammeTemplate
     ? getEffectiveProgrammeWeeks(selectedProgrammeTemplate, siteSetup)
     : Math.max(1, siteSetup.defaultProgrammeWeeks || 23);
-  const nextCompletionWeek = (sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.stage9CompleteWeek)) : 22) + 1;
+  const nextCompletionWeek = (sitePlots.length ? Math.max(...sitePlots.map((plot) => getPlotCompletionProgrammeWeek(plot, siteSetup))) : 22) + 1;
   const nextCompletionHint = formatProgrammeDate(siteSetup.programmeStartDate, nextCompletionWeek);
   const nextStartHint = formatProgrammeDate(siteSetup.programmeStartDate, Math.max(1, nextCompletionWeek - selectedProgrammeWeeks + 1));
 
@@ -105,7 +106,7 @@ export default function MasterProgrammeScreen() {
   }, [holdPlotId, selectedResetPlotId, sortedPlots]);
 
   const getStageDisplayForWeek = (plot: (typeof sitePlots)[number], week: number) => {
-    const configuredStage = getConfiguredStageForProgrammeWeek(stageDefinitions, plot.stage9CompleteWeek, week);
+    const configuredStage = getConfiguredStageForProgrammeWeek(stageDefinitions, getPlotCompletionProgrammeWeek(plot, siteSetup), week);
     const stage = configuredStage?.stage;
     if (!stage) return '';
     if (!plot.holdStage || stage < plot.holdStage) return stage;
@@ -137,9 +138,17 @@ export default function MasterProgrammeScreen() {
     const programmeWeeks = programmeTemplate
       ? getEffectiveProgrammeWeeks(programmeTemplate, siteSetup)
       : Math.max(1, siteSetup.defaultProgrammeWeeks || 23);
-    const completionWeek = programmeGenerationBasis === 'start'
-      ? anchorWeek + programmeWeeks - 1
-      : anchorWeek;
+    const exactStartDate = programmeGenerationBasis === 'start'
+      ? selectedDate
+      : shiftProgrammeDateWeeks(selectedDate, -(programmeWeeks - 1));
+    const exactCompletionDate = programmeGenerationBasis === 'completion'
+      ? selectedDate
+      : shiftProgrammeDateWeeks(selectedDate, programmeWeeks - 1);
+    const completionWeek = getProgrammeWeekForDate(siteSetup.programmeStartDate, exactCompletionDate);
+    if (!completionWeek) {
+      setPlotDateError('Unable to calculate the programme completion week for that date.');
+      return;
+    }
 
     const existingPlot = sitePlots.find((plot) => plot.plotNo.toLowerCase() === cleanedPlotNo.toLowerCase());
     const nextBuildOrder = sitePlots.length ? Math.max(...sitePlots.map((plot) => plot.buildOrder ?? 0)) + 1 : 1;
@@ -147,6 +156,8 @@ export default function MasterProgrammeScreen() {
       plotNo: cleanedPlotNo,
       buildOrder: existingPlot?.buildOrder ?? nextBuildOrder,
       stage9CompleteWeek: completionWeek,
+      plotStartDate: exactStartDate,
+      plotCompletionDate: exactCompletionDate,
       templateId: selectedHouseType.id,
       houseTypeId: selectedHouseType.id,
       constructionMethod: buildRoute === 'Timber Frame' ? 'timberFrame' : 'traditional',
@@ -157,8 +168,8 @@ export default function MasterProgrammeScreen() {
       houseTypeId: selectedHouseType.id,
       buildRoute,
       programmeGenerationBasis,
-      plotStartDate: programmeGenerationBasis === 'start' ? selectedDate : formatProgrammeDate(siteSetup.programmeStartDate, Math.max(1, completionWeek - programmeWeeks + 1)),
-      plotCompletionDate: programmeGenerationBasis === 'completion' ? selectedDate : formatProgrammeDate(siteSetup.programmeStartDate, completionWeek),
+      plotStartDate: exactStartDate,
+      plotCompletionDate: exactCompletionDate,
     });
     setPlotMetadata(nextMetadata);
     setPlotNo('');
@@ -427,8 +438,8 @@ export default function MasterProgrammeScreen() {
                   <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.bedrooms ?? '-'}</Text>
                   <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.floors ?? '-'}</Text>
                   <Text style={[styles.holdBodyCell, styles.holdCell, plot.holdStage ? styles.holdBodyCellActive : null]}>{getPlotHoldLabel(plot)}</Text>
-                  <Text style={[styles.stageStartBody, styles.weekInputCell]}>{formatCalendarWeek(siteSetup.programmeStartDate, getConfiguredStageProgrammeStartWeek(stageDefinitions, plot.stage9CompleteWeek), siteSetup.calendarWeekOne)}</Text>
-                  <Text style={[styles.weekInputBody, styles.completionCell]}>{metadata?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
+                  <Text style={[styles.stageStartBody, styles.weekInputCell]}>{formatCalendarWeek(siteSetup.programmeStartDate, getConfiguredStageProgrammeStartWeek(stageDefinitions, getPlotCompletionProgrammeWeek(plot, siteSetup)), siteSetup.calendarWeekOne)}</Text>
+                  <Text style={[styles.weekInputBody, styles.completionCell]}>{plot.plotCompletionDate || metadata?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, getPlotCompletionProgrammeWeek(plot, siteSetup))}</Text>
                   {visibleWeeks.map((week) => {
                     const stage = getStageDisplayForWeek(plot, week);
                     const heldStageCell = String(stage).includes('H');

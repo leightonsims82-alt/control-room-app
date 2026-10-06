@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSitePlanner } from '../data/sitePlannerStore';
-import { formatBritishDate, formatProgrammeDate, getProgrammeWeekForDate, parseProgrammeDate, validatePlotCompletionDate } from '../utils/programmeDates';
+import { formatProgrammeDate, getProgrammeWeekForDate, shiftProgrammeDateWeeks, validatePlotCompletionDate } from '../utils/programmeDates';
 import { getPlotMetadataKey, PlotBuildRoute, readPlotMetadata, removePlotMetadata, savePlotMetadata } from '../utils/plotMetadata';
 import { getEffectiveProgrammeWeeks, getHouseTypeTemplates, getTemplateById } from '../utils/templateProgramme';
 
@@ -11,12 +11,6 @@ const managePlotListeners = new Set<ManagePlotListener>();
 
 export function openMasterPlotManager(plotId: string) {
   managePlotListeners.forEach((listener) => listener(plotId));
-}
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-function shiftWeeks(value: string, weeks: number) {
-  const date = parseProgrammeDate(value);
-  return date ? formatBritishDate(new Date(date.getTime() + weeks * 7 * DAY_MS)) : '';
 }
 
 export function MasterPlotManager() {
@@ -41,7 +35,7 @@ export function MasterPlotManager() {
     setSelectedId(plot.id);
     setBuildRoute(detail?.buildRoute ?? (plot.constructionMethod === 'timberFrame' ? 'Timber Frame' : 'Traditional'));
     setHouseTypeId(plot.houseTypeId ?? detail?.houseTypeId ?? detail?.bedroomTemplateId ?? (plot.templateId === 'timberFrame' ? '' : plot.templateId ?? ''));
-    setCompletionDate(detail?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek));
+    setCompletionDate(plot.plotCompletionDate || detail?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek));
     setMessage('');
     setConfirmDelete(false);
   };
@@ -78,23 +72,26 @@ export function MasterPlotManager() {
     try {
       if (!selectedHouseType) { setMessage('Create and select a house type before saving this plot.'); return; }
       const programmeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : selectedHouseType.id;
+      const programmeTemplate = getTemplateById(programmeTemplateId, plotTemplates);
+      const programmeWeeks = getEffectiveProgrammeWeeks(programmeTemplate, siteSetup);
+      const exactStartDate = shiftProgrammeDateWeeks(completionDate, -(programmeWeeks - 1));
       await upsertSitePlot({
         plotNo: selectedPlot.plotNo,
         buildOrder: selectedPlot.buildOrder,
         stage9CompleteWeek: completionWeek,
+        plotStartDate: exactStartDate,
+        plotCompletionDate: completionDate,
         templateId: selectedHouseType.id,
         houseTypeId: selectedHouseType.id,
         constructionMethod: buildRoute === 'Timber Frame' ? 'timberFrame' : 'traditional',
       });
-      const programmeTemplate = getTemplateById(programmeTemplateId, plotTemplates);
-      const programmeWeeks = getEffectiveProgrammeWeeks(programmeTemplate, siteSetup);
       await savePlotMetadata({
         plotNo: selectedPlot.plotNo,
         houseTypeName: selectedHouseType.name,
         houseTypeId: selectedHouseType.id,
         buildRoute,
         programmeGenerationBasis: 'completion',
-        plotStartDate: shiftWeeks(completionDate, -(programmeWeeks - 1)),
+        plotStartDate: exactStartDate,
         plotCompletionDate: completionDate,
       });
       setMessage(`Plot ${selectedPlot.plotNo} updated successfully.`);
