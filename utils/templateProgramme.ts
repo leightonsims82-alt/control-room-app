@@ -2,6 +2,8 @@ import { ActivityDelay, BUILD_SEQUENCE, getStageNumberForRelativeWeek, Programme
 
 export type TemplateSitePlot = SitePlot & {
   templateId?: string;
+  houseTypeId?: string;
+  constructionMethod?: ConstructionMethod;
   buildOrder?: number;
   holdStage?: ProgrammeStageNumber;
   holdReason?: string;
@@ -25,6 +27,10 @@ export type PlotTemplate = {
   name: string;
   houseTypeCode?: string;
   constructionMethod?: ConstructionMethod;
+  bedrooms?: number;
+  floors?: number;
+  isHouseType?: boolean;
+  isSystemTemplate?: boolean;
   description: string;
   programmeWeeks: number;
   stageCount: number;
@@ -178,13 +184,23 @@ function makeTimberFrameTemplate(): PlotTemplate {
   };
 }
 
+const siteStandardTemplate: PlotTemplate = {
+  ...makeTemplate('threeBed', 'Site Standard Programme', 'Locked baseline programme used when creating house types', 25),
+  bedrooms: 3,
+  floors: 2,
+  isHouseType: false,
+  isSystemTemplate: true,
+};
+
+const timberFrameSystemTemplate: PlotTemplate = {
+  ...makeTimberFrameTemplate(),
+  isHouseType: false,
+  isSystemTemplate: true,
+};
+
 export const DEFAULT_PLOT_TEMPLATES: PlotTemplate[] = [
-  makeTemplate('apartment', 'Apartment', 'Traditional route using the locked sequence and durations', 25),
-  makeTemplate('twoBed', '2 Bedroom', 'Traditional route using the locked sequence and durations', 25),
-  makeTemplate('threeBed', '3 Bedroom', 'Traditional route using the locked sequence and durations', 25),
-  makeTimberFrameTemplate(),
-  makeTemplate('fourBed', '4 Bedroom', 'Traditional route using the locked sequence and durations', 25),
-  makeTemplate('fiveBed', '5 Bedroom', 'Traditional route using the locked sequence and durations', 25),
+  siteStandardTemplate,
+  timberFrameSystemTemplate,
 ];
 
 export const DEFAULT_TEMPLATE_PLOTS: TemplateSitePlot[] = [];
@@ -196,14 +212,82 @@ export function getPlotHoldLabel(plot: TemplateSitePlot) { return plot.holdStage
 export function getPlotHoldDetail(plot: TemplateSitePlot) { return plot.holdStage ? `Held at Stage ${plot.holdStage}${plot.holdReason?.trim() ? `: ${plot.holdReason.trim()}` : ''}` : 'Plot is not currently held.'; }
 export function getPlotBuildOrder(plot: TemplateSitePlot, fallbackIndex = 0) { return Number.isFinite(plot.buildOrder) && Number(plot.buildOrder) > 0 ? Number(plot.buildOrder) : fallbackIndex + 1; }
 export function getSortedSitePlots(plots: TemplateSitePlot[]) { return plots.slice().sort((a, b) => getPlotBuildOrder(a, 9999) - getPlotBuildOrder(b, 9999) || a.plotNo.localeCompare(b.plotNo, undefined, { numeric: true })); }
-export function getHouseTypeLabel(template: PlotTemplate) { return template.houseTypeCode?.trim() || template.name; }
-export function createHouseTypeTemplate(input: { name: string; houseTypeCode: string; baseTemplate?: PlotTemplate }): PlotTemplate {
-  const base = input.baseTemplate ?? DEFAULT_PLOT_TEMPLATES[0];
-  return { ...base, id: `custom-${input.houseTypeCode.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`, name: input.name, houseTypeCode: input.houseTypeCode, activities: base.activities.map((activity) => ({ ...activity })) };
+export function getHouseTypeLabel(template: PlotTemplate) { return template.name.trim() || template.houseTypeCode?.trim() || 'House type'; }
+
+const THREE_STOREY_AUTO_CODES = new Set([
+  '2nd floor joists and flooring',
+  '5th lift brickwork',
+  '5th lift scaffold',
+]);
+
+function reindexActivities(activities: TemplateActivity[]) {
+  return activities.map((activity, index) => ({ ...activity, order: index + 1 }));
+}
+
+export function applyHouseTypeFloorConfiguration(template: PlotTemplate, floors: number): PlotTemplate {
+  const normalisedFloors = Math.max(1, Math.min(3, Math.round(Number(floors) || 2)));
+  const baseActivities = template.activities
+    .filter((activity) => !THREE_STOREY_AUTO_CODES.has(activity.code))
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((activity) => ({ ...activity }));
+
+  if (normalisedFloors !== 3) {
+    return { ...template, floors: normalisedFloors, activities: reindexActivities(baseActivities) };
+  }
+
+  const insertionAfter = baseActivities.findIndex((activity) => activity.code.toLowerCase().includes('4th lift scaffold'));
+  const fallbackAfter = baseActivities.findIndex((activity) => activity.code.toLowerCase().includes('4th lift brickwork'));
+  const insertAt = Math.max(insertionAfter, fallbackAfter) >= 0 ? Math.max(insertionAfter, fallbackAfter) + 1 : Math.max(0, baseActivities.findIndex((activity) => activity.code.toLowerCase() === 'truss'));
+
+  const extras: TemplateActivity[] = [
+    templateActivity(0, '2nd floor joists and flooring', 'Carpenter', '2F Joist', 2, 4),
+    templateActivity(0, '5th lift brickwork', 'Bricklayer', '5th BWK', 7, 4),
+    templateActivity(0, '5th lift scaffold', 'Scaffolder', '5th Scaff', 2, 4),
+  ];
+
+  const next = baseActivities.slice();
+  next.splice(insertAt < 0 ? next.length : insertAt, 0, ...extras);
+  return { ...template, floors: normalisedFloors, activities: reindexActivities(next) };
+}
+
+export function createHouseTypeTemplate(input: { name: string; bedrooms: number; floors: number; baseTemplate?: PlotTemplate }): PlotTemplate {
+  const base = input.baseTemplate ?? DEFAULT_PLOT_TEMPLATES.find((template) => template.id === 'threeBed') ?? DEFAULT_PLOT_TEMPLATES[0];
+  const name = input.name.trim();
+  const bedrooms = Math.max(1, Math.min(8, Math.round(Number(input.bedrooms) || 3)));
+  const floors = Math.max(1, Math.min(3, Math.round(Number(input.floors) || 2)));
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'house-type';
+  const draft: PlotTemplate = {
+    ...base,
+    id: `house-${slug}-${Date.now()}`,
+    name,
+    houseTypeCode: name,
+    bedrooms,
+    floors,
+    isHouseType: true,
+    isSystemTemplate: false,
+    constructionMethod: undefined,
+    description: `${bedrooms} bedroom · ${floors} storey house type`,
+    activities: base.activities.map((activity) => ({ ...activity })),
+  };
+  return applyHouseTypeFloorConfiguration(draft, floors);
+}
+
+export function getHouseTypeTemplates(templates: PlotTemplate[]) {
+  return templates.filter((template) => template.isHouseType);
 }
 
 export function getTemplateForPlot(plot: TemplateSitePlot, templates: PlotTemplate[]) {
-  return templates.find((template) => template.id === plot.templateId) ?? templates.find((template) => template.id === 'threeBed') ?? templates[0];
+  if (plot.constructionMethod === 'timberFrame' || plot.templateId === 'timberFrame') {
+    return templates.find((template) => template.id === 'timberFrame')
+      ?? templates.find((template) => template.id === plot.houseTypeId)
+      ?? templates.find((template) => template.id === 'threeBed')
+      ?? templates[0];
+  }
+  const houseTypeId = plot.houseTypeId ?? plot.templateId;
+  return templates.find((template) => template.id === houseTypeId)
+    ?? templates.find((template) => template.id === 'threeBed')
+    ?? templates[0];
 }
 
 export function getTemplateById(templateId: string | undefined, templates: PlotTemplate[]) {
