@@ -1,12 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../components/AppScreen';
 import { useProgrammeData } from '../data/programmeStore';
 import { useSitePlanner } from '../data/sitePlannerStore';
 import { siteprogTheme } from '../theme/siteprogTheme';
+import { buildCanonicalQaPlots, canonicalEvidenceBelongsToPlot } from '../utils/canonicalQaProgramme';
+import { parseProgrammeDate } from '../utils/programmeDates';
 
 const HANDOVER_KEY = 'siteprog:handover-readiness:v1';
 
@@ -37,31 +39,36 @@ type HandoverPlot = {
 
 function daysUntil(date?: string) {
   if (!date) return undefined;
-  const target = new Date(`${date}T00:00:00`);
+  const target = parseProgrammeDate(date) ?? new Date(`${date}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return undefined;
   const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.ceil((target.getTime() - now.getTime()) / 86400000);
+  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  return Math.ceil((target.getTime() - today.getTime()) / 86400000);
 }
 
 export default function HandoverScreen() {
-  const { plotProgrammes, defects } = useProgrammeData();
-  const { sitePlots } = useSitePlanner();
+  const { plotProgrammes: legacyPlots, defects } = useProgrammeData();
+  const { sitePlots, plotTemplates, siteSetup } = useSitePlanner();
   const [records, setRecords] = useState<HandoverRecord[]>([]);
+  const recordsRef = useRef<HandoverRecord[]>([]);
   const [selectedId, setSelectedId] = useState('');
+  const [notesDraft, setNotesDraft] = useState('');
 
-  const plots = useMemo<HandoverPlot[]>(() => {
-    const primary = plotProgrammes.map((plot) => ({ id: plot.id, name: plot.plotName, endDate: plot.endDate }));
-    const seenNames = new Set(primary.map((plot) => plot.name.trim().toLowerCase()));
-    const plannerOnly = sitePlots
-      .filter((plot) => !seenNames.has(plot.plotNo.trim().toLowerCase()))
-      .map((plot) => ({ id: plot.id, name: plot.plotNo }));
-    return [...primary, ...plannerOnly];
-  }, [plotProgrammes, sitePlots]);
+  const canonicalPlots = useMemo(
+    () => buildCanonicalQaPlots(sitePlots, plotTemplates, siteSetup, legacyPlots),
+    [sitePlots, plotTemplates, siteSetup, legacyPlots],
+  );
+  const plots = useMemo<HandoverPlot[]>(
+    () => canonicalPlots.map((plot) => ({ id: plot.id, name: plot.plotName, endDate: plot.plotCompletionDate })),
+    [canonicalPlots],
+  );
 
   useEffect(() => {
     async function load() {
       const stored = await AsyncStorage.getItem(HANDOVER_KEY);
-      setRecords(stored ? (JSON.parse(stored) as HandoverRecord[]) : []);
+      const loaded = stored ? (JSON.parse(stored) as HandoverRecord[]) : [];
+      recordsRef.current = loaded;
+      setRecords(loaded);
     }
     load();
   }, []);
@@ -72,17 +79,26 @@ export default function HandoverScreen() {
 
   const selected = plots.find((plot) => plot.id === selectedId) ?? plots[0];
   const record = selected ? records.find((item) => item.plotId === selected.id) : undefined;
+  const selectedCanonicalPlot = selected ? canonicalPlots.find((plot) => plot.id === selected.id) : undefined;
+
+  useEffect(() => {
+    setNotesDraft(record?.notes ?? '');
+  }, [selected?.id, record?.notes]);
   const checklist = record?.items ?? {};
   const completed = DEFAULT_ITEMS.filter((item) => checklist[item]).length;
-  const openDefects = selected ? defects.filter((item) => item.plotProgrammeId === selected.id && item.status !== 'Verified fixed') : [];
+  const openDefects = selectedCanonicalPlot
+    ? defects.filter((item) => canonicalEvidenceBelongsToPlot(selectedCanonicalPlot, item.plotProgrammeId) && item.status !== 'Verified fixed')
+    : [];
   const dueIn = daysUntil(selected?.endDate);
   const ready = completed === DEFAULT_ITEMS.length && openDefects.length === 0;
   const atRisk = !ready && (completed >= DEFAULT_ITEMS.length / 2 || (dueIn !== undefined && dueIn <= 21));
   const readiness = ready ? 'Ready' : atRisk ? 'At Risk' : 'Not Ready';
 
   async function save(next: HandoverRecord) {
-    const exists = records.some((item) => item.plotId === next.plotId);
-    const nextRecords = exists ? records.map((item) => (item.plotId === next.plotId ? next : item)) : [...records, next];
+    const current = recordsRef.current;
+    const exists = current.some((item) => item.plotId === next.plotId);
+    const nextRecords = exists ? current.map((item) => (item.plotId === next.plotId ? next : item)) : [...current, next];
+    recordsRef.current = nextRecords;
     setRecords(nextRecords);
     await AsyncStorage.setItem(HANDOVER_KEY, JSON.stringify(nextRecords));
   }
@@ -110,7 +126,10 @@ export default function HandoverScreen() {
   const readyCount = plots.filter((plot) => {
     const saved = records.find((recordItem) => recordItem.plotId === plot.id);
     const itemCount = DEFAULT_ITEMS.filter((item) => saved?.items[item]).length;
-    const plotOpenDefects = defects.filter((item) => item.plotProgrammeId === plot.id && item.status !== 'Verified fixed');
+    const canonical = canonicalPlots.find((item) => item.id === plot.id);
+    const plotOpenDefects = canonical
+      ? defects.filter((item) => canonicalEvidenceBelongsToPlot(canonical, item.plotProgrammeId) && item.status !== 'Verified fixed')
+      : [];
     return itemCount === DEFAULT_ITEMS.length && plotOpenDefects.length === 0;
   }).length;
 
@@ -191,10 +210,11 @@ export default function HandoverScreen() {
             <Text style={styles.cardTitle}>Handover notes</Text>
             <TextInput
               style={styles.notes}
-              defaultValue={record?.notes ?? ''}
+              value={notesDraft}
+              onChangeText={setNotesDraft}
               multiline
               placeholder="Outstanding items, customer demo notes, certificates, keys or access issues"
-              onBlur={(event: any) => updateNotes(event.nativeEvent.text)}
+              onBlur={() => updateNotes(notesDraft)}
             />
           </View>
 
