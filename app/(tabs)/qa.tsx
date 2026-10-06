@@ -4,7 +4,9 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { AppScreen } from '../../components/AppScreen';
 import { PhotoCaptureField } from '../../components/PhotoCaptureField';
 import { useProgrammeData } from '../../data/programmeStore';
+import { useSitePlanner } from '../../data/sitePlannerStore';
 import { DefectAction, DefectStatus } from '../../types/models';
+import { buildCanonicalQaPlots, canonicalEvidenceBelongsToPlot, findCanonicalQaPlot } from '../../utils/canonicalQaProgramme';
 import { exportActionLogCsv, exportInspectionLogCsv } from '../../utils/qaExports';
 
 const statusOrder: DefectStatus[] = [
@@ -17,41 +19,54 @@ const statusOrder: DefectStatus[] = [
 ];
 
 export default function QAScreen() {
-  const { plotProgrammes, inspections, defects, updateDefect } = useProgrammeData();
+  const { plotProgrammes: legacyPlots, inspections, defects, updateDefect } = useProgrammeData();
+  const { sitePlots, plotTemplates, siteSetup } = useSitePlanner();
+  const canonicalPlots = useMemo(
+    () => buildCanonicalQaPlots(sitePlots, plotTemplates, siteSetup, legacyPlots),
+    [sitePlots, plotTemplates, siteSetup, legacyPlots],
+  );
   const [plotFilter, setPlotFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'open' | 'all' | 'verify'>('open');
   const [message, setMessage] = useState('');
 
-  const plotName = (plotId: string) => plotProgrammes.find((plot) => plot.id === plotId)?.plotName ?? 'Plot';
+  const plotName = (plotId: string) => findCanonicalQaPlot(canonicalPlots, plotId)?.plotName ?? 'Archived plot';
 
   const filteredActions = useMemo(() => {
+    const selectedPlot = canonicalPlots.find((plot) => plot.id === plotFilter);
     return defects
-      .filter((defect) => plotFilter === 'all' || defect.plotProgrammeId === plotFilter)
+      .filter((defect) => selectedPlot
+        ? canonicalEvidenceBelongsToPlot(selectedPlot, defect.plotProgrammeId)
+        : canonicalPlots.some((plot) => canonicalEvidenceBelongsToPlot(plot, defect.plotProgrammeId)))
       .filter((defect) => {
         if (statusFilter === 'all') return true;
         if (statusFilter === 'verify') return defect.status === 'Fixed awaiting verification';
         return defect.status !== 'Verified fixed';
       })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [defects, plotFilter, statusFilter]);
+  }, [defects, canonicalPlots, plotFilter, statusFilter]);
 
   const filteredInspections = useMemo(() => {
+    const selectedPlot = canonicalPlots.find((plot) => plot.id === plotFilter);
     return inspections
-      .filter((inspection) => plotFilter === 'all' || inspection.plotProgrammeId === plotFilter)
+      .filter((inspection) => selectedPlot
+        ? canonicalEvidenceBelongsToPlot(selectedPlot, inspection.plotProgrammeId)
+        : canonicalPlots.some((plot) => canonicalEvidenceBelongsToPlot(plot, inspection.plotProgrammeId)))
       .sort((a, b) => (b.completedAt ?? b.startedAt).localeCompare(a.completedAt ?? a.startedAt));
-  }, [inspections, plotFilter]);
+  }, [inspections, canonicalPlots, plotFilter]);
 
-  const openCount = defects.filter((item) => item.status !== 'Verified fixed').length;
-  const verifyCount = defects.filter((item) => item.status === 'Fixed awaiting verification').length;
-  const closedCount = defects.filter((item) => item.status === 'Verified fixed').length;
+  const canonicalDefects = defects.filter((item) => canonicalPlots.some((plot) => canonicalEvidenceBelongsToPlot(plot, item.plotProgrammeId)));
+  const canonicalInspections = inspections.filter((item) => canonicalPlots.some((plot) => canonicalEvidenceBelongsToPlot(plot, item.plotProgrammeId)));
+  const openCount = canonicalDefects.filter((item) => item.status !== 'Verified fixed').length;
+  const verifyCount = canonicalDefects.filter((item) => item.status === 'Fixed awaiting verification').length;
+  const closedCount = canonicalDefects.filter((item) => item.status === 'Verified fixed').length;
 
   const exportActions = () => {
-    const downloaded = exportActionLogCsv(defects, plotProgrammes);
+    const downloaded = exportActionLogCsv(canonicalDefects, canonicalPlots);
     setMessage(downloaded ? 'Action log CSV downloaded.' : 'CSV export is available in the browser version.');
   };
 
   const exportInspections = () => {
-    const downloaded = exportInspectionLogCsv(inspections, plotProgrammes);
+    const downloaded = exportInspectionLogCsv(canonicalInspections, canonicalPlots);
     setMessage(downloaded ? 'Inspection log CSV downloaded.' : 'CSV export is available in the browser version.');
   };
 
@@ -76,17 +91,17 @@ export default function QAScreen() {
         <Summary label="Open actions" value={openCount} danger={openCount > 0} />
         <Summary label="Awaiting verification" value={verifyCount} warning={verifyCount > 0} />
         <Summary label="Verified fixed" value={closedCount} />
-        <Summary label="Inspections" value={inspections.length} />
+        <Summary label="Inspections" value={canonicalInspections.length} />
       </View>
 
       <View style={styles.toolbar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.chips}>
             <FilterChip label="All plots" active={plotFilter === 'all'} onPress={() => setPlotFilter('all')} />
-            {plotProgrammes.map((plot) => (
+            {canonicalPlots.map((plot) => (
               <FilterChip
                 key={plot.id}
-                label={plot.plotName}
+                label={`${plot.plotName} · ${plot.plotCompletionDate}`}
                 active={plotFilter === plot.id}
                 onPress={() => setPlotFilter(plot.id)}
               />
