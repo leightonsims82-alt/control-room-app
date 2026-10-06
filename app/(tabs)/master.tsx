@@ -43,7 +43,7 @@ export default function MasterProgrammeScreen() {
   const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
   const currentProgrammeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
   const visibleWeeks = Array.from({ length: 23 }, (_, index) => currentProgrammeWeek + index);
-  const initialStageCount = Math.max(1, siteSetup.stageCount || 9);
+  const initialStageCount = 9;
   const [plotNo, setPlotNo] = useState('');
 
   const [programmeGenerationBasis, setProgrammeGenerationBasis] = useState<ProgrammeGenerationBasis>('completion');
@@ -88,13 +88,12 @@ export default function MasterProgrammeScreen() {
 
 
   useEffect(() => {
-    readStageConfiguration(siteSetup.stageCount)
-      .then(setStageDefinitions)
+    readStageConfiguration(9)
+      .then((stages) => setStageDefinitions(stages.slice(0, 9)))
       .catch(() => {
-        const count = Math.max(1, siteSetup.stageCount || 9);
-        setStageDefinitions(PROGRAMME_STAGE_SEQUENCE.slice(0, count).map((stage) => ({ ...stage })));
+        setStageDefinitions(PROGRAMME_STAGE_SEQUENCE.slice(0, 9).map((stage) => ({ ...stage })));
       });
-  }, [siteSetup.stageCount]);
+  }, []);
 
   useEffect(() => {
     if (!selectedResetPlotId && sortedPlots[0]?.id) setSelectedResetPlotId(sortedPlots[0].id);
