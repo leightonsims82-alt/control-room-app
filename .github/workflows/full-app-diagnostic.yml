@@ -6,7 +6,6 @@ on:
   push:
     branches:
       - programme-buddy-excel-rebuild
-      - fix-plot-date-diagnostic-final
     paths:
       - 'app/**'
       - 'components/**'
@@ -27,7 +26,7 @@ jobs:
       - name: Check out programme branch
         uses: actions/checkout@v4
         with:
-          ref: fix-plot-date-diagnostic-final
+          ref: programme-buddy-excel-rebuild
 
       - name: Set up Node 22
         uses: actions/setup-node@v4
