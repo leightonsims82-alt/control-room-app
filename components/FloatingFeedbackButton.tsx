@@ -71,7 +71,11 @@ export function FloatingFeedbackButton() {
     setStatus('');
     try {
       const result = await submitSiteProgFeedback({ page: pathname || '/', category, message, screenshotDataUrl: screenshotDataUrl || undefined });
-      setStatus(result.synced ? 'Feedback sent — thank you.' : 'Saved on this device and will be available locally.');
+      if (!result.synced) {
+        setStatus(result.deliveryWarning || 'Saved on this device. Cloud delivery is incomplete, so your draft and screenshot have been retained.');
+        return;
+      }
+      setStatus('Feedback sent — thank you.');
       setMessage('');
       setScreenshotDataUrl('');
       setScreenshotName('');
@@ -102,7 +106,7 @@ export function FloatingFeedbackButton() {
         <Text style={styles.floatingText}>Feedback</Text>
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+      <Modal visible={open} transparent animationType={Platform.OS === 'web' ? 'none' : 'fade'} onRequestClose={() => setOpen(false)}>
         <View style={styles.backdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
           <View style={styles.modalCard}>
