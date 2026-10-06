@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { ProgrammeDatePicker } from '../../components/ProgrammeDatePicker';
+import { openMasterPlotManager } from '../../components/MasterPlotManager';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import {
@@ -433,7 +434,16 @@ ${formatProgrammeDate(siteSetup.programmeStartDate, week)}`}</Text>
                     const heldStageCell = String(stage).includes('H');
                     return <Text key={week} style={[styles.weekCell, stage ? styles.activeWeekCell : null, heldStageCell ? styles.heldWeekCell : null]}>{stage}</Text>;
                   })}
-                  <Text style={[styles.bodyCell, styles.actionCell]}>Manage</Text>
+                  <View style={[styles.bodyCell, styles.actionCell, styles.actionButtonCell]}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Manage Plot ${plot.plotNo}`}
+                      onPress={() => openMasterPlotManager(plot.id)}
+                      style={styles.manageButton}
+                    >
+                      <Text style={styles.manageButtonText}>Manage</Text>
+                    </Pressable>
+                  </View>
                 </View>
               );
             })}
@@ -529,6 +539,9 @@ const styles = StyleSheet.create({
   weekInputCell: { width: 104 },
   completionCell: { width: 132 },
   actionCell: { width: 86 },
+  actionButtonCell: { alignItems: 'center', justifyContent: 'center', padding: 4 },
+  manageButton: { backgroundColor: '#173b5f', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, minWidth: 70, alignItems: 'center', justifyContent: 'center' },
+  manageButtonText: { color: '#ffffff', fontSize: 11, fontWeight: '900' },
   weekHeader: { width: 70, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 10, lineHeight: 14, padding: 6, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
   holdBodyCell: { color: '#64748b', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
