@@ -99,6 +99,7 @@ create table if not exists public.siteprog_feedback (
   page text,
   category text not null default 'General' check (category in ('Bug','Idea','Usability','General')),
   message text not null check (char_length(message) between 3 and 4000),
+  screenshot_path text,
   app_version text,
   status text not null default 'new' check (status in ('new','reviewed','planned','resolved')),
   created_at timestamptz not null default now()
