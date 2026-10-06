@@ -138,6 +138,36 @@ test('site setup: named house type uses explicit edit and save workflow', async 
   await expect(page.getByText('Edit House Type', { exact: true })).toBeVisible();
 });
 
+test('site setup: activity up and down arrows really reorder fixes', async ({ page }) => {
+  await goto(page, '/site/setup');
+  await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Arrow QA');
+  await page.getByText('Create House Type', { exact: true }).click();
+  await page.getByText('Edit House Type', { exact: true }).click();
+
+  const foundation = page.getByDisplayValue('Foundation');
+  const drainage = page.getByDisplayValue('Drainage');
+  await expect(foundation).toBeVisible();
+  await expect(drainage).toBeVisible();
+
+  const beforeFoundation = await foundation.boundingBox();
+  const beforeDrainage = await drainage.boundingBox();
+  expect(beforeFoundation?.y ?? 0).toBeLessThan(beforeDrainage?.y ?? 0);
+
+  const foundationRow = foundation.locator('xpath=..');
+  await foundationRow.getByText('↓', { exact: true }).click();
+
+  const movedFoundation = await foundation.boundingBox();
+  const movedDrainage = await drainage.boundingBox();
+  expect(movedFoundation?.y ?? 0).toBeGreaterThan(movedDrainage?.y ?? 0);
+
+  const movedFoundationRow = foundation.locator('xpath=..');
+  await movedFoundationRow.getByText('↑', { exact: true }).click();
+
+  const restoredFoundation = await foundation.boundingBox();
+  const restoredDrainage = await drainage.boundingBox();
+  expect(restoredFoundation?.y ?? 0).toBeLessThan(restoredDrainage?.y ?? 0);
+});
+
 test('master: named house type and construction route are separate selections', async ({ page }) => {
   await goto(page, '/site/setup');
   await page.getByPlaceholder('e.g. Warrley or Linngate').fill('Warrley QA');
