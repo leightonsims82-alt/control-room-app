@@ -23,6 +23,7 @@ import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber } from '../../utils/site
 import {
   getEffectiveProgrammeWeeks,
   getHouseTypeLabel,
+  getHouseTypeTemplates,
   getLinearStage1StartWeekForPlot,
   getPlotBuildOrder,
   getPlotHoldDetail,
@@ -39,18 +40,18 @@ type ProgrammeGenerationBasis = 'start' | 'completion';
 export default function MasterProgrammeScreen() {
   const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
-  const bedroomTemplates = plotTemplates.filter((template) => template.id !== 'timberFrame' && template.constructionMethod !== 'timberFrame');
+  const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
   const currentProgrammeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
   const visibleWeeks = Array.from({ length: 23 }, (_, index) => currentProgrammeWeek + index);
   const initialStageCount = Math.max(1, siteSetup.stageCount || 9);
   const [plotNo, setPlotNo] = useState('');
-  const [houseTypeName, setHouseTypeName] = useState('');
+
   const [programmeGenerationBasis, setProgrammeGenerationBasis] = useState<ProgrammeGenerationBasis>('completion');
   const [plotStartDate, setPlotStartDate] = useState('');
   const [plotCompletionDate, setPlotCompletionDate] = useState('');
   const [plotDateError, setPlotDateError] = useState('');
   const [buildRoute, setBuildRoute] = useState<PlotBuildRoute>('Traditional');
-  const [templateId, setTemplateId] = useState(bedroomTemplates[2]?.id ?? bedroomTemplates[0]?.id ?? 'threeBed');
+  const [houseTypeId, setHouseTypeId] = useState('');
   const [plotMetadata, setPlotMetadata] = useState<PlotMetadataMap>({});
   const [stageDefinitions, setStageDefinitions] = useState<ConfiguredProgrammeStage[]>(
     PROGRAMME_STAGE_SEQUENCE.slice(0, initialStageCount).map((stage) => ({ ...stage })),
@@ -64,7 +65,8 @@ export default function MasterProgrammeScreen() {
   const selectedResetPlot = sortedPlots.find((plot) => plot.id === selectedResetPlotId) ?? sortedPlots[0];
   const selectedHoldPlot = sortedPlots.find((plot) => plot.id === holdPlotId) ?? sortedPlots[0];
   const nextPlotHint = String(sitePlots.length + 1);
-  const selectedProgrammeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : templateId;
+  const selectedHouseType = houseTypes.find((template) => template.id === houseTypeId) ?? houseTypes[0];
+  const selectedProgrammeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : selectedHouseType?.id ?? 'threeBed';
   const selectedProgrammeTemplate = getTemplateById(selectedProgrammeTemplateId, plotTemplates);
   const selectedProgrammeWeeks = selectedProgrammeTemplate
     ? getEffectiveProgrammeWeeks(selectedProgrammeTemplate, siteSetup)
@@ -76,6 +78,14 @@ export default function MasterProgrammeScreen() {
   useEffect(() => {
     readPlotMetadata().then(setPlotMetadata).catch(() => setPlotMetadata({}));
   }, []);
+
+  useEffect(() => {
+    if (!houseTypeId && houseTypes[0]?.id) setHouseTypeId(houseTypes[0].id);
+    if (houseTypeId && !houseTypes.some((template) => template.id === houseTypeId)) {
+      setHouseTypeId(houseTypes[0]?.id ?? '');
+    }
+  }, [houseTypeId, houseTypes]);
+
 
   useEffect(() => {
     readStageConfiguration(siteSetup.stageCount)
@@ -119,7 +129,12 @@ export default function MasterProgrammeScreen() {
     const cleanedPlotNo = plotNo.trim();
     if (!cleanedPlotNo || dateError || !anchorWeek) return;
 
-    const programmeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : templateId;
+    if (!selectedHouseType) {
+      setPlotDateError('Create and select a house type in Site Setup before adding a plot.');
+      return;
+    }
+
+    const programmeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : selectedHouseType.id;
     const programmeTemplate = getTemplateById(programmeTemplateId, plotTemplates);
     const programmeWeeks = programmeTemplate
       ? getEffectiveProgrammeWeeks(programmeTemplate, siteSetup)
@@ -134,17 +149,21 @@ export default function MasterProgrammeScreen() {
       plotNo: cleanedPlotNo,
       buildOrder: existingPlot?.buildOrder ?? nextBuildOrder,
       stage9CompleteWeek: completionWeek,
-      templateId: programmeTemplateId,
+      templateId: selectedHouseType.id,
+      houseTypeId: selectedHouseType.id,
+      constructionMethod: buildRoute === 'Timber Frame' ? 'timberFrame' : 'traditional',
     });
     const nextMetadata = await savePlotMetadata({
       plotNo: cleanedPlotNo,
-      houseTypeName,
-      bedroomTemplateId: templateId,
+      houseTypeName: selectedHouseType.name,
+      houseTypeId: selectedHouseType.id,
       buildRoute,
+      programmeGenerationBasis,
+      plotStartDate: programmeGenerationBasis === 'start' ? selectedDate : formatProgrammeDate(siteSetup.programmeStartDate, Math.max(1, completionWeek - programmeWeeks + 1)),
+      plotCompletionDate: programmeGenerationBasis === 'completion' ? selectedDate : formatProgrammeDate(siteSetup.programmeStartDate, completionWeek),
     });
     setPlotMetadata(nextMetadata);
     setPlotNo('');
-    setHouseTypeName('');
     setPlotStartDate('');
     setPlotCompletionDate('');
     setPlotDateError('');
@@ -268,31 +287,26 @@ export default function MasterProgrammeScreen() {
         </View>
 
         <View style={styles.formRow}>
-          <View style={styles.houseTypeWrap}>
-            <Text style={styles.label}>House Type</Text>
-            <TextInput
-              value={houseTypeName}
-              onChangeText={setHouseTypeName}
-              style={styles.input}
-              placeholder="Enter house type, e.g. Houghton"
-            />
-          </View>
           <View style={styles.inputWrapWide}>
-            <Text style={styles.label}>Property Size</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <Text style={styles.label}>House Type</Text>
+            {houseTypes.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.templateChips}>
-                {bedroomTemplates.map((template) => {
-                  const active = template.id === templateId;
+                {houseTypes.map((template) => {
+                  const active = template.id === selectedHouseType?.id;
                   return (
-                    <Pressable key={template.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => setTemplateId(template.id)}>
+                    <Pressable key={template.id} style={[styles.templateChip, active ? styles.templateChipActive : null]} onPress={() => setHouseTypeId(template.id)}>
                       <Text style={[styles.templateChipText, active ? styles.templateChipTextActive : null]}>{getHouseTypeLabel(template)}</Text>
                     </Pressable>
                   );
                 })}
               </View>
-            </ScrollView>
+            </ScrollView> : <Text style={styles.errorText}>No house types created. Create one in Site Setup first.</Text>}
           </View>
-          <Pressable style={styles.saveButton} onPress={savePlot}>
+          {selectedHouseType ? <View style={styles.houseTypeSummary}>
+            <Text style={styles.houseTypeSummaryTitle}>{selectedHouseType.name}</Text>
+            <Text style={styles.houseTypeSummaryText}>{selectedHouseType.bedrooms ?? '-'} bedrooms · {selectedHouseType.floors ?? '-'} storeys</Text>
+          </View> : null}
+          <Pressable disabled={!selectedHouseType} style={[styles.saveButton, !selectedHouseType ? styles.disabledButton : null]} onPress={savePlot}>
             <Text style={styles.saveButtonText}>Generate Plot Programme</Text>
           </Pressable>
         </View>
@@ -380,7 +394,8 @@ export default function MasterProgrammeScreen() {
               <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
               <Text style={[styles.headerCell, styles.routeCell]}>Route</Text>
               <Text style={[styles.headerCell, styles.houseTypeCell]}>House Type</Text>
-              <Text style={[styles.headerCell, styles.templateCell]}>Size</Text>
+              <Text style={[styles.headerCell, styles.templateCell]}>Beds</Text>
+              <Text style={[styles.headerCell, styles.templateCell]}>Storeys</Text>
               <Text style={[styles.headerCell, styles.holdCell]}>Hold</Text>
               <Text style={[styles.headerCell, styles.weekInputCell]}>Start</Text>
               <Text style={[styles.headerCell, styles.completionCell]}>Plot Completion</Text>
@@ -399,17 +414,18 @@ ${formatProgrammeDate(siteSetup.programmeStartDate, week)}`}</Text>
 
             {sortedPlots.map((plot, rowIndex) => {
               const metadata = plotMetadata[getPlotMetadataKey(plot.plotNo)];
-              const route = metadata?.buildRoute ?? (plot.templateId === 'timberFrame' ? 'Timber Frame' : 'Traditional');
-              const sizeTemplateId = metadata?.bedroomTemplateId ?? (plot.templateId === 'timberFrame' ? 'threeBed' : plot.templateId);
-              const sizeTemplate = getTemplateById(sizeTemplateId, bedroomTemplates);
+              const route = metadata?.buildRoute ?? (plot.constructionMethod === 'timberFrame' ? 'Timber Frame' : 'Traditional');
+              const houseTypeTemplateId = plot.houseTypeId ?? metadata?.houseTypeId ?? metadata?.bedroomTemplateId ?? plot.templateId;
+              const houseType = houseTypes.find((template) => template.id === houseTypeTemplateId);
               const programmeTemplate = getTemplateForPlot(plot, plotTemplates);
               return (
                 <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                   <Text style={[styles.bodyCell, styles.buildCell]}>{getPlotBuildOrder(plot, rowIndex)}</Text>
                   <Text style={[styles.bodyCell, styles.plotCell]}>{plot.plotNo}</Text>
                   <Text style={[styles.bodyCell, styles.routeCell]}>{route}</Text>
-                  <Text style={[styles.bodyCell, styles.houseTypeCell]}>{metadata?.houseTypeName || '-'}</Text>
-                  <Text style={[styles.bodyCell, styles.templateCell]}>{getHouseTypeLabel(sizeTemplate ?? programmeTemplate)}</Text>
+                  <Text style={[styles.bodyCell, styles.houseTypeCell]}>{houseType?.name ?? metadata?.houseTypeName ?? getHouseTypeLabel(programmeTemplate)}</Text>
+                  <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.bedrooms ?? '-'}</Text>
+                  <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.floors ?? '-'}</Text>
                   <Text style={[styles.holdBodyCell, styles.holdCell, plot.holdStage ? styles.holdBodyCellActive : null]}>{getPlotHoldLabel(plot)}</Text>
                   <Text style={[styles.stageStartBody, styles.weekInputCell]}>WK{String(getStage1StartWeekForPlot(plot, plotTemplates, siteSetup)).padStart(2, '0')}</Text>
                   <Text style={[styles.weekInputBody, styles.completionCell]}>{formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
@@ -457,6 +473,9 @@ const styles = StyleSheet.create({
   inputWrapRoute: { gap: 6, minWidth: 230, flex: 1 },
   houseTypeWrap: { gap: 6, minWidth: 260, flex: 2 },
   inputWrapWide: { gap: 6, minWidth: 320, flex: 2 },
+  houseTypeSummary: { minWidth: 190, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  houseTypeSummaryTitle: { color: '#0f172a', fontWeight: '900', fontSize: 14 },
+  houseTypeSummaryText: { color: '#64748b', fontWeight: '800', fontSize: 12, marginTop: 2 },
   label: { color: '#334155', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
   input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', fontWeight: '800' },
   errorText: { color: '#dc2626', fontSize: 12, fontWeight: '800' },

@@ -9,7 +9,7 @@ import { useSitePlanner } from '../../data/sitePlannerStore';
 import { getProgrammeStartDateValue, normaliseBritishDate, validateWeekOneDate } from '../../utils/programmeDates';
 import { ConfiguredProgrammeStage, readStageConfiguration, saveStageConfiguration } from '../../utils/stageConfiguration';
 import { PROGRAMME_STAGE_SEQUENCE } from '../../utils/siteProgrammeEngine';
-import { getEffectiveProgrammeWeeks, getHouseTypeLabel, PlotTemplate, TemplateActivity } from '../../utils/templateProgramme';
+import { applyHouseTypeFloorConfiguration, getEffectiveProgrammeWeeks, getHouseTypeLabel, getHouseTypeTemplates, PlotTemplate, TemplateActivity } from '../../utils/templateProgramme';
 
 const LOCKED_STANDARD_KEY = 'programme-buddy:locked-three-bed-standard:v1';
 const LOCKED_STAGE_COUNT = 9;
@@ -30,13 +30,16 @@ function toPositiveInt(value: string, fallback: number) {
 
 export default function SiteSetupScreen() {
   const router = useRouter();
-  const { siteSetup, plotTemplates, isSitePlannerLoaded, updateSiteSetup, updatePlotTemplate } = useSitePlanner();
+  const { siteSetup, plotTemplates, isSitePlannerLoaded, updateSiteSetup, addPlotTemplate, updatePlotTemplate } = useSitePlanner();
   const [weekOneDate, setWeekOneDate] = useState(getProgrammeStartDateValue(siteSetup.programmeStartDate));
   const [workingDays, setWorkingDays] = useState<5 | 6 | 7>(siteSetup.includeSunday ? 7 : siteSetup.includeSaturday ? 6 : 5);
   const [stageDefinitions, setStageDefinitions] = useState<ConfiguredProgrammeStage[]>(PROGRAMME_STAGE_SEQUENCE.slice(0, LOCKED_STAGE_COUNT).map((stage) => ({ ...stage })));
   const [lockedThreeBed, setLockedThreeBed] = useState<PlotTemplate | null>(null);
-  const [selectedTemplateId, setSelectedTemplateId] = useState('threeBed');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [draft, setDraft] = useState<PlotTemplate | null>(null);
+  const [newHouseTypeName, setNewHouseTypeName] = useState('');
+  const [newBedrooms, setNewBedrooms] = useState(3);
+  const [newFloors, setNewFloors] = useState(2);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [weekOneDateError, setWeekOneDateError] = useState('');
@@ -70,12 +73,18 @@ export default function SiteSetupScreen() {
     setWorkingDays(siteSetup.includeSunday ? 7 : siteSetup.includeSaturday ? 6 : 5);
   }, [siteSetup.programmeStartDate, siteSetup.includeSaturday, siteSetup.includeSunday]);
 
-  const visibleTemplates = useMemo(() => plotTemplates.filter((template) => template.id !== 'timberFrame'), [plotTemplates]);
-  const selectedLiveTemplate = visibleTemplates.find((template) => template.id === selectedTemplateId) ?? visibleTemplates[0];
-  const selectedTemplate = selectedTemplateId === 'threeBed' && lockedThreeBed ? lockedThreeBed : selectedLiveTemplate;
+  const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
+  const selectedTemplate = houseTypes.find((template) => template.id === selectedTemplateId) ?? houseTypes[0];
   const displayTemplate = draft ?? selectedTemplate;
-  const isLocked = selectedTemplateId === 'threeBed';
   const calculatedWeeks = displayTemplate ? getEffectiveProgrammeWeeks(displayTemplate, { ...siteSetup, includeSaturday: workingDays >= 6, includeSunday: workingDays >= 7 }) : 0;
+
+  useEffect(() => {
+    if (!selectedTemplateId && houseTypes[0]?.id) setSelectedTemplateId(houseTypes[0].id);
+    if (selectedTemplateId && !houseTypes.some((template) => template.id === selectedTemplateId)) {
+      setSelectedTemplateId(houseTypes[0]?.id ?? '');
+      setDraft(null);
+    }
+  }, [houseTypes, selectedTemplateId]);
 
   const saveSiteSettings = async () => {
     const dateError = validateWeekOneDate(weekOneDate);
@@ -108,9 +117,9 @@ export default function SiteSetupScreen() {
   };
 
   const beginEditTemplate = () => {
-    if (!selectedTemplate || isLocked) return;
+    if (!selectedTemplate) return;
     setDraft(cloneTemplate(selectedTemplate));
-    setMessage(`Editing ${getHouseTypeLabel(selectedTemplate)}. Changes are local until Save Template is pressed.`);
+    setMessage(`Editing ${getHouseTypeLabel(selectedTemplate)}. Changes are local until Save House Type is pressed.`);
   };
 
   const cancelEditTemplate = () => {
@@ -119,10 +128,24 @@ export default function SiteSetupScreen() {
   };
 
   const saveTemplate = async () => {
-    if (!draft || isLocked) return;
+    if (!draft) return;
     setSaving(true);
     try {
-      const cleaned: PlotTemplate = { ...draft, stageCount: LOCKED_STAGE_COUNT, activities: orderedActivities(draft.activities) };
+      const withFloors = applyHouseTypeFloorConfiguration(draft, draft.floors ?? 2);
+      const cleaned: PlotTemplate = {
+        ...withFloors,
+        name: withFloors.name.trim(),
+        houseTypeCode: withFloors.name.trim(),
+        description: `${withFloors.bedrooms ?? 3} bedroom · ${withFloors.floors ?? 2} storey house type`,
+        stageCount: LOCKED_STAGE_COUNT,
+        isHouseType: true,
+        isSystemTemplate: false,
+        activities: orderedActivities(withFloors.activities),
+      };
+      if (!cleaned.name) {
+        setMessage('House type name is required.');
+        return;
+      }
       await updatePlotTemplate(cleaned);
       setDraft(null);
       setMessage(`${getHouseTypeLabel(cleaned)} saved successfully.`);
@@ -131,17 +154,55 @@ export default function SiteSetupScreen() {
     }
   };
 
-  const cloneThreeBedToSelected = () => {
-    if (!lockedThreeBed || !selectedLiveTemplate || isLocked) return;
-    setDraft({
+  const resetSelectedToSiteStandard = () => {
+    if (!lockedThreeBed || !selectedTemplate) return;
+    const reset = applyHouseTypeFloorConfiguration({
       ...cloneTemplate(lockedThreeBed),
-      id: selectedLiveTemplate.id,
-      name: selectedLiveTemplate.name,
-      houseTypeCode: selectedLiveTemplate.houseTypeCode,
-      description: selectedLiveTemplate.description,
-      constructionMethod: selectedLiveTemplate.constructionMethod,
+      id: selectedTemplate.id,
+      name: selectedTemplate.name,
+      houseTypeCode: selectedTemplate.name,
+      bedrooms: selectedTemplate.bedrooms ?? 3,
+      floors: selectedTemplate.floors ?? 2,
+      isHouseType: true,
+      isSystemTemplate: false,
+      constructionMethod: undefined,
+      description: selectedTemplate.description,
+    }, selectedTemplate.floors ?? 2);
+    setDraft(reset);
+    setMessage('House type programme reset from the locked site standard. Press Save House Type to commit it.');
+  };
+
+  const createHouseType = async () => {
+    const name = newHouseTypeName.trim();
+    if (!name) {
+      setMessage('Enter a house type name first.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const created = await addPlotTemplate({
+        name,
+        bedrooms: newBedrooms,
+        floors: newFloors,
+        baseTemplateId: 'threeBed',
+      });
+      setSelectedTemplateId(created.id);
+      setDraft(null);
+      setNewHouseTypeName('');
+      setMessage(`${created.name} created from the locked site standard.${created.floors === 3 ? ' Three-storey brickwork and joist activities were added automatically.' : ''}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const patchDraftDetails = (changes: Partial<PlotTemplate>) => {
+    setDraft((current) => {
+      if (!current) return current;
+      const next = { ...current, ...changes };
+      return Object.prototype.hasOwnProperty.call(changes, 'floors')
+        ? applyHouseTypeFloorConfiguration(next, Number(next.floors ?? 2))
+        : next;
     });
-    setMessage(`Draft reset from the locked 3 Bedroom standard. Press Save Template to commit it.`);
   };
 
   const patchActivity = (order: number, changes: Partial<TemplateActivity>) => {
@@ -194,7 +255,7 @@ export default function SiteSetupScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Programme setup</Text>
-          <Text style={styles.subtitle}>A clean, explicit-save setup. The current 3 Bedroom programme is now the locked site standard.</Text>
+          <Text style={styles.subtitle}>Set the site calendar once, then create the named house types used on this development.</Text>
         </View>
         <Pressable style={styles.secondaryButton} onPress={() => router.replace('/')}><Text style={styles.secondaryButtonText}>Back to dashboard</Text></Pressable>
       </View>
@@ -229,51 +290,90 @@ export default function SiteSetupScreen() {
         <Pressable disabled={saving} style={styles.primaryButton} onPress={saveSiteSettings}><Text style={styles.primaryButtonText}>{saving ? 'Saving…' : 'Save Site Settings'}</Text></Pressable>
       </SectionCard>
 
-      <SectionCard title="Build route and property type templates" subtitle="3 Bedroom is the locked baseline. Other property types use a safe draft → Save workflow; there is no autosave.">
-        <View style={styles.chips}>
-          {visibleTemplates.map((template) => <Pressable key={template.id} onPress={() => { setSelectedTemplateId(template.id); setDraft(null); }} style={[styles.chip, selectedTemplateId === template.id ? styles.chipActive : null]}><Text style={[styles.chipText, selectedTemplateId === template.id ? styles.chipTextActive : null]}>{getHouseTypeLabel(template)}</Text></Pressable>)}
+      <SectionCard title="House types" subtitle="Create the named house types used on this development. Every house type starts from your locked site-standard programme. Construction type is selected separately when a plot is added.">
+        <View style={styles.lockedBanner}>
+          <Text style={styles.lockedTitle}>🔒 Site-standard programme locked</Text>
+          <Text style={styles.lockedText}>Your original 3 Bedroom programme is now used only as the protected baseline. It is no longer a selectable property size. New house types copy this programme automatically.</Text>
         </View>
 
-        {displayTemplate ? <>
-          <View style={styles.templateSummary}>
-            <View><Text style={styles.label}>Template</Text><Text style={styles.summaryValue}>{getHouseTypeLabel(displayTemplate)}</Text></View>
-            <View><Text style={styles.label}>Build route</Text><Text style={styles.summaryValue}>{displayTemplate.constructionMethod === 'timberFrame' ? 'Timber Frame' : 'Traditional'}</Text></View>
-            <View><Text style={styles.label}>Target weeks</Text><Text style={styles.summaryValue}>{displayTemplate.programmeWeeks}</Text></View>
-            <View><Text style={styles.label}>Stages</Text><Text style={styles.summaryValue}>9</Text></View>
-            <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>Calculated weeks</Text><Text style={styles.calculatedValue}>{calculatedWeeks}</Text></View>
+        <View style={styles.settingsGrid}>
+          <View style={styles.field}>
+            <Text style={styles.label}>New house type name</Text>
+            <TextInput value={newHouseTypeName} onChangeText={setNewHouseTypeName} style={styles.input} placeholder="e.g. Warrley or Linngate" />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Bedrooms</Text>
+            <View style={styles.chips}>
+              {[1, 2, 3, 4, 5, 6].map((count) => <Pressable key={count} onPress={() => setNewBedrooms(count)} style={[styles.chip, newBedrooms === count ? styles.chipActive : null]}><Text style={[styles.chipText, newBedrooms === count ? styles.chipTextActive : null]}>{count}</Text></Pressable>)}
+            </View>
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Storeys</Text>
+            <View style={styles.chips}>
+              {[1, 2, 3].map((count) => <Pressable key={count} onPress={() => setNewFloors(count)} style={[styles.chip, newFloors === count ? styles.chipActive : null]}><Text style={[styles.chipText, newFloors === count ? styles.chipTextActive : null]}>{count}</Text></Pressable>)}
+            </View>
+          </View>
+          <Pressable disabled={saving} style={styles.primaryButton} onPress={createHouseType}><Text style={styles.primaryButtonText}>{saving ? 'Creating…' : 'Create House Type'}</Text></Pressable>
+        </View>
+
+        {newFloors === 3 ? <View style={styles.messageBox}><Text style={styles.messageText}>Three-storey rule: the programme will automatically add a second set of joists/flooring, 5th lift brickwork and 5th lift scaffold before the roof sequence.</Text></View> : null}
+
+        {houseTypes.length ? <>
+          <View>
+            <Text style={styles.label}>Development house types</Text>
+            <View style={[styles.chips, { marginTop: 8 }]}>
+              {houseTypes.map((template) => <Pressable key={template.id} onPress={() => { setSelectedTemplateId(template.id); setDraft(null); }} style={[styles.chip, selectedTemplate?.id === template.id ? styles.chipActive : null]}><Text style={[styles.chipText, selectedTemplate?.id === template.id ? styles.chipTextActive : null]}>{getHouseTypeLabel(template)}</Text></Pressable>)}
+            </View>
           </View>
 
-          {isLocked ? <View style={styles.lockedBanner}><Text style={styles.lockedTitle}>🔒 Standard 3 Bedroom — locked</Text><Text style={styles.lockedText}>This exact programme has been captured from your current saved 3 Bedroom setup and is now the baseline. It cannot be accidentally changed from this screen.</Text></View> : null}
-
-          {!isLocked ? <View style={styles.actionRow}>
-            {!draft ? <Pressable style={styles.primaryButton} onPress={beginEditTemplate}><Text style={styles.primaryButtonText}>Edit Template</Text></Pressable> : null}
-            {!draft ? <Pressable style={styles.secondaryButton} onPress={cloneThreeBedToSelected}><Text style={styles.secondaryButtonText}>Start from 3 Bed Standard</Text></Pressable> : null}
-            {draft ? <Pressable disabled={saving} style={styles.primaryButton} onPress={saveTemplate}><Text style={styles.primaryButtonText}>{saving ? 'Saving…' : 'Save Template'}</Text></Pressable> : null}
-            {draft ? <Pressable style={styles.secondaryButton} onPress={cancelEditTemplate}><Text style={styles.secondaryButtonText}>Cancel</Text></Pressable> : null}
-          </View> : null}
-
-          <ScrollView horizontal showsHorizontalScrollIndicator>
-            <View style={styles.activityTable}>
-              <View style={styles.activityRow}>
-                <Text style={[styles.th, styles.seqCol]}>Seq</Text><Text style={[styles.th, styles.taskCol]}>Task</Text><Text style={[styles.th, styles.tradeCol]}>Trade</Text><Text style={[styles.th, styles.displayCol]}>Display</Text><Text style={[styles.th, styles.smallCol]}>Stage</Text><Text style={[styles.th, styles.smallCol]}>Days</Text>{draft ? <Text style={[styles.th, styles.actionCol]}>Actions</Text> : null}
-              </View>
-              {rows.map((activity) => <View key={`${activity.order}-${activity.code}`} style={styles.activityRow}>
-                <Text style={[styles.td, styles.seqCol]}>{activity.order}</Text>
-                {draft ? <TextInput value={activity.code} onChangeText={(value) => patchActivity(activity.order, { code: value })} style={[styles.input, styles.taskCol]} /> : <Text style={[styles.td, styles.taskCol]}>{activity.code}</Text>}
-                {draft ? <TextInput value={activity.trade} onChangeText={(value) => patchActivity(activity.order, { trade: value })} style={[styles.input, styles.tradeCol]} /> : <Text style={[styles.td, styles.tradeCol]}>{activity.trade}</Text>}
-                {draft ? <TextInput value={activity.displayText} onChangeText={(value) => patchActivity(activity.order, { displayText: value })} style={[styles.input, styles.displayCol]} /> : <Text style={[styles.td, styles.displayCol]}>{activity.displayText}</Text>}
-                {draft ? <TextInput defaultValue={String(activity.stage)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => patchActivity(activity.order, { stage: Math.min(LOCKED_STAGE_COUNT, toPositiveInt(nativeEvent.text, Number(activity.stage))) as TemplateActivity['stage'] })} style={[styles.input, styles.smallCol]} /> : <Text style={[styles.td, styles.smallCol]}>{activity.stage}</Text>}
-                {draft ? <TextInput defaultValue={String(activity.durationDays)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => patchActivity(activity.order, { durationDays: toPositiveInt(nativeEvent.text, activity.durationDays) })} style={[styles.input, styles.smallCol, styles.daysInput]} /> : <Text style={[styles.td, styles.smallCol, styles.daysCell]}>{activity.durationDays}</Text>}
-                {draft ? <View style={styles.rowActions}>
-                  <Pressable style={styles.miniButton} onPress={() => moveActivity(activity.order, -1)}><Text style={styles.miniButtonText}>↑</Text></Pressable>
-                  <Pressable style={styles.miniButton} onPress={() => moveActivity(activity.order, 1)}><Text style={styles.miniButtonText}>↓</Text></Pressable>
-                  <Pressable style={styles.addButton} onPress={() => addActivityAfter(activity.order)}><Text style={styles.addButtonText}>+</Text></Pressable>
-                  <Pressable style={styles.removeButton} onPress={() => removeActivity(activity.order)}><Text style={styles.removeButtonText}>−</Text></Pressable>
-                </View> : null}
-              </View>)}
+          {displayTemplate ? <>
+            <View style={styles.templateSummary}>
+              <View><Text style={styles.label}>House type</Text><Text style={styles.summaryValue}>{getHouseTypeLabel(displayTemplate)}</Text></View>
+              <View><Text style={styles.label}>Bedrooms</Text><Text style={styles.summaryValue}>{displayTemplate.bedrooms ?? '-'}</Text></View>
+              <View><Text style={styles.label}>Storeys</Text><Text style={styles.summaryValue}>{displayTemplate.floors ?? '-'}</Text></View>
+              <View><Text style={styles.label}>Target weeks</Text><Text style={styles.summaryValue}>{displayTemplate.programmeWeeks}</Text></View>
+              <View><Text style={styles.label}>Stages</Text><Text style={styles.summaryValue}>9</Text></View>
+              <View style={styles.calculatedCard}><Text style={styles.calculatedLabel}>Calculated weeks</Text><Text style={styles.calculatedValue}>{calculatedWeeks}</Text></View>
             </View>
-          </ScrollView>
-        </> : <Text style={styles.subtitle}>No template available.</Text>}
+
+            {displayTemplate.floors === 3 ? <View style={styles.lockedBanner}><Text style={styles.lockedTitle}>3-storey programme rule active</Text><Text style={styles.lockedText}>Includes second-floor joists/flooring, 5th lift brickwork and 5th lift scaffold automatically.</Text></View> : null}
+
+            <View style={styles.actionRow}>
+              {!draft ? <Pressable style={styles.primaryButton} onPress={beginEditTemplate}><Text style={styles.primaryButtonText}>Edit House Type</Text></Pressable> : null}
+              {!draft ? <Pressable style={styles.secondaryButton} onPress={resetSelectedToSiteStandard}><Text style={styles.secondaryButtonText}>Reset Programme to Site Standard</Text></Pressable> : null}
+              {draft ? <Pressable disabled={saving} style={styles.primaryButton} onPress={saveTemplate}><Text style={styles.primaryButtonText}>{saving ? 'Saving…' : 'Save House Type'}</Text></Pressable> : null}
+              {draft ? <Pressable style={styles.secondaryButton} onPress={cancelEditTemplate}><Text style={styles.secondaryButtonText}>Cancel</Text></Pressable> : null}
+            </View>
+
+            {draft ? <View style={styles.settingsGrid}>
+              <View style={styles.field}><Text style={styles.label}>House type name</Text><TextInput value={draft.name} onChangeText={(value) => patchDraftDetails({ name: value, houseTypeCode: value })} style={styles.input} /></View>
+              <View style={styles.field}><Text style={styles.label}>Bedrooms</Text><View style={styles.chips}>{[1,2,3,4,5,6].map((count) => <Pressable key={count} onPress={() => patchDraftDetails({ bedrooms: count })} style={[styles.chip, draft.bedrooms === count ? styles.chipActive : null]}><Text style={[styles.chipText, draft.bedrooms === count ? styles.chipTextActive : null]}>{count}</Text></Pressable>)}</View></View>
+              <View style={styles.field}><Text style={styles.label}>Storeys</Text><View style={styles.chips}>{[1,2,3].map((count) => <Pressable key={count} onPress={() => patchDraftDetails({ floors: count })} style={[styles.chip, draft.floors === count ? styles.chipActive : null]}><Text style={[styles.chipText, draft.floors === count ? styles.chipTextActive : null]}>{count}</Text></Pressable>)}</View></View>
+            </View> : null}
+
+            <ScrollView horizontal showsHorizontalScrollIndicator>
+              <View style={styles.activityTable}>
+                <View style={styles.activityRow}>
+                  <Text style={[styles.th, styles.seqCol]}>Seq</Text><Text style={[styles.th, styles.taskCol]}>Task</Text><Text style={[styles.th, styles.tradeCol]}>Trade</Text><Text style={[styles.th, styles.displayCol]}>Display</Text><Text style={[styles.th, styles.smallCol]}>Stage</Text><Text style={[styles.th, styles.smallCol]}>Days</Text>{draft ? <Text style={[styles.th, styles.actionCol]}>Actions</Text> : null}
+                </View>
+                {rows.map((activity) => <View key={`${activity.order}-${activity.code}`} style={styles.activityRow}>
+                  <Text style={[styles.td, styles.seqCol]}>{activity.order}</Text>
+                  {draft ? <TextInput value={activity.code} onChangeText={(value) => patchActivity(activity.order, { code: value })} style={[styles.input, styles.taskCol]} /> : <Text style={[styles.td, styles.taskCol]}>{activity.code}</Text>}
+                  {draft ? <TextInput value={activity.trade} onChangeText={(value) => patchActivity(activity.order, { trade: value })} style={[styles.input, styles.tradeCol]} /> : <Text style={[styles.td, styles.tradeCol]}>{activity.trade}</Text>}
+                  {draft ? <TextInput value={activity.displayText} onChangeText={(value) => patchActivity(activity.order, { displayText: value })} style={[styles.input, styles.displayCol]} /> : <Text style={[styles.td, styles.displayCol]}>{activity.displayText}</Text>}
+                  {draft ? <TextInput defaultValue={String(activity.stage)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => patchActivity(activity.order, { stage: Math.min(LOCKED_STAGE_COUNT, toPositiveInt(nativeEvent.text, Number(activity.stage))) as TemplateActivity['stage'] })} style={[styles.input, styles.smallCol]} /> : <Text style={[styles.td, styles.smallCol]}>{activity.stage}</Text>}
+                  {draft ? <TextInput defaultValue={String(activity.durationDays)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => patchActivity(activity.order, { durationDays: toPositiveInt(nativeEvent.text, activity.durationDays) })} style={[styles.input, styles.smallCol, styles.daysInput]} /> : <Text style={[styles.td, styles.smallCol, styles.daysCell]}>{activity.durationDays}</Text>}
+                  {draft ? <View style={styles.rowActions}>
+                    <Pressable style={styles.miniButton} onPress={() => moveActivity(activity.order, -1)}><Text style={styles.miniButtonText}>↑</Text></Pressable>
+                    <Pressable style={styles.miniButton} onPress={() => moveActivity(activity.order, 1)}><Text style={styles.miniButtonText}>↓</Text></Pressable>
+                    <Pressable style={styles.addButton} onPress={() => addActivityAfter(activity.order)}><Text style={styles.addButtonText}>+</Text></Pressable>
+                    <Pressable style={styles.removeButton} onPress={() => removeActivity(activity.order)}><Text style={styles.removeButtonText}>−</Text></Pressable>
+                  </View> : null}
+                </View>)}
+              </View>
+            </ScrollView>
+          </> : null}
+        </> : <View style={styles.messageBox}><Text style={styles.messageText}>No house types have been created yet. Create Warrley, Linngate or any other development house type above.</Text></View>}
       </SectionCard>
 
       {message ? <View style={styles.messageBox}><Text style={styles.messageText}>{message}</Text></View> : null}
