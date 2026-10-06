@@ -13,7 +13,7 @@ import {
   removePlotMetadata,
   savePlotMetadata,
 } from '../../utils/plotMetadata';
-import { formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, validatePlotCompletionDate } from '../../utils/programmeDates';
+import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, validatePlotCompletionDate } from '../../utils/programmeDates';
 import {
   ConfiguredProgrammeStage,
   getConfiguredStageForRelativeWeek,
@@ -399,7 +399,7 @@ export default function MasterProgrammeScreen() {
               <Text style={[styles.headerCell, styles.weekInputCell]}>Start</Text>
               <Text style={[styles.headerCell, styles.completionCell]}>Plot Completion</Text>
               {visibleWeeks.map((week) => (
-                <Text key={week} style={styles.weekHeader}>{`WK${String(week).padStart(2, '0')}\
+                <Text key={week} style={styles.weekHeader}>{`${formatCalendarWeek(siteSetup.programmeStartDate, week, siteSetup.calendarWeekOne)}\
 ${formatProgrammeDate(siteSetup.programmeStartDate, week)}`}</Text>
               ))}
               <Text style={[styles.headerCell, styles.actionCell]}>Action</Text>
@@ -426,7 +426,7 @@ ${formatProgrammeDate(siteSetup.programmeStartDate, week)}`}</Text>
                   <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.bedrooms ?? '-'}</Text>
                   <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.floors ?? '-'}</Text>
                   <Text style={[styles.holdBodyCell, styles.holdCell, plot.holdStage ? styles.holdBodyCellActive : null]}>{getPlotHoldLabel(plot)}</Text>
-                  <Text style={[styles.stageStartBody, styles.weekInputCell]}>WK{String(getStage1StartWeekForPlot(plot, plotTemplates, siteSetup)).padStart(2, '0')}</Text>
+                  <Text style={[styles.stageStartBody, styles.weekInputCell]}>{formatCalendarWeek(siteSetup.programmeStartDate, getStage1StartWeekForPlot(plot, plotTemplates, siteSetup), siteSetup.calendarWeekOne)}</Text>
                   <Text style={[styles.weekInputBody, styles.completionCell]}>{formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
                   {visibleWeeks.map((week) => {
                     const stage = getStageDisplayForWeek(plot, week);
