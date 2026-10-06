@@ -13,6 +13,7 @@ export function MasterPlotDeleteControl() {
   const [visible, setVisible] = useState(false);
   const [selectedPlotId, setSelectedPlotId] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const orderedPlots = useMemo(
     () => sitePlots.slice().sort((a, b) => plotNumberValue(a.plotNo) - plotNumberValue(b.plotNo)),
@@ -22,16 +23,22 @@ export function MasterPlotDeleteControl() {
 
   const openDeleteControl = () => {
     setSelectedPlotId((current) => orderedPlots.some((plot) => plot.id === current) ? current : orderedPlots[0]?.id ?? '');
+    setConfirmDelete(false);
     setVisible(true);
   };
 
   const closeDeleteControl = () => {
     if (deleting) return;
+    setConfirmDelete(false);
     setVisible(false);
   };
 
   const deleteSelectedPlot = async () => {
     if (!selectedPlot || deleting) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
     setDeleting(true);
     try {
       await removeSitePlot(selectedPlot.id);
@@ -76,7 +83,7 @@ export function MasterPlotDeleteControl() {
                       <Pressable
                         key={plot.id}
                         style={[styles.plotChip, active ? styles.plotChipActive : null]}
-                        onPress={() => setSelectedPlotId(plot.id)}
+                        onPress={() => { setSelectedPlotId(plot.id); setConfirmDelete(false); }}
                       >
                         <Text style={[styles.plotChipText, active ? styles.plotChipTextActive : null]}>Plot {plot.plotNo}</Text>
                       </Pressable>
@@ -87,6 +94,7 @@ export function MasterPlotDeleteControl() {
                 <View style={styles.warningBox}>
                   <Text style={styles.warningTitle}>Delete Plot {selectedPlot?.plotNo}?</Text>
                   <Text style={styles.warningText}>This removes the plot, its programme changes, notes, delays and linked QA records from this device. This cannot be undone.</Text>
+                  {confirmDelete ? <Text style={styles.confirmWarning}>Press Confirm Delete to permanently remove Plot {selectedPlot?.plotNo}.</Text> : null}
                 </View>
 
                 <View style={styles.actions}>
@@ -94,7 +102,7 @@ export function MasterPlotDeleteControl() {
                     <Text style={styles.cancelButtonText}>Cancel</Text>
                   </Pressable>
                   <Pressable disabled={deleting} style={[styles.deleteButton, deleting ? styles.disabledButton : null]} onPress={deleteSelectedPlot}>
-                    <Text style={styles.deleteButtonText}>{deleting ? 'Deleting…' : `Delete Plot ${selectedPlot?.plotNo}`}</Text>
+                    <Text style={styles.deleteButtonText}>{deleting ? 'Deleting…' : confirmDelete ? `Confirm Delete Plot ${selectedPlot?.plotNo}` : `Delete Plot ${selectedPlot?.plotNo}`}</Text>
                   </Pressable>
                 </View>
               </>
@@ -151,6 +159,7 @@ const styles = StyleSheet.create({
   warningBox: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74', borderRadius: 14, padding: 14, gap: 5 },
   warningTitle: { color: '#9a3412', fontSize: 16, fontWeight: '900' },
   warningText: { color: '#9a3412', fontSize: 13, lineHeight: 19, fontWeight: '700' },
+  confirmWarning: { color: '#b91c1c', fontSize: 13, lineHeight: 19, fontWeight: '900', marginTop: 4 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10 },
   cancelButton: { alignSelf: 'flex-end', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 11, backgroundColor: '#ffffff' },
   cancelButtonText: { color: '#0f172a', fontWeight: '900' },
