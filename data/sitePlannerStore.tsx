@@ -24,6 +24,7 @@ const TRADE_CONTACTS_KEY = 'programme-buddy:trade-contacts:v1';
 const ISSUE_SETTINGS_KEY = 'programme-buddy:issue-settings:v1';
 const ISSUE_LOGS_KEY = 'programme-buddy:issue-logs:v1';
 const PLOT_TEMPLATES_KEY = 'programme-buddy:plot-templates:v1';
+const HOUSE_TYPES_RESET_KEY = 'programme-buddy:house-types-reset:v2';
 const SITE_PROGRAMME_SETUP_KEY = 'programme-buddy:programme-setup:v1';
 const PROGRAMME_NOTES_KEY = 'programme-buddy:programme-notes:v1';
 
@@ -312,9 +313,15 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           setIssueSettingsState(storedIssueSettings);
           setIssueLogs(storedIssueLogs);
           setProgrammeNotes(storedNotes);
-          const mergedTemplates = mergeDefaultTemplates(storedTemplates);
+          const houseTypesReset = await AsyncStorage.getItem(HOUSE_TYPES_RESET_KEY);
+          const mergedTemplates = houseTypesReset === 'done'
+            ? mergeDefaultTemplates(storedTemplates)
+            : DEFAULT_PLOT_TEMPLATES.map(normaliseTemplate);
           setPlotTemplates(mergedTemplates);
           await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(mergedTemplates));
+          if (houseTypesReset !== 'done') {
+            await AsyncStorage.setItem(HOUSE_TYPES_RESET_KEY, 'done');
+          }
           const migratedSiteSetup = { ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup, programmeStartDate: getProgrammeStartDateValue(storedSiteSetup.programmeStartDate) };
           setSiteSetupState(migratedSiteSetup);
           await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(migratedSiteSetup));
