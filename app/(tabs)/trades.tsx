@@ -5,7 +5,7 @@ import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { TradeContact, useSitePlanner } from '../../data/sitePlannerStore';
 import { siteprogTheme } from '../../theme/siteprogTheme';
-import { formatProgrammeDate, getCurrentProgrammeWeek } from '../../utils/programmeDates';
+import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek } from '../../utils/programmeDates';
 import { getActivitiesForTemplateDay } from '../../utils/templateProgramme';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -76,6 +76,8 @@ export default function TradesScreen() {
     [firstProgrammeWeek, siteSetup.programmeStartDate],
   );
   const dateRange = `${days[0]?.date ?? ''} - ${days[13]?.date ?? ''}`;
+  const firstCalendarWeek = formatCalendarWeek(siteSetup.programmeStartDate, days[0]?.programmeWeek ?? firstProgrammeWeek, siteSetup.calendarWeekOne);
+  const secondCalendarWeek = formatCalendarWeek(siteSetup.programmeStartDate, days[7]?.programmeWeek ?? normaliseWeek(firstProgrammeWeek + 1), siteSetup.calendarWeekOne);
 
   const rows = useMemo(() => sitePlots.map((plot) => {
     const activitiesByDay = days.map((day) => getActivitiesForTemplateDay(
@@ -177,7 +179,7 @@ export default function TradesScreen() {
         >
           <View style={styles.summary}>
             <Text style={styles.summaryTitle}>{selectedTrade} Programme</Text>
-            <Text style={styles.summaryMeta}>Week 1 and Week 2: {dateRange}</Text>
+            <Text style={styles.summaryMeta}>{firstCalendarWeek} + {secondCalendarWeek}: {dateRange}</Text>
           </View>
 
           {message ? <Text style={styles.notice}>{message}</Text> : null}
@@ -201,8 +203,8 @@ export default function TradesScreen() {
               <View style={styles.row}>
                 <Text style={[styles.headerCell, styles.plot]} />
                 <Text style={[styles.headerCell, styles.trade]} />
-                <Text style={styles.weekHeader}>Week 1</Text>
-                <Text style={styles.weekHeader}>Week 2</Text>
+                <Text style={styles.weekHeader}>{firstCalendarWeek}</Text>
+                <Text style={styles.weekHeader}>{secondCalendarWeek}</Text>
               </View>
 
               <View style={styles.row}>
