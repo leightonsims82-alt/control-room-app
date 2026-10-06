@@ -21,6 +21,12 @@ export function formatBritishDate(date: Date) {
   return `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
 }
 
+export function shiftProgrammeDateWeeks(value: string, weeks: number) {
+  const date = parseProgrammeDate(value);
+  if (!date) return '';
+  return formatBritishDate(new Date(date.getTime() + Math.round(weeks) * 7 * DAY_MS));
+}
+
 export function getIsoCalendarWeek(date: Date) {
   const working = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const day = working.getUTCDay() || 7;
