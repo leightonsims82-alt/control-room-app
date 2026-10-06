@@ -54,13 +54,13 @@ function shortActivity(text: string) {
 
 export default function SupervisorLockedView() {
   const params = useLocalSearchParams<{ trade?: string; print?: string }>();
-  const { sitePlots, activityDelays, plotTemplates, tradeContacts, issueLogs, siteSetup } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, tradeContacts, issueLogs, siteSetup } = useSitePlanner();
   const requestedTrade = Array.isArray(params.trade) ? params.trade[0] : params.trade;
   const printMode = String(Array.isArray(params.print) ? params.print[0] : params.print ?? '') === '1';
   const lockedTrade = tradeContacts.find((trade) => slug(trade.trade) === slug(String(requestedTrade ?? '')))?.trade ?? tradeContacts[0]?.trade ?? 'Trade';
 
-  // Week 1 is the next full programme week. Week 2 is the week after.
-  const startWeek = normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate) + 1);
+  // Locked supervisor view uses the same current 2-week window as the main programme.
+  const startWeek = normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate));
   const days = useMemo(() => buildTwoWeekWindow(startWeek, siteSetup.programmeStartDate), [startWeek, siteSetup.programmeStartDate]);
   const dateRange = `${days[0]?.date ?? ''} - ${days[13]?.date ?? ''}`;
   const latestIssue = issueLogs[0];
@@ -77,7 +77,7 @@ export default function SupervisorLockedView() {
       style.innerHTML = `
         @page { size: A4 landscape; margin: 7mm; }
         @media print {
-          html, body { width: 297mm; min-height: 210mm; background: #fff !important; overflow: visible !important; }
+          html, body { width: auto; min-height: 0; height: auto; background: #fff !important; overflow: visible !important; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           [data-testid="scroll-view"], div { overflow: visible !important; }
         }
@@ -93,13 +93,13 @@ export default function SupervisorLockedView() {
 
   const rows = useMemo(() => {
     return sitePlots.map((plot) => {
-      const cells = days.map((day) => getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates, siteSetup)
+      const cells = days.map((day) => getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates, siteSetup, activityMoves)
         .filter((activity) => activity.trade.toLowerCase() === lockedTrade.toLowerCase())
         .map((activity) => shortActivity(activity.displayText || activity.code))
         .join('\n'));
-      return { key: plot.id, plotNo: plot.plotNo, cells };
+      return { key: plot.id, plotNo: plot.plotNo, completionDate: plot.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek), cells };
     }).filter((row) => row.cells.some(Boolean));
-  }, [sitePlots, days, activityDelays, plotTemplates, siteSetup, lockedTrade]);
+  }, [sitePlots, days, activityDelays, activityMoves, plotTemplates, siteSetup, lockedTrade]);
 
   return (
     <AppScreen>
@@ -148,7 +148,7 @@ export default function SupervisorLockedView() {
             </View>
             {rows.map((row, rowIndex) => (
               <View key={row.key} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
-                <Text style={[styles.bodyCell, { width: plotWidth }, printMode ? styles.printBodyCell : null]}>{row.plotNo}</Text>
+                <View style={[styles.bodyCell, { width: plotWidth }, printMode ? styles.printBodyCell : null]}><Text style={styles.plotNoText}>{row.plotNo}</Text><Text style={styles.plotCompletionText}>{row.completionDate}</Text></View>
                 <Text style={[styles.bodyCell, { width: tradeWidth }, printMode ? styles.printBodyCell : null]}>{lockedTrade}</Text>
                 {row.cells.map((cell, index) => (
                   <View key={`${row.key}-${days[index].key}`} style={[styles.dayBodyCell, { width: dayWidth }, days[index].weekend ? styles.weekendCell : null, cell ? styles.activeDayCell : null, printMode ? styles.printDayBodyCell : null]}>
@@ -207,6 +207,8 @@ const styles = StyleSheet.create({
   dateHeaderCell: { backgroundColor: '#214c75', color: '#dbeafe', borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center', paddingVertical: 4, fontSize: 9, fontWeight: '900' },
   printDateCell: { fontSize: 6.5, paddingVertical: 2 },
   weekendDateCell: { backgroundColor: '#2b587f' },
+  plotNoText: { color: '#0f172a', fontWeight: '900', textAlign: 'center' },
+  plotCompletionText: { color: '#64748b', fontWeight: '800', fontSize: 8, textAlign: 'center', marginTop: 2 },
   bodyCell: { color: '#0f172a', padding: 7, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800', fontSize: 11 },
   printBodyCell: { fontSize: 7, padding: 3, minHeight: 30 },
   dayBodyCell: { minHeight: 48, borderWidth: 1, borderColor: '#c8d7e6', paddingHorizontal: 4, paddingVertical: 5, alignItems: 'center', justifyContent: 'center' },
