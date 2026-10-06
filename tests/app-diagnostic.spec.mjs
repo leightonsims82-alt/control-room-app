@@ -146,9 +146,9 @@ test('site setup: four bedroom house type uses the agreed four bedroom programme
   await expect(page.getByText('Groundwork Externals', { exact: true }).first()).toBeVisible();
 
   await page.getByText('Edit House Type', { exact: true }).click();
-  const foundationRow = await inputWithValue(page, 'Foundations').locator('xpath=..');
-  const substructureRow = await inputWithValue(page, 'Substructure').locator('xpath=..');
-  const decorationRow = await inputWithValue(page, 'Decoration').locator('xpath=..');
+  const foundationRow = (await inputWithValue(page, 'Foundations')).locator('xpath=..');
+  const substructureRow = (await inputWithValue(page, 'Substructure')).locator('xpath=..');
+  const decorationRow = (await inputWithValue(page, 'Decoration')).locator('xpath=..');
   expect(await foundationRow.locator('input').last().inputValue()).toBe('5');
   expect(await substructureRow.locator('input').last().inputValue()).toBe('5');
   expect(await decorationRow.locator('input').last().inputValue()).toBe('7');
@@ -169,10 +169,10 @@ test('site setup: three storey four bed adds extra structure and fix days', asyn
   await expect(page.getByText('4th lift scaffold', { exact: true }).first()).toBeVisible();
 
   await page.getByText('Edit House Type', { exact: true }).click();
-  const firstCarpRow = await inputWithValue(page, '1st Fix Carp').locator('xpath=..');
-  const firstPlumbRow = await inputWithValue(page, '1st fix plumbing').locator('xpath=..');
-  const firstElecRow = await inputWithValue(page, '1st fix electrics').locator('xpath=..');
-  const secondCarpRow = await inputWithValue(page, '2nd fix carpentry').locator('xpath=..');
+  const firstCarpRow = (await inputWithValue(page, '1st Fix Carp')).locator('xpath=..');
+  const firstPlumbRow = (await inputWithValue(page, '1st fix plumbing')).locator('xpath=..');
+  const firstElecRow = (await inputWithValue(page, '1st fix electrics')).locator('xpath=..');
+  const secondCarpRow = (await inputWithValue(page, '2nd fix carpentry')).locator('xpath=..');
   expect(await firstCarpRow.locator('input').last().inputValue()).toBe('4');
   expect(await firstPlumbRow.locator('input').last().inputValue()).toBe('3');
   expect(await firstElecRow.locator('input').last().inputValue()).toBe('3');
