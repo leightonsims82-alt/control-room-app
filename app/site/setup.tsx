@@ -400,7 +400,7 @@ export default function SiteSetupScreen() {
                 <View style={styles.activityRow}>
                   <Text style={[styles.th, styles.seqCol]}>Seq</Text><Text style={[styles.th, styles.taskCol]}>Task</Text><Text style={[styles.th, styles.tradeCol]}>Trade</Text><Text style={[styles.th, styles.displayCol]}>Display</Text><Text style={[styles.th, styles.smallCol]}>Stage</Text><Text style={[styles.th, styles.smallCol]}>Days</Text>{draft ? <Text style={[styles.th, styles.actionCol]}>Actions</Text> : null}
                 </View>
-                {rows.map((activity) => <View key={`${activity.order}-${activity.code}`} style={styles.activityRow}>
+                {rows.map((activity) => <View key={`activity-row-${activity.order}`} style={styles.activityRow}>
                   <Text style={[styles.td, styles.seqCol]}>{activity.order}</Text>
                   {draft ? <TextInput value={activity.code} onChangeText={(value) => patchActivity(activity.order, { code: value })} style={[styles.input, styles.taskCol]} /> : <Text style={[styles.td, styles.taskCol]}>{activity.code}</Text>}
                   {draft ? <TextInput value={activity.trade} onChangeText={(value) => patchActivity(activity.order, { trade: value })} style={[styles.input, styles.tradeCol]} /> : <Text style={[styles.td, styles.tradeCol]}>{activity.trade}</Text>}
