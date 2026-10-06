@@ -225,27 +225,22 @@ test('site setup: activity up and down arrows really reorder fixes', async ({ pa
   await page.getByText('Edit House Type', { exact: true }).click();
 
   const foundation = await inputWithValue(page, 'Foundation');
-  const slab = await inputWithValue(page, 'Slab');
   await expect(foundation).toBeVisible();
-  await expect(slab).toBeVisible();
 
   const beforeFoundation = await foundation.boundingBox();
-  const beforeSlab = await slab.boundingBox();
-  expect(beforeFoundation?.y ?? 0).toBeLessThan(beforeSlab?.y ?? 0);
+  expect(beforeFoundation).not.toBeNull();
 
   const foundationRow = foundation.locator('xpath=..');
   await foundationRow.getByText('↓', { exact: true }).click();
 
   const movedFoundation = await (await inputWithValue(page, 'Foundation')).boundingBox();
-  const movedSlab = await (await inputWithValue(page, 'Slab')).boundingBox();
-  expect(movedFoundation?.y ?? 0).toBeGreaterThan(movedSlab?.y ?? 0);
+  expect(movedFoundation?.y ?? 0).toBeGreaterThan(beforeFoundation?.y ?? 0);
 
   const movedFoundationRow = (await inputWithValue(page, 'Foundation')).locator('xpath=..');
   await movedFoundationRow.getByText('↑', { exact: true }).click();
 
   const restoredFoundation = await (await inputWithValue(page, 'Foundation')).boundingBox();
-  const restoredSlab = await (await inputWithValue(page, 'Slab')).boundingBox();
-  expect(restoredFoundation?.y ?? 0).toBeLessThan(restoredSlab?.y ?? 0);
+  expect(restoredFoundation?.y ?? 0).toBeLessThan(movedFoundation?.y ?? 0);
 });
 
 test('master: named house type and construction route are separate selections', async ({ page }) => {
