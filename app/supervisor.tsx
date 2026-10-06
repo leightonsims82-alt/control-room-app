@@ -79,7 +79,7 @@ export default function SupervisorView() {
     style.innerHTML = `
       @page { size: A4 landscape; margin: 7mm; }
       @media print {
-        html, body { width: 297mm; min-height: 210mm; background: #fff !important; overflow: visible !important; }
+        html, body { width: auto; min-height: 0; height: auto; background: #fff !important; overflow: visible !important; }
         * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         [data-testid="scroll-view"], div { overflow: visible !important; }
       }
@@ -104,7 +104,7 @@ export default function SupervisorView() {
     ).filter((activity) => activity.trade.toLowerCase() === selectedTrade.toLowerCase())
       .map((activity) => shortActivity(activity.displayText || activity.code))
       .join('\n'));
-    return { id: plot.id, plotNo: plot.plotNo, cells };
+    return { id: plot.id, plotNo: plot.plotNo, completionDate: plot.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek), cells };
   }).filter((row) => row.cells.some(Boolean)), [
     sitePlots,
     days,
@@ -145,7 +145,7 @@ export default function SupervisorView() {
             </View>
             {rows.map((row, rowIndex) => (
               <View key={row.id} style={[styles.row, rowIndex % 2 ? styles.altRow : null]}>
-                <Text style={[styles.bodyCell, { width: plotWidth }]}>{row.plotNo}</Text>
+                <View style={[styles.bodyCell, { width: plotWidth }]}><Text style={styles.plotNoText}>{row.plotNo}</Text><Text style={styles.plotCompletionText}>{row.completionDate}</Text></View>
                 <Text style={[styles.bodyCell, { width: tradeWidth }]}>{selectedTrade}</Text>
                 {row.cells.map((cell, index) => (
                   <View key={`${row.id}-${days[index].key}`} style={[styles.dayCell, { width: dayWidth }, days[index].weekend ? styles.weekendCell : null, cell ? styles.activeCell : null]}>
@@ -177,6 +177,8 @@ const styles = StyleSheet.create({
   dateBlank: { backgroundColor: '#214c75', borderWidth: 1, borderColor: '#9fb6ce' },
   dateHeader: { backgroundColor: '#214c75', color: '#dbeafe', borderWidth: 1, borderColor: '#9fb6ce', paddingVertical: 4, textAlign: 'center', fontSize: 8, fontWeight: '900' },
   weekendDate: { backgroundColor: '#2b587f' },
+  plotNoText: { color: '#0f172a', fontWeight: '900', textAlign: 'center' },
+  plotCompletionText: { color: '#64748b', fontWeight: '800', fontSize: 8, textAlign: 'center', marginTop: 2 },
   bodyCell: { color: '#0f172a', borderWidth: 1, borderColor: '#c8d7e6', padding: 7, textAlign: 'center', fontSize: 10, fontWeight: '800' },
   dayCell: { minHeight: 46, borderWidth: 1, borderColor: '#c8d7e6', padding: 4, alignItems: 'center', justifyContent: 'center' },
   weekendCell: { backgroundColor: '#f8fafc' },
