@@ -1,3 +1,4 @@
+import { getProgrammeWeekForDate } from './programmeDates';
 import { ActivityDelay, BUILD_SEQUENCE, getStageNumberForRelativeWeek, ProgrammeActivity, ProgrammeStageNumber, PROGRAMME_STAGE_SEQUENCE, SitePlot, TRADE_ORDER } from './siteProgrammeEngine';
 
 export type TemplateSitePlot = SitePlot & {
@@ -8,6 +9,8 @@ export type TemplateSitePlot = SitePlot & {
   holdStage?: ProgrammeStageNumber;
   holdReason?: string;
   holdUpdatedAt?: string;
+  plotStartDate?: string;
+  plotCompletionDate?: string;
 };
 
 export type ConstructionMethod = 'traditional' | 'timberFrame' | 'hybrid' | 'projectSpecific';
@@ -451,9 +454,16 @@ export function getEffectiveProgrammeWeeks(template: PlotTemplate, setup?: Parti
   return Math.max(template.programmeWeeks, Math.ceil(lastFinish / workingDays));
 }
 
+export function getPlotCompletionProgrammeWeek(plot: TemplateSitePlot, setup?: Partial<SiteProgrammeSetup>) {
+  const exactWeek = plot.plotCompletionDate && setup?.programmeStartDate
+    ? getProgrammeWeekForDate(setup.programmeStartDate, plot.plotCompletionDate)
+    : undefined;
+  return exactWeek ?? plot.stage9CompleteWeek;
+}
+
 export function getLinearStage1StartWeekForPlot(plot: TemplateSitePlot, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
   const template = getTemplateForPlot(plot, templates);
-  return plot.stage9CompleteWeek - getEffectiveProgrammeWeeks(template, setup) + 1;
+  return getPlotCompletionProgrammeWeek(plot, setup) - getEffectiveProgrammeWeeks(template, setup) + 1;
 }
 
 export function getStage1StartWeekForPlot(plot: TemplateSitePlot, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
