@@ -5,6 +5,7 @@ import { getProgrammeStartDateValue } from '../utils/programmeDates';
 import { ActivityDelay, ProgrammeStageNumber, TRADE_ORDER } from '../utils/siteProgrammeEngine';
 import {
   ActivityMove,
+  applyHouseTypeFloorConfiguration,
   ConstructionMethod,
   createHouseTypeTemplate,
   DEFAULT_PLOT_TEMPLATES,
@@ -203,10 +204,31 @@ function mergeDefaultTemplates(stored: PlotTemplate[]) {
   const savedById = new Map(stored.map((template) => [template.id, normaliseTemplate(template)]));
   const merged = DEFAULT_PLOT_TEMPLATES.map((template) => savedById.get(template.id) ?? normaliseTemplate(template));
   const defaultIds = new Set(DEFAULT_PLOT_TEMPLATES.map((template) => template.id));
+  const fourBedStandard = DEFAULT_PLOT_TEMPLATES.find((template) => template.id === 'fourBedStandard');
   const custom = stored
     .filter((template) => !defaultIds.has(template.id) && !LEGACY_PROPERTY_TEMPLATE_IDS.has(template.id))
     .map(normaliseTemplate)
-    .filter((template) => template.isHouseType);
+    .filter((template) => template.isHouseType)
+    .map((template) => {
+      if (!fourBedStandard || template.bedrooms !== 4 || (template.standardVersion ?? 0) >= (fourBedStandard.standardVersion ?? 1)) {
+        return template;
+      }
+      const floors = template.floors ?? 2;
+      return applyHouseTypeFloorConfiguration({
+        ...fourBedStandard,
+        id: template.id,
+        name: template.name,
+        houseTypeCode: template.houseTypeCode || template.name,
+        bedrooms: 4,
+        floors,
+        isHouseType: true,
+        isSystemTemplate: false,
+        constructionMethod: undefined,
+        description: template.description,
+        standardVersion: fourBedStandard.standardVersion,
+        activities: fourBedStandard.activities.map((activity) => ({ ...activity })),
+      }, floors);
+    });
   return [...merged, ...custom];
 }
 
@@ -290,7 +312,9 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           setIssueSettingsState(storedIssueSettings);
           setIssueLogs(storedIssueLogs);
           setProgrammeNotes(storedNotes);
-          setPlotTemplates(mergeDefaultTemplates(storedTemplates));
+          const mergedTemplates = mergeDefaultTemplates(storedTemplates);
+          setPlotTemplates(mergedTemplates);
+          await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(mergedTemplates));
           const migratedSiteSetup = { ...DEFAULT_SITE_PROGRAMME_SETUP, ...storedSiteSetup, programmeStartDate: getProgrammeStartDateValue(storedSiteSetup.programmeStartDate) };
           setSiteSetupState(migratedSiteSetup);
           await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(migratedSiteSetup));
