@@ -27,7 +27,7 @@ jobs:
       - name: Check out programme branch
         uses: actions/checkout@v4
         with:
-          ref: programme-buddy-excel-rebuild
+          ref: fix-plot-date-diagnostic-final
 
       - name: Set up Node 22
         uses: actions/setup-node@v4
