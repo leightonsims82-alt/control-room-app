@@ -1,0 +1,77 @@
+name: Forensic Live Programme Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - forensic-live-programme-fix
+
+permissions:
+  contents: read
+
+jobs:
+  forensic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact audit branch
+        uses: actions/checkout@v4
+        with:
+          ref: forensic-live-programme-fix
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install browser audit tools
+        run: npm install --no-save --package-lock=false --no-audit --no-fund @playwright/test@1.55.1 wait-on@8.0.4
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Static interaction audit
+        run: node scripts/full-app-diagnostic.mjs
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Browser forensic suite
+        env:
+          CI: '1'
+          EXPO_NO_TELEMETRY: '1'
+          DIAGNOSTIC_BASE_URL: http://127.0.0.1:8084
+        run: |
+          npx expo start --web --port 8084 --clear > expo.log 2>&1 &
+          EXPO_PID=$!
+          trap 'kill $EXPO_PID 2>/dev/null || true' EXIT
+          npx wait-on http://127.0.0.1:8084 --timeout 120000
+          npx playwright test tests/app-diagnostic.spec.mjs tests/live-programme-audit.spec.mjs --workers=1 --reporter=line
+
+      - name: Production web export
+        run: npx expo export --platform web --output-dir forensic-dist
+
+      - name: Dependency advisory evidence
+        if: always()
+        run: |
+          mkdir -p diagnostics
+          npm audit --json > diagnostics/npm-audit-live-programme.json || true
+
+      - name: Upload forensic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forensic-live-programme-audit
+          path: |
+            diagnostics/
+            test-results/
+            playwright-report/
+            expo.log
+          if-no-files-found: ignore
