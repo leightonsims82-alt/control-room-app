@@ -1,4 +1,4 @@
-import { getProgrammeWeekForDate } from './programmeDates';
+import { getProgrammeWeekForDate, parseProgrammeDate } from './programmeDates';
 import { ActivityDelay, BUILD_SEQUENCE, getStageNumberForRelativeWeek, ProgrammeActivity, ProgrammeStageNumber, PROGRAMME_STAGE_SEQUENCE, SitePlot, TRADE_ORDER } from './siteProgrammeEngine';
 
 export type TemplateSitePlot = SitePlot & {
@@ -102,6 +102,15 @@ function programmeDayIndex(week: number, day: number, setup?: Partial<SiteProgra
 
 function firstProgrammeDayIndexForWeek(week: number, setup?: Partial<SiteProgrammeSetup>) {
   return (week - 1) * workingDaysPerWeek(setup) + 1;
+}
+
+export function getProgrammeWorkingDayIndexForDate(programmeStartDate: string | undefined, value: string, setup?: Partial<SiteProgrammeSetup>) {
+  const week = getProgrammeWeekForDate(programmeStartDate, value);
+  const date = parseProgrammeDate(value);
+  if (!week || !date) return null;
+  const utcDay = date.getUTCDay();
+  const programmeDay = utcDay === 0 ? 7 : utcDay;
+  return programmeDayIndex(week, programmeDay, setup);
 }
 
 export function normaliseProgrammeWeek(week: number) {
