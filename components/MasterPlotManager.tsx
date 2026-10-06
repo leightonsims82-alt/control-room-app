@@ -72,6 +72,8 @@ export function MasterPlotManager() {
     try {
       if (!selectedHouseType) { setMessage('Create and select a house type before saving this plot.'); return; }
       const programmeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : selectedHouseType.id;
+      const programmeTemplate = getTemplateById(programmeTemplateId, plotTemplates);
+      const programmeWeeks = getEffectiveProgrammeWeeks(programmeTemplate, siteSetup);
       const exactStartDate = shiftProgrammeDateWeeks(completionDate, -(programmeWeeks - 1));
       await upsertSitePlot({
         plotNo: selectedPlot.plotNo,
@@ -83,8 +85,6 @@ export function MasterPlotManager() {
         houseTypeId: selectedHouseType.id,
         constructionMethod: buildRoute === 'Timber Frame' ? 'timberFrame' : 'traditional',
       });
-      const programmeTemplate = getTemplateById(programmeTemplateId, plotTemplates);
-      const programmeWeeks = getEffectiveProgrammeWeeks(programmeTemplate, siteSetup);
       await savePlotMetadata({
         plotNo: selectedPlot.plotNo,
         houseTypeName: selectedHouseType.name,
