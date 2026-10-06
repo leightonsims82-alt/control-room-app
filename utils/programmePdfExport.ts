@@ -3,6 +3,7 @@ import { formatCalendarWeek, formatProgrammeDate } from './programmeDates';
 import {
   getActivitiesForTemplateDay,
   getMilestoneForPlotWeek,
+  getPlotCompletionProgrammeWeek,
   getStage1StartWeekForPlot,
   getHouseTypeTemplates,
   getTemplateForPlot,
