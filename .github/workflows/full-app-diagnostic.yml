@@ -54,19 +54,17 @@ jobs:
         continue-on-error: true
         run: npm run lint
 
-      - name: Start Expo web app
+      - name: Run browser interaction diagnostics
         env:
           CI: '1'
           EXPO_NO_TELEMETRY: '1'
+          DIAGNOSTIC_BASE_URL: http://127.0.0.1:8084
         run: |
           npx expo start --web --port 8084 --clear > expo.log 2>&1 &
-          echo $! > expo.pid
+          EXPO_PID=$!
+          trap 'kill $EXPO_PID 2>/dev/null || true' EXIT
           npx wait-on http://127.0.0.1:8084 --timeout 120000
-
-      - name: Run browser interaction diagnostics
-        env:
-          DIAGNOSTIC_BASE_URL: http://127.0.0.1:8084
-        run: npx playwright test tests/app-diagnostic.spec.mjs --workers=1 --reporter=line
+          npx playwright test tests/app-diagnostic.spec.mjs --workers=1 --reporter=line
 
       - name: Production web export
         run: npx expo export --platform web
