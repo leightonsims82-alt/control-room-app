@@ -340,12 +340,11 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           setIssueLogs(storedIssueLogs);
           setProgrammeNotes(storedNotes);
           const houseTypesReset = await AsyncStorage.getItem(HOUSE_TYPES_RESET_KEY);
-          const mergedTemplates = houseTypesReset === 'done'
-            ? mergeDefaultTemplates(storedTemplates)
-            : DEFAULT_PLOT_TEMPLATES.map(normaliseTemplate);
+          const mergedTemplates = mergeDefaultTemplates(storedTemplates.length ? storedTemplates : DEFAULT_PLOT_TEMPLATES);
           setPlotTemplates(mergedTemplates);
           await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(mergedTemplates));
           if (houseTypesReset !== 'done') {
+            // Marker retained only for compatibility. Never clear or replace saved house types automatically.
             await AsyncStorage.setItem(HOUSE_TYPES_RESET_KEY, 'done');
           }
           setSiteSetupState(migratedSiteSetup);
