@@ -400,8 +400,10 @@ export default function MasterProgrammeScreen() {
               <Text style={[styles.headerCell, styles.weekInputCell]}>Start</Text>
               <Text style={[styles.headerCell, styles.completionCell]}>Plot Completion</Text>
               {visibleWeeks.map((week) => (
-                <Text key={week} style={styles.weekHeader}>{`${formatCalendarWeek(siteSetup.programmeStartDate, week, siteSetup.calendarWeekOne)}\
-${formatProgrammeDate(siteSetup.programmeStartDate, week)}`}</Text>
+                <View key={week} style={styles.weekHeader}>
+                  <Text style={styles.weekHeaderWeek}>{formatCalendarWeek(siteSetup.programmeStartDate, week, siteSetup.calendarWeekOne)}</Text>
+                  <Text style={styles.weekHeaderDate}>{formatProgrammeDate(siteSetup.programmeStartDate, week)}</Text>
+                </View>
               ))}
               <Text style={[styles.headerCell, styles.actionCell]}>Action</Text>
             </View>
@@ -542,13 +544,15 @@ const styles = StyleSheet.create({
   actionButtonCell: { alignItems: 'center', justifyContent: 'center', padding: 4 },
   manageButton: { backgroundColor: '#173b5f', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, minWidth: 70, alignItems: 'center', justifyContent: 'center' },
   manageButtonText: { color: '#ffffff', fontSize: 11, fontWeight: '900' },
-  weekHeader: { width: 70, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 10, lineHeight: 14, padding: 6, borderWidth: 1, borderColor: '#9fb6ce', textAlign: 'center' },
+  weekHeader: { width: 92, backgroundColor: '#173b5f', paddingHorizontal: 5, paddingVertical: 6, borderWidth: 1, borderColor: '#9fb6ce', alignItems: 'center', justifyContent: 'center' },
+  weekHeaderWeek: { color: '#ffffff', fontWeight: '900', fontSize: 10, lineHeight: 13, textAlign: 'center' },
+  weekHeaderDate: { color: '#ffffff', fontWeight: '800', fontSize: 9, lineHeight: 12, textAlign: 'center', marginTop: 2 },
   bodyCell: { color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '800' },
   holdBodyCell: { color: '#64748b', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
   holdBodyCellActive: { backgroundColor: '#fee2e2', color: '#991b1b' },
   weekInputBody: { backgroundColor: '#fff4cc', color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
   stageStartBody: { backgroundColor: '#e3f3d8', color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
-  weekCell: { width: 70, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
+  weekCell: { width: 92, color: '#0f172a', padding: 8, borderWidth: 1, borderColor: '#c8d7e6', textAlign: 'center', fontWeight: '900' },
   activeWeekCell: { backgroundColor: '#dff0ff' },
   heldWeekCell: { backgroundColor: '#fee2e2', color: '#991b1b' },
   emptyMatrixRow: { width: 1420, borderWidth: 1, borderColor: '#c8d7e6', backgroundColor: '#f8fafc', padding: 18 },
