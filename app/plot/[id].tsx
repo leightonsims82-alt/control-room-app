@@ -4,10 +4,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { StageStatusPill } from '../../components/StageStatusPill';
-import { houseTypes } from '../../data/demoData';
+import { houseTypes as legacyHouseTypes } from '../../data/demoData';
 import { useProgrammeData } from '../../data/programmeStore';
+import { useSitePlanner } from '../../data/sitePlannerStore';
 import { PlotStage, StageStatus } from '../../types/models';
 import { getActiveStage, getPlotProgress, getStagesForPlot } from '../../utils/programmeLogic';
+import { buildCanonicalQaPlots, canonicalEvidenceBelongsToPlot } from '../../utils/canonicalQaProgramme';
+import { formatBritishDate, getProgrammeWeekForDate } from '../../utils/programmeDates';
+import { getActivitiesForTemplateDay, getHouseTypeTemplates, getTemplateForPlot, TemplateSitePlot } from '../../utils/templateProgramme';
 
 const stageStatuses: StageStatus[] = ['Not started', 'In progress', 'Complete'];
 
@@ -18,6 +22,26 @@ function dateOnly(value: Date) {
 export default function PlotDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { plotProgrammes, plotStages, inspections, defects, updateStageStatus } = useProgrammeData();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup } = useSitePlanner();
+  const canonicalPlots = buildCanonicalQaPlots(sitePlots, plotTemplates, siteSetup, plotProgrammes);
+  const canonicalPlot = canonicalPlots.find((item) => item.id === id);
+  const canonicalSitePlot = sitePlots.find((item) => item.id === id);
+
+  if (canonicalPlot && canonicalSitePlot) {
+    return (
+      <CanonicalPlotDetail
+        plot={canonicalSitePlot}
+        canonicalPlot={canonicalPlot}
+        plotTemplates={plotTemplates}
+        siteSetup={siteSetup}
+        activityDelays={activityDelays}
+        activityMoves={activityMoves}
+        inspections={inspections.filter((item) => canonicalEvidenceBelongsToPlot(canonicalPlot, item.plotProgrammeId))}
+        defects={defects.filter((item) => canonicalEvidenceBelongsToPlot(canonicalPlot, item.plotProgrammeId))}
+      />
+    );
+  }
+
   const plot = plotProgrammes.find((item) => item.id === id);
 
   if (!plot) {
@@ -32,7 +56,7 @@ export default function PlotDetailScreen() {
   const stages = getStagesForPlot(plot.id, plotStages);
   const progress = getPlotProgress(plot.id, plotStages);
   const activeStage = getActiveStage(plot.id, plotStages);
-  const houseType = houseTypes.find((item) => item.id === plot.houseTypeId);
+  const houseType = legacyHouseTypes.find((item) => item.id === plot.houseTypeId);
   const today = dateOnly(new Date());
   const horizon = new Date();
   horizon.setDate(horizon.getDate() + 14);
@@ -164,6 +188,99 @@ export default function PlotDetailScreen() {
   );
 }
 
+function CanonicalPlotDetail({
+  plot,
+  canonicalPlot,
+  plotTemplates,
+  siteSetup,
+  activityDelays,
+  activityMoves,
+  inspections,
+  defects,
+}: {
+  plot: TemplateSitePlot;
+  canonicalPlot: ReturnType<typeof buildCanonicalQaPlots>[number];
+  plotTemplates: ReturnType<typeof useSitePlanner>['plotTemplates'];
+  siteSetup: ReturnType<typeof useSitePlanner>['siteSetup'];
+  activityDelays: ReturnType<typeof useSitePlanner>['activityDelays'];
+  activityMoves: ReturnType<typeof useSitePlanner>['activityMoves'];
+  inspections: ReturnType<typeof useProgrammeData>['inspections'];
+  defects: ReturnType<typeof useProgrammeData>['defects'];
+}) {
+  const template = getTemplateForPlot(plot, plotTemplates);
+  const houseType = getHouseTypeTemplates(plotTemplates).find((item) => item.id === (plot.houseTypeId ?? plot.templateId));
+  const today = new Date();
+  const todayUtc = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+  const liveDays = Array.from({ length: 14 }, (_, index) => {
+    const date = new Date(todayUtc.getTime() + index * 86400000);
+    const britishDate = formatBritishDate(date);
+    const programmeWeek = getProgrammeWeekForDate(siteSetup.programmeStartDate, britishDate);
+    const utcDay = date.getUTCDay();
+    const programmeDay = utcDay === 0 ? 7 : utcDay;
+    const activities = programmeWeek
+      ? getActivitiesForTemplateDay(plot, programmeWeek, programmeDay, activityDelays, plotTemplates, siteSetup, activityMoves)
+      : [];
+    return { date: britishDate, activities };
+  });
+  const openDefects = defects.filter((defect) => defect.status !== 'Verified fixed');
+  const liveMoveDays = activityMoves
+    .filter((move) => move.plotId === plot.id)
+    .reduce((total, move) => total + move.deltaDays, 0);
+
+  return (
+    <AppScreen>
+      <Link href="/(tabs)/plots" style={styles.backLink}>‹ Back to plots</Link>
+      <View style={styles.hero}>
+        <View style={styles.heroTextWrap}>
+          <Text style={styles.heroTitle}>{canonicalPlot.plotName}</Text>
+          <Text style={styles.heroSubtitle}>{houseType?.name ?? template.name} · {plot.constructionMethod === 'timberFrame' ? 'Timber Frame' : 'Traditional'}</Text>
+          <View style={[styles.healthPill, plot.holdStage ? styles.healthHold : styles.healthGood]}>
+            <Text style={styles.healthText}>{plot.holdStage ? `Held at Stage ${plot.holdStage}` : 'Live programme'}</Text>
+          </View>
+        </View>
+        <View style={styles.canonicalDateCard}>
+          <Text style={styles.canonicalDateLabel}>Plot completion</Text>
+          <Text style={styles.canonicalDateValue}>{canonicalPlot.plotCompletionDate}</Text>
+        </View>
+      </View>
+
+      <View style={styles.infoGrid}>
+        <InfoTile icon="calendar-outline" label="Start" value={canonicalPlot.plotStartDate || 'Derived from programme'} />
+        <InfoTile icon="flag-outline" label="Completion" value={canonicalPlot.plotCompletionDate} />
+        <InfoTile icon="home-outline" label="House type" value={houseType?.name ?? template.name} />
+        <InfoTile icon="swap-horizontal-outline" label="Live movement" value={`${liveMoveDays > 0 ? '+' : ''}${liveMoveDays} working days`} />
+        <InfoTile icon="warning-outline" label="Open QA" value={String(openDefects.length)} />
+        <InfoTile icon="shield-checkmark-outline" label="Inspections" value={String(inspections.length)} />
+      </View>
+
+      <View style={styles.quickGrid}>
+        <QuickLink href="/(tabs)/qa" icon="shield-checkmark-outline" title="QA & Actions" />
+        <QuickLink href="/(tabs)/trades" icon="briefcase-outline" title="Trades" />
+        <QuickLink href="/(tabs)/two-week" icon="grid-outline" title="2 Week" />
+        <QuickLink href="/(tabs)/master" icon="calendar-outline" title="Master" />
+      </View>
+
+      <SectionCard title="Next 14 Days" subtitle="Canonical live activities from the same schedule used by the Main 2 Week Programme">
+        {liveDays.every((day) => day.activities.length === 0) ? (
+          <Text style={styles.emptyText}>No live activities fall inside the next 14 days.</Text>
+        ) : liveDays.map((day) => day.activities.length ? (
+          <View key={day.date} style={styles.nextRow}>
+            <View style={styles.nextDate}><Text style={styles.nextDateText}>{day.date.slice(0, 5)}</Text></View>
+            <View style={styles.currentMain}>
+              <Text style={styles.stageName}>{day.activities.map((activity) => activity.displayText || activity.code).join(' · ')}</Text>
+              <Text style={styles.stageMeta}>{day.date}</Text>
+            </View>
+          </View>
+        ) : null)}
+      </SectionCard>
+
+      <SectionCard title="QA evidence" subtitle="Legacy QA evidence is projected onto this canonical plot without changing its programme dates">
+        <Text style={styles.stageMeta}>{inspections.length} inspection record{inspections.length === 1 ? '' : 's'} · {openDefects.length} open action{openDefects.length === 1 ? '' : 's'}</Text>
+      </SectionCard>
+    </AppScreen>
+  );
+}
+
 function InfoTile({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
   return (
     <View style={styles.infoTile}>
@@ -213,6 +330,9 @@ const styles = StyleSheet.create({
   healthRisk: { backgroundColor: '#b91c1c' },
   healthText: { color: '#ffffff', fontWeight: '900', fontSize: 11 },
   progressCircle: { width: 96, height: 96, borderRadius: 48, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center' },
+  canonicalDateCard: { minWidth: 150, backgroundColor: '#ffffff', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' },
+  canonicalDateLabel: { color: '#64748b', fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  canonicalDateValue: { color: '#0f172a', fontSize: 18, fontWeight: '900', marginTop: 3 },
   progressValue: { color: '#2563eb', fontSize: 24, fontWeight: '900' },
   progressLabel: { color: '#64748b', fontSize: 11, fontWeight: '800' },
   infoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
