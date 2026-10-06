@@ -148,8 +148,10 @@ export function exportMasterProgrammePdf(input: { siteName: string; programmeSta
   const rows = input.plots.map((plot) => {
     const template = getTemplateForPlot(plot, input.templates);
     const houseType = getHouseTypeTemplates(input.templates).find((item) => item.id === (plot.houseTypeId ?? plot.templateId));
-    const weeks = WEEK_NUMBERS.map((week) => `<td>${escapeHtml(getMilestoneForPlotWeek(plot, week, input.templates))}</td>`).join('');
-    return `<tr><td>${escapeHtml(plot.plotNo)}</td><td>${escapeHtml(houseType?.name ?? template.name)}</td><td>${escapeHtml(formatProgrammeDate(input.programmeStartDate, plot.stage9CompleteWeek))}</td><td>${escapeHtml(formatCalendarWeek(input.programmeStartDate, getStage1StartWeekForPlot(plot, input.templates), input.calendarWeekOne))}</td>${weeks}</tr>`;
+    const dateSetup = { programmeStartDate: input.programmeStartDate };
+    const weeks = WEEK_NUMBERS.map((week) => `<td>${escapeHtml(getMilestoneForPlotWeek(plot, week, input.templates, dateSetup))}</td>`).join('');
+    const completionDate = plot.plotCompletionDate || formatProgrammeDate(input.programmeStartDate, getPlotCompletionProgrammeWeek(plot, dateSetup));
+    return `<tr><td>${escapeHtml(plot.plotNo)}</td><td>${escapeHtml(houseType?.name ?? template.name)}</td><td>${escapeHtml(completionDate)}</td><td>${escapeHtml(formatCalendarWeek(input.programmeStartDate, getStage1StartWeekForPlot(plot, input.templates, dateSetup), input.calendarWeekOne))}</td>${weeks}</tr>`;
   }).join('');
   return openPrintablePdf(
     `${input.siteName} Master Programme`,
