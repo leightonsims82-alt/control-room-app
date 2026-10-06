@@ -22,7 +22,13 @@ async function goto(page, route) {
 
 async function inputWithValue(page, value) {
   const inputs = page.locator('input');
-  const index = await inputs.evaluateAll((nodes, expected) => nodes.findIndex((node) => node.value === expected), value);
+  const index = await inputs.evaluateAll((nodes, expected) => {
+    let found = -1;
+    nodes.forEach((node, itemIndex) => {
+      if (node.value === expected) found = itemIndex;
+    });
+    return found;
+  }, value);
   expect(index, `Input with value "${value}" was not found`).toBeGreaterThanOrEqual(0);
   return inputs.nth(index);
 }
@@ -219,27 +225,27 @@ test('site setup: activity up and down arrows really reorder fixes', async ({ pa
   await page.getByText('Edit House Type', { exact: true }).click();
 
   const foundation = await inputWithValue(page, 'Foundation');
-  const drainage = await inputWithValue(page, 'Drainage');
+  const slab = await inputWithValue(page, 'Slab');
   await expect(foundation).toBeVisible();
-  await expect(drainage).toBeVisible();
+  await expect(slab).toBeVisible();
 
   const beforeFoundation = await foundation.boundingBox();
-  const beforeDrainage = await drainage.boundingBox();
-  expect(beforeFoundation?.y ?? 0).toBeLessThan(beforeDrainage?.y ?? 0);
+  const beforeSlab = await slab.boundingBox();
+  expect(beforeFoundation?.y ?? 0).toBeLessThan(beforeSlab?.y ?? 0);
 
   const foundationRow = foundation.locator('xpath=..');
   await foundationRow.getByText('↓', { exact: true }).click();
 
   const movedFoundation = await foundation.boundingBox();
-  const movedDrainage = await drainage.boundingBox();
-  expect(movedFoundation?.y ?? 0).toBeGreaterThan(movedDrainage?.y ?? 0);
+  const movedSlab = await slab.boundingBox();
+  expect(movedFoundation?.y ?? 0).toBeGreaterThan(movedSlab?.y ?? 0);
 
   const movedFoundationRow = foundation.locator('xpath=..');
   await movedFoundationRow.getByText('↑', { exact: true }).click();
 
   const restoredFoundation = await foundation.boundingBox();
-  const restoredDrainage = await drainage.boundingBox();
-  expect(restoredFoundation?.y ?? 0).toBeLessThan(restoredDrainage?.y ?? 0);
+  const restoredSlab = await slab.boundingBox();
+  expect(restoredFoundation?.y ?? 0).toBeLessThan(restoredSlab?.y ?? 0);
 });
 
 test('master: named house type and construction route are separate selections', async ({ page }) => {
