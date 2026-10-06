@@ -3,7 +3,7 @@ import { useEffect, useMemo } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../components/AppScreen';
 import { useSitePlanner } from '../data/sitePlannerStore';
-import { formatProgrammeDate, getCurrentProgrammeWeek } from '../utils/programmeDates';
+import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek } from '../utils/programmeDates';
 import { getActivitiesForTemplateDay } from '../utils/templateProgramme';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -64,6 +64,8 @@ export default function SupervisorView() {
     [firstProgrammeWeek, siteSetup.programmeStartDate],
   );
   const dateRange = `${days[0]?.date ?? ''} - ${days[13]?.date ?? ''}`;
+  const firstCalendarWeek = formatCalendarWeek(siteSetup.programmeStartDate, days[0]?.programmeWeek ?? firstProgrammeWeek, siteSetup.calendarWeekOne);
+  const secondCalendarWeek = formatCalendarWeek(siteSetup.programmeStartDate, days[7]?.programmeWeek ?? normaliseWeek(firstProgrammeWeek + 1), siteSetup.calendarWeekOne);
   const dayWidth = printMode ? PRINT_DAY_WIDTH : SCREEN_DAY_WIDTH;
   const plotWidth = printMode ? 46 : 74;
   const tradeWidth = printMode ? 76 : 110;
@@ -116,7 +118,7 @@ export default function SupervisorView() {
       <View style={styles.header}>
         <Text style={styles.kicker}>{printMode ? 'PDF record' : 'Live supervisor programme'}</Text>
         <Text style={styles.title}>{selectedTrade} Programme</Text>
-        <Text style={styles.subtitle}>Week 1 and Week 2 match the Main 2 Week Programme, {dateRange}.</Text>
+        <Text style={styles.subtitle}>{firstCalendarWeek} and {secondCalendarWeek} match the Main 2 Week Programme, {dateRange}.</Text>
       </View>
 
       <View style={[styles.card, printMode ? styles.printCard : null]}>
@@ -126,8 +128,8 @@ export default function SupervisorView() {
             <View style={styles.row}>
               <Text style={[styles.headerCell, { width: plotWidth }]} />
               <Text style={[styles.headerCell, { width: tradeWidth }]} />
-              <Text style={[styles.weekHeader, { width: weekWidth }]}>Week 1</Text>
-              <Text style={[styles.weekHeader, { width: weekWidth }]}>Week 2</Text>
+              <Text style={[styles.weekHeader, { width: weekWidth }]}>{firstCalendarWeek}</Text>
+              <Text style={[styles.weekHeader, { width: weekWidth }]}>{secondCalendarWeek}</Text>
             </View>
             <View style={styles.row}>
               <Text style={[styles.headerCell, { width: plotWidth }]}>Plot No</Text>
