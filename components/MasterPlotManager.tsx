@@ -25,7 +25,11 @@ export function MasterPlotManager() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
   const selectedPlot = sitePlots.find((plot) => plot.id === selectedId) ?? sitePlots[0];
-  const selectedHouseType = houseTypes.find((template) => template.id === houseTypeId) ?? houseTypes[0];
+  const selectedHouseType = plotTemplates.find((template) => template.id === houseTypeId)
+    ?? houseTypes.find((template) => template.id === houseTypeId)
+    ?? houseTypes[0]
+    ?? plotTemplates.find((template) => template.id === 'threeBed')
+    ?? plotTemplates[0];
 
   const loadPlot = async (plotId: string) => {
     const plot = sitePlots.find((item) => item.id === plotId) ?? sitePlots[0];
@@ -70,7 +74,7 @@ export function MasterPlotManager() {
     if (!completionWeek) { setMessage('Unable to calculate the programme week for that date.'); return; }
     setSaving(true);
     try {
-      if (!selectedHouseType) { setMessage('Create and select a house type before saving this plot.'); return; }
+      if (!selectedHouseType) { setMessage('No programme template is available for this plot.'); return; }
       const programmeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : selectedHouseType.id;
       const programmeTemplate = getTemplateById(programmeTemplateId, plotTemplates);
       const programmeWeeks = getEffectiveProgrammeWeeks(programmeTemplate, siteSetup);
