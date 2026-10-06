@@ -366,6 +366,39 @@ test('master: named house type and construction route are separate selections', 
   await expect(page.getByText('Property Size', { exact: true })).toHaveCount(0);
 });
 
+test('master: legacy 11-stage data is migrated and only 9 stages are shown', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('programme-buddy:programme-setup:v1', JSON.stringify({
+      siteName: 'QA Site',
+      defaultProgrammeWeeks: 25,
+      stageCount: 11,
+      workingWeek: '5 days - Monday to Friday',
+      includeSaturday: false,
+      includeSunday: false,
+      programmeStartDate: '05/01/2026',
+    }));
+    localStorage.setItem('programme-buddy:stage-configuration:v1', JSON.stringify(
+      Array.from({ length: 11 }, (_, index) => ({
+        stage: index + 1,
+        label: `Legacy Stage ${index + 1}`,
+        startWeek: index + 1,
+        finishWeek: index + 1,
+      })),
+    ));
+  });
+
+  await goto(page, '/master');
+  await expect(page.getByText(/This programme uses 9 stages/i)).toBeVisible();
+  await expect(page.getByText(/Showing the 9 stages configured in Site Setup/i)).toBeVisible();
+  await expect(page.getByText('Stage 10', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Stage 11', { exact: true })).toHaveCount(0);
+
+  const storedSetup = await page.evaluate(() => JSON.parse(localStorage.getItem('programme-buddy:programme-setup:v1') || '{}'));
+  const storedStages = await page.evaluate(() => JSON.parse(localStorage.getItem('programme-buddy:stage-configuration:v1') || '[]'));
+  expect(storedSetup.stageCount).toBe(9);
+  expect(storedStages).toHaveLength(9);
+});
+
 test('site setup: Save Site Settings gives visible confirmation', async ({ page }) => {
   await goto(page, '/site/setup');
   const save = page.getByText('Save Site Settings', { exact: true });
