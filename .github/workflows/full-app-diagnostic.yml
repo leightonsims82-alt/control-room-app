@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - programme-buddy-excel-rebuild
+      - fix-plot-date-diagnostic-final
     paths:
       - 'app/**'
       - 'components/**'
