@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
+import { getCurrentProgrammeWeek } from '../../utils/programmeDates';
+import { exportMainTwoWeekPdf } from '../../utils/programmePdfExport';
 
 function toRevisionLabel(index: number) {
   const letterIndex = Math.max(0, index % 26);
@@ -16,12 +18,13 @@ function getCurrentWeekLabel() {
 }
 
 export default function ProgrammeIssueCentre() {
-  const { sitePlots, issueLogs, tradeContacts, recordIssue } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, issueLogs, tradeContacts, recordIssue } = useSitePlanner();
   const [notice, setNotice] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
   const nextRevision = useMemo(() => toRevisionLabel(issueLogs.length), [issueLogs.length]);
   const supervisorCount = tradeContacts.filter((contact) => contact.supervisorEmail.trim()).length;
   const latestIssue = issueLogs[0];
+  const currentProgrammeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
 
   const previewIssue = () => {
     if (sitePlots.length === 0) {
@@ -38,7 +41,7 @@ export default function ProgrammeIssueCentre() {
       return;
     }
     await recordIssue({
-      startWeek: 0,
+      startWeek: currentProgrammeWeek,
       recipientCount: supervisorCount,
       note: `${nextRevision} | 2 Week Programme | PDF + Supervisor App | ${getCurrentWeekLabel()}`,
     });
@@ -47,20 +50,32 @@ export default function ProgrammeIssueCentre() {
   };
 
   const downloadPdf = () => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.print();
-      setNotice('Print view opened. Choose Save as PDF to download the programme.');
-      return;
-    }
-    setNotice('PDF export is ready for web print/save. Native mobile PDF export can be added later.');
+    const opened = exportMainTwoWeekPdf({
+      siteName: siteSetup.siteName,
+      programmeStartDate: siteSetup.programmeStartDate,
+      calendarWeekOne: siteSetup.calendarWeekOne,
+      startWeek: currentProgrammeWeek,
+      plots: sitePlots,
+      delays: activityDelays,
+      moves: activityMoves,
+      templates: plotTemplates,
+    });
+    setNotice(opened
+      ? 'Current 2-week programme opened. Choose Save as PDF in the print window.'
+      : 'Unable to open the programme PDF. Check pop-up permissions and try again.');
   };
 
   const copySupervisorLink = async () => {
     const link = '/supervisor';
     if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-      await navigator.clipboard.writeText(link);
-      setNotice('Supervisor app link copied. Send it to supervisors to view their trade programme.');
-      return;
+      try {
+        await navigator.clipboard.writeText(link);
+        setNotice('Supervisor app link copied. Send it to supervisors to view their trade programme.');
+        return;
+      } catch {
+        setNotice(`Clipboard access was denied. Copy this supervisor link manually: ${link}`);
+        return;
+      }
     }
     setNotice(`Supervisor app link: ${link}`);
   };
