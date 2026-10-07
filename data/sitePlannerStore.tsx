@@ -8,6 +8,7 @@ import {
   ActivityMove,
   canAdjustFinalStageWeek,
   applyHouseTypeFloorConfiguration,
+  applyStandardHouseTypeStages,
   ConstructionMethod,
   createHouseTypeTemplate,
   DEFAULT_PLOT_TEMPLATES,
@@ -210,15 +211,19 @@ function normaliseTemplate(template: PlotTemplate) {
 
 function mergeDefaultTemplates(stored: PlotTemplate[]) {
   const savedById = new Map(stored.map((template) => [template.id, normaliseTemplate(template)]));
-  const merged = DEFAULT_PLOT_TEMPLATES.map((template) => savedById.get(template.id) ?? normaliseTemplate(template));
+  const merged = DEFAULT_PLOT_TEMPLATES.map((template) => {
+    const saved = savedById.get(template.id) ?? normaliseTemplate(template);
+    return template.id === 'timberFrame' ? saved : applyStandardHouseTypeStages(saved);
+  });
   const defaultIds = new Set(DEFAULT_PLOT_TEMPLATES.map((template) => template.id));
   const fourBedStandard = DEFAULT_PLOT_TEMPLATES.find((template) => template.id === 'fourBedStandard');
   const custom = stored
     .filter((template) => !defaultIds.has(template.id) && !LEGACY_PROPERTY_TEMPLATE_IDS.has(template.id))
     .map(normaliseTemplate)
     .filter((template) => template.isHouseType)
+    .map((template) => applyStandardHouseTypeStages(template))
     .map((template) => {
-      if (!fourBedStandard || template.bedrooms !== 4 || (template.standardVersion ?? 0) >= (fourBedStandard.standardVersion ?? 1)) {
+      if (!fourBedStandard || template.bedrooms !== 4 || (template.standardVersion ?? 0) >= (fourBedStandard.standardVersion ?? 2)) {
         return template;
       }
       const floors = template.floors ?? 2;
