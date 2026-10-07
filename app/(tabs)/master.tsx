@@ -97,7 +97,7 @@ export default function MasterProgrammeScreen() {
       .catch(() => {
         setStageDefinitions(PROGRAMME_STAGE_SEQUENCE.slice(0, 9).map((stage) => ({ ...stage })));
       });
-  }, []);
+  }, [siteSetup]);
 
   useEffect(() => {
     if (!selectedResetPlotId && sortedPlots[0]?.id) setSelectedResetPlotId(sortedPlots[0].id);
