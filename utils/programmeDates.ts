@@ -58,6 +58,21 @@ export function getProgrammeWorkingDayIndexForDate(programmeStartDate: string | 
   return null;
 }
 
+export function getProgrammeDateForWorkingDayIndex(programmeStartDate: string | undefined, index: number, includeSaturday = false, includeSunday = false) {
+  const start = parseProgrammeDate(programmeStartDate);
+  if (!start || !Number.isFinite(index) || index < 1) return '';
+  let workingIndex = 0;
+  const cursor = new Date(start.getTime());
+  for (let guard = 0; guard < 5000; guard += 1) {
+    if (configuredWorkingDay(cursor, includeSaturday, includeSunday)) {
+      workingIndex += 1;
+      if (workingIndex === Math.round(index)) return formatBritishDate(cursor);
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return '';
+}
+
 export function getIsoCalendarWeek(date: Date) {
   const working = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const day = working.getUTCDay() || 7;
