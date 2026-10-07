@@ -14,7 +14,7 @@ import {
   removePlotMetadata,
   savePlotMetadata,
 } from '../../utils/plotMetadata';
-import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, shiftProgrammeDateWeeks, validatePlotCompletionDate } from '../../utils/programmeDates';
+import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, shiftProgrammeWorkingDays, validatePlotCompletionDate } from '../../utils/programmeDates';
 import {
   ConfiguredProgrammeStage,
   getConfiguredStageForProgrammeWeek,
@@ -33,6 +33,7 @@ import {
   getSortedSitePlots,
   getTemplateById,
   getTemplateForPlot,
+  getTemplateProgrammeWorkingDays,
 } from '../../utils/templateProgramme';
 
 type ResetMode = 'all' | 'single';
@@ -74,7 +75,9 @@ export default function MasterProgrammeScreen() {
     : Math.max(1, siteSetup.defaultProgrammeWeeks || 23);
   const nextCompletionWeek = (sitePlots.length ? Math.max(...sitePlots.map((plot) => getPlotCompletionProgrammeWeek(plot, siteSetup))) : 22) + 1;
   const nextCompletionHint = formatProgrammeDate(siteSetup.programmeStartDate, nextCompletionWeek);
-  const nextStartHint = formatProgrammeDate(siteSetup.programmeStartDate, Math.max(1, nextCompletionWeek - selectedProgrammeWeeks + 1));
+  const nextStartHint = selectedProgrammeTemplate
+    ? shiftProgrammeWorkingDays(nextCompletionHint, -(getTemplateProgrammeWorkingDays(selectedProgrammeTemplate) - 1), siteSetup.includeSaturday, siteSetup.includeSunday)
+    : formatProgrammeDate(siteSetup.programmeStartDate, Math.max(1, nextCompletionWeek - selectedProgrammeWeeks + 1));
 
   useEffect(() => {
     readPlotMetadata().then(setPlotMetadata).catch(() => setPlotMetadata({}));
@@ -135,15 +138,15 @@ export default function MasterProgrammeScreen() {
 
     const programmeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : selectedHouseType.id;
     const programmeTemplate = getTemplateById(programmeTemplateId, plotTemplates);
-    const programmeWeeks = programmeTemplate
-      ? getEffectiveProgrammeWeeks(programmeTemplate, siteSetup)
-      : Math.max(1, siteSetup.defaultProgrammeWeeks || 23);
+    const programmeWorkingDays = programmeTemplate
+      ? getTemplateProgrammeWorkingDays(programmeTemplate)
+      : Math.max(1, (siteSetup.defaultProgrammeWeeks || 23) * (siteSetup.includeSunday ? 7 : siteSetup.includeSaturday ? 6 : 5));
     const exactStartDate = programmeGenerationBasis === 'start'
       ? selectedDate
-      : shiftProgrammeDateWeeks(selectedDate, -(programmeWeeks - 1));
+      : shiftProgrammeWorkingDays(selectedDate, -(programmeWorkingDays - 1), siteSetup.includeSaturday, siteSetup.includeSunday);
     const exactCompletionDate = programmeGenerationBasis === 'completion'
       ? selectedDate
-      : shiftProgrammeDateWeeks(selectedDate, programmeWeeks - 1);
+      : shiftProgrammeWorkingDays(selectedDate, programmeWorkingDays - 1, siteSetup.includeSaturday, siteSetup.includeSunday);
     const completionWeek = getProgrammeWeekForDate(siteSetup.programmeStartDate, exactCompletionDate);
     if (!completionWeek) {
       setPlotDateError('Unable to calculate the programme completion week for that date.');
