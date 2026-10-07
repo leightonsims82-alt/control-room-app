@@ -6,6 +6,8 @@ on:
   push:
     branches:
       - programme-buddy-excel-rebuild
+      - perfect-live-programme-audit
+      - finish-live-programme-print
     paths:
       - 'app/**'
       - 'components/**'
@@ -26,7 +28,7 @@ jobs:
       - name: Check out programme branch
         uses: actions/checkout@v4
         with:
-          ref: programme-buddy-excel-rebuild
+          ref: ${{ github.sha }}
 
       - name: Set up Node 22
         uses: actions/setup-node@v4
@@ -233,13 +235,14 @@ jobs:
             await expect(page.getByText(/04\/01\/2027 - 17\/01\/2027/).first()).toBeVisible();
           });
           LIVEQA
-          npx playwright test tests/app-diagnostic.spec.mjs tests/live-programme-ci.spec.mjs --workers=1 --reporter=line
+          npx playwright test tests/app-diagnostic.spec.mjs tests/live-programme-ci.spec.mjs tests/master-print.spec.mjs --workers=1 --reporter=line
 
       - name: Dependency advisory inventory
         if: always()
         run: |
           mkdir -p diagnostics
           npm audit --json > diagnostics/npm-audit.json || true
+          node -e "const a=require('./diagnostics/npm-audit.json'); if(a.error || !a.metadata) throw Error('Dependency audit unavailable'); console.log(a.metadata.vulnerabilities); if(a.metadata.vulnerabilities.critical > 0) process.exit(1);"
 
       - name: Production web export
         run: npx expo export --platform web
@@ -255,3 +258,4 @@ jobs:
             playwright-report/
             expo.log
           if-no-files-found: ignore
+

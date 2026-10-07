@@ -531,6 +531,25 @@ export function getMasterProgrammeWeeks(
   return Array.from({ length: lastWeek - safeStart + 1 }, (_, index) => safeStart + index);
 }
 
+/** Weekly stages from the same moved/delayed activity ranges used by the live programme. */
+export function getLiveStageNumbersForPlotWeek(
+  plot: TemplateSitePlot, week: number, delays: ActivityDelay[], moves: ActivityMove[],
+  templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>,
+) {
+  const template = getTemplateForPlot(plot, templates);
+  const days = workingDaysPerWeek(setup);
+  const firstDay = (week - 1) * days + 1;
+  const lastDay = week * days;
+  const stages = orderedActivities(template).filter((activity) => {
+    const range = getActivityProgrammeRange(plot, template, activity, delays, moves, setup);
+    return range.start <= lastDay && range.finish >= firstDay;
+  }).map((activity) => activity.stage);
+  return [...new Set(stages)].sort((a, b) => a - b).map((stage) => {
+    if (!plot.holdStage || stage < plot.holdStage) return String(stage);
+    return stage === plot.holdStage ? `${stage}H` : `H${plot.holdStage}`;
+  }).filter((stage, index, all) => all.indexOf(stage) === index).join('/');
+}
+
 export function getLinearStage1StartWeekForPlot(plot: TemplateSitePlot, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
   const template = getTemplateForPlot(plot, templates);
   return getPlotCompletionProgrammeWeek(plot, setup) - getEffectiveProgrammeWeeks(template, setup) + 1;
@@ -633,3 +652,4 @@ export function plotHasTradeWorkForTemplate(plot: TemplateSitePlot, trade: strin
 export function getActiveTemplateTrades(plots: TemplateSitePlot[], startWeek: number, delays: ActivityDelay[], templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>, moves: ActivityMove[] = []) {
   return TRADE_ORDER.filter((trade) => plots.some((plot) => plotHasTradeWorkForTemplate(plot, trade, startWeek, delays, templates, setup, moves)));
 }
+

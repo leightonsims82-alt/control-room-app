@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { MasterPaperSize, printMasterProgramme } from '../../utils/masterProgrammePrint';
 import { AppScreen } from '../../components/AppScreen';
 import { ProgrammeDatePicker } from '../../components/ProgrammeDatePicker';
 import { openMasterPlotManager } from '../../components/MasterPlotManager';
@@ -17,7 +18,6 @@ import {
 import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, shiftProgrammeWorkingDays, validatePlotCompletionDate } from '../../utils/programmeDates';
 import {
   ConfiguredProgrammeStage,
-  getConfiguredStageForProgrammeWeek,
   getConfiguredStageProgrammeStartWeek,
   readStageConfiguration,
 } from '../../utils/stageConfiguration';
@@ -27,6 +27,7 @@ import {
   getHouseTypeLabel,
   getHouseTypeTemplates,
   getMasterProgrammeWeeks,
+  getLiveStageNumbersForPlotWeek,
   getPlotBuildOrder,
   getPlotCompletionProgrammeWeek,
   getPlotHoldDetail,
@@ -51,6 +52,8 @@ export default function MasterProgrammeScreen() {
   );
   const initialStageCount = 9;
   const [plotNo, setPlotNo] = useState('');
+  const [paperSize, setPaperSize] = useState<MasterPaperSize>('A3');
+  const [printError, setPrintError] = useState('');
 
   const [programmeGenerationBasis, setProgrammeGenerationBasis] = useState<ProgrammeGenerationBasis>('completion');
   const [plotStartDate, setPlotStartDate] = useState('');
@@ -113,11 +116,34 @@ export default function MasterProgrammeScreen() {
   }, [holdPlotId, selectedResetPlotId, sortedPlots]);
 
   const getStageDisplayForWeek = (plot: (typeof sitePlots)[number], week: number) => {
-    const configuredStage = getConfiguredStageForProgrammeWeek(stageDefinitions, getPlotCompletionProgrammeWeek(plot, siteSetup), week);
-    const stage = configuredStage?.stage;
-    if (!stage) return '';
-    if (!plot.holdStage || stage < plot.holdStage) return stage;
-    return stage === plot.holdStage ? `${stage}H` : `H${plot.holdStage}`;
+    return getLiveStageNumbersForPlotWeek(plot, week, activityDelays, activityMoves, plotTemplates, siteSetup);
+  };
+
+  const printAllLivePages = () => {
+    const error = printMasterProgramme({
+      paperSize,
+      siteName: siteSetup.siteName,
+      weeks: visibleWeeks.map((week) => ({
+        label: formatCalendarWeek(siteSetup.programmeStartDate, week, siteSetup.calendarWeekOne),
+        date: formatProgrammeDate(siteSetup.programmeStartDate, week),
+      })),
+      rows: sortedPlots.map((plot, rowIndex) => {
+        const metadata = plotMetadata[getPlotMetadataKey(plot.plotNo)];
+        const houseTypeId = plot.houseTypeId ?? metadata?.houseTypeId ?? metadata?.bedroomTemplateId ?? plot.templateId;
+        const houseType = houseTypes.find((template) => template.id === houseTypeId);
+        return {
+          sequence: getPlotBuildOrder(plot, rowIndex),
+          plot: plot.plotNo,
+          route: metadata?.buildRoute ?? (plot.constructionMethod === 'timberFrame' ? 'Timber Frame' : 'Traditional'),
+          houseType: houseType?.name ?? metadata?.houseTypeName ?? getHouseTypeLabel(getTemplateForPlot(plot, plotTemplates)),
+          start: formatCalendarWeek(siteSetup.programmeStartDate, getConfiguredStageProgrammeStartWeek(stageDefinitions, getPlotCompletionProgrammeWeek(plot, siteSetup)), siteSetup.calendarWeekOne),
+          completion: plot.plotCompletionDate || metadata?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, getPlotCompletionProgrammeWeek(plot, siteSetup)),
+          stages: visibleWeeks.map((week) => getStageDisplayForWeek(plot, week)),
+        };
+      }),
+      stageKey: stageDefinitions,
+    });
+    setPrintError(error ?? '');
   };
 
   const selectGenerationBasis = (basis: ProgrammeGenerationBasis) => {
@@ -403,6 +429,21 @@ export default function MasterProgrammeScreen() {
       </SectionCard>
 
       <SectionCard title="Master stage-number matrix" subtitle={`The final configured stage is anchored to each plot's completion week. This programme uses ${stageDefinitions.length} stages.`}>
+        <View style={styles.buttonRow}>
+          {(['A3', 'A4'] as MasterPaperSize[]).map((size) => (
+            <Pressable key={size} accessibilityRole="radio" accessibilityState={{ checked: paperSize === size }}
+              accessibilityLabel={`${size} landscape`} onPress={() => setPaperSize(size)}
+              style={[styles.routeChip, paperSize === size ? styles.routeChipActive : null]}>
+              <Text style={[styles.routeChipText, paperSize === size ? styles.routeChipTextActive : null]}>{size} landscape</Text>
+            </Pressable>
+          ))}
+          <Pressable accessibilityRole="button" disabled={!sortedPlots.length} onPress={printAllLivePages}
+            style={[styles.saveButton, !sortedPlots.length ? styles.disabledButton : null]}>
+            <Text style={styles.saveButtonText}>Print all live pages</Text>
+          </Pressable>
+        </View>
+        <Text style={styles.subtitle}>{sortedPlots.length} plots · {Math.ceil(sortedPlots.length / 30) * Math.ceil(visibleWeeks.length / 23)} pages · Maximum 30 plots and 23 weeks per page. All date sections included. Print or save as PDF. Bedrooms, storeys and hold columns are omitted from the printout.</Text>
+        {printError ? <Text accessibilityRole="alert" style={styles.errorText}>{printError}</Text> : null}
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
             <View style={styles.tableRow}>
@@ -582,3 +623,4 @@ const styles = StyleSheet.create({
   stageKeyLabel: { color: '#0f172a', fontWeight: '900' },
   stageKeyMeta: { color: '#64748b', fontSize: 12, marginTop: 2 },
 });
+
