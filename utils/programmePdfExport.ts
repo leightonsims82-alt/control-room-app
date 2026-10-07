@@ -1,5 +1,5 @@
-import { ActivityDelay, WEEK_NUMBERS } from './siteProgrammeEngine';
-import { formatCalendarWeek, formatProgrammeDate } from './programmeDates';
+import { ActivityDelay } from './siteProgrammeEngine';
+import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek } from './programmeDates';
 import {
   getActivitiesForTemplateDay,
   getMilestoneForPlotWeek,
@@ -146,12 +146,15 @@ export function exportTradeProgrammesPdf(input: { siteName: string; programmeSta
 }
 
 export function exportMasterProgrammePdf(input: { siteName: string; programmeStartDate: string; calendarWeekOne?: number; plots: TemplateSitePlot[]; templates: PlotTemplate[] }) {
-  const header = `<tr><th style="width:55px">Plot</th><th style="width:80px">House</th><th style="width:85px">Plot Completion</th><th style="width:45px">Start</th>${WEEK_NUMBERS.map((week) => `<th>${formatCalendarWeek(input.programmeStartDate, week, input.calendarWeekOne)}<br/><span class="small">${formatProgrammeDate(input.programmeStartDate, week)}</span></th>`).join('')}</tr>`;
+  const dateSetup = { programmeStartDate: input.programmeStartDate };
+  const latestCompletionWeek = input.plots.length ? Math.max(...input.plots.map((plot) => getPlotCompletionProgrammeWeek(plot, dateSetup))) : 1;
+  const currentProgrammeWeek = getCurrentProgrammeWeek(input.programmeStartDate);
+  const masterWeeks = Array.from({ length: Math.max(52, latestCompletionWeek + 4, currentProgrammeWeek + 23) }, (_, index) => index + 1);
+  const header = `<tr><th style="width:55px">Plot</th><th style="width:80px">House</th><th style="width:85px">Plot Completion</th><th style="width:45px">Start</th>${masterWeeks.map((week) => `<th>${formatCalendarWeek(input.programmeStartDate, week, input.calendarWeekOne)}<br/><span class="small">${formatProgrammeDate(input.programmeStartDate, week)}</span></th>`).join('')}</tr>`;
   const rows = input.plots.map((plot) => {
     const template = getTemplateForPlot(plot, input.templates);
     const houseType = getHouseTypeTemplates(input.templates).find((item) => item.id === (plot.houseTypeId ?? plot.templateId));
-    const dateSetup = { programmeStartDate: input.programmeStartDate };
-    const weeks = WEEK_NUMBERS.map((week) => `<td>${escapeHtml(getMilestoneForPlotWeek(plot, week, input.templates, dateSetup))}</td>`).join('');
+    const weeks = masterWeeks.map((week) => `<td>${escapeHtml(getMilestoneForPlotWeek(plot, week, input.templates, dateSetup))}</td>`).join('');
     const completionDate = plot.plotCompletionDate || formatProgrammeDate(input.programmeStartDate, getPlotCompletionProgrammeWeek(plot, dateSetup));
     return `<tr><td>${escapeHtml(plot.plotNo)}</td><td>${escapeHtml(houseType?.name ?? template.name)}</td><td>${escapeHtml(completionDate)}</td><td>${escapeHtml(formatCalendarWeek(input.programmeStartDate, getStage1StartWeekForPlot(plot, input.templates, dateSetup), input.calendarWeekOne))}</td>${weeks}</tr>`;
   }).join('');
