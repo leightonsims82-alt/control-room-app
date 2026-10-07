@@ -27,6 +27,37 @@ export function shiftProgrammeDateWeeks(value: string, weeks: number) {
   return formatBritishDate(new Date(date.getTime() + Math.round(weeks) * 7 * DAY_MS));
 }
 
+function configuredWorkingDay(date: Date, includeSaturday = false, includeSunday = false) {
+  const day = date.getUTCDay();
+  return day >= 1 && day <= 5 || (day === 6 && includeSaturday) || (day === 0 && includeSunday);
+}
+
+export function shiftProgrammeWorkingDays(value: string, days: number, includeSaturday = false, includeSunday = false) {
+  const date = parseProgrammeDate(value);
+  if (!date || !Number.isFinite(days)) return '';
+  let remaining = Math.abs(Math.round(days));
+  const direction = days < 0 ? -1 : 1;
+  while (remaining > 0) {
+    date.setUTCDate(date.getUTCDate() + direction);
+    if (configuredWorkingDay(date, includeSaturday, includeSunday)) remaining -= 1;
+  }
+  return formatBritishDate(date);
+}
+
+export function getProgrammeWorkingDayIndexForDate(programmeStartDate: string | undefined, value: string, includeSaturday = false, includeSunday = false) {
+  const start = parseProgrammeDate(programmeStartDate);
+  const target = parseProgrammeDate(value);
+  if (!start || !target || target.getTime() < start.getTime() || !configuredWorkingDay(target, includeSaturday, includeSunday)) return null;
+  let index = 0;
+  const cursor = new Date(start.getTime());
+  while (cursor.getTime() <= target.getTime()) {
+    if (configuredWorkingDay(cursor, includeSaturday, includeSunday)) index += 1;
+    if (cursor.getTime() === target.getTime()) return index;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return null;
+}
+
 export function getIsoCalendarWeek(date: Date) {
   const working = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const day = working.getUTCDay() || 7;
