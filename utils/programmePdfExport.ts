@@ -2,6 +2,7 @@ import { ActivityDelay } from './siteProgrammeEngine';
 import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek } from './programmeDates';
 import {
   getActivitiesForTemplateDay,
+  getMasterProgrammeWeeks,
   getMilestoneForPlotWeek,
   getPlotCompletionProgrammeWeek,
   getStage1StartWeekForPlot,
@@ -145,11 +146,17 @@ export function exportTradeProgrammesPdf(input: { siteName: string; programmeSta
   return openPrintablePdf(`${input.siteName} Trade Programmes ${calendarWeekOne}`, sections || `<h1>${escapeHtml(input.siteName)} - Trade Programmes</h1><p>No trade activity found for this 2-week window.</p>`);
 }
 
-export function exportMasterProgrammePdf(input: { siteName: string; programmeStartDate: string; calendarWeekOne?: number; plots: TemplateSitePlot[]; templates: PlotTemplate[] }) {
+export function exportMasterProgrammePdf(input: { siteName: string; programmeStartDate: string; calendarWeekOne?: number; plots: TemplateSitePlot[]; delays?: ActivityDelay[]; moves?: ActivityMove[]; templates: PlotTemplate[] }) {
   const dateSetup = { programmeStartDate: input.programmeStartDate };
-  const latestCompletionWeek = input.plots.length ? Math.max(...input.plots.map((plot) => getPlotCompletionProgrammeWeek(plot, dateSetup))) : 1;
   const currentProgrammeWeek = getCurrentProgrammeWeek(input.programmeStartDate);
-  const masterWeeks = Array.from({ length: Math.max(52, latestCompletionWeek + 4, currentProgrammeWeek + 23) }, (_, index) => index + 1);
+  const masterWeeks = getMasterProgrammeWeeks(
+    input.plots,
+    currentProgrammeWeek,
+    input.delays ?? [],
+    input.moves ?? [],
+    input.templates,
+    dateSetup,
+  );
   const header = `<tr><th style="width:55px">Plot</th><th style="width:80px">House</th><th style="width:85px">Plot Completion</th><th style="width:45px">Start</th>${masterWeeks.map((week) => `<th>${formatCalendarWeek(input.programmeStartDate, week, input.calendarWeekOne)}<br/><span class="small">${formatProgrammeDate(input.programmeStartDate, week)}</span></th>`).join('')}</tr>`;
   const rows = input.plots.map((plot) => {
     const template = getTemplateForPlot(plot, input.templates);
