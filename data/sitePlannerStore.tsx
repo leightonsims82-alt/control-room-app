@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { INSPECTION_RESULTS_KEY, INSPECTION_STORY_KEY } from '../utils/inspectionRecords';
 import { getProgrammeStartDateValue, getProgrammeWeekForDate } from '../utils/programmeDates';
 import { getPlotMetadataKey, readPlotMetadata } from '../utils/plotMetadata';
@@ -112,6 +112,7 @@ type SitePlannerStore = {
   holdPlotAtStage: (input: { plotId: string; holdStage?: ProgrammeStageNumber; holdReason?: string }) => Promise<void>;
   setActivityDelay: (input: ActivityDelay) => Promise<void>;
   setActivityMove: (input: { plotId: string; activityCode: string; deltaDays: number }) => Promise<void>;
+  adjustActivityMove: (input: { plotId: string; activityCode: string; deltaDays: number }) => Promise<number>;
   resetActivityMovesForPlot: (plotId: string) => Promise<void>;
   upsertTradeContact: (input: TradeContact) => Promise<void>;
   setIssueSettings: (input: IssueSettings) => Promise<void>;
@@ -192,6 +193,7 @@ function normalisePlots(stored: TemplateSitePlot[]) {
 }
 
 const LEGACY_PROPERTY_TEMPLATE_IDS = new Set(['apartment', 'twoBed', 'fourBed', 'fiveBed']);
+const LEGACY_DEMO_HOUSE_TYPE_IDS = new Set(['custom-cambridge', 'custom-ashford']);
 
 function normaliseTemplate(template: PlotTemplate) {
   const isSystemTemplate = template.isSystemTemplate ?? (template.id === 'threeBed' || template.id === 'fourBedStandard' || template.id === 'timberFrame');
@@ -299,6 +301,24 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   const [siteSetup, setSiteSetupState] = useState<SiteProgrammeSetup>(DEFAULT_SITE_PROGRAMME_SETUP);
   const [isSitePlannerLoaded, setIsSitePlannerLoaded] = useState(false);
 
+  const sitePlotsRef = useRef(sitePlots);
+  const activityDelaysRef = useRef(activityDelays);
+  const activityMovesRef = useRef(activityMoves);
+  const tradeContactsRef = useRef(tradeContacts);
+  const issueLogsRef = useRef(issueLogs);
+  const programmeNotesRef = useRef(programmeNotes);
+  const plotTemplatesRef = useRef(plotTemplates);
+  const siteSetupRef = useRef(siteSetup);
+
+  useEffect(() => { sitePlotsRef.current = sitePlots; }, [sitePlots]);
+  useEffect(() => { activityDelaysRef.current = activityDelays; }, [activityDelays]);
+  useEffect(() => { activityMovesRef.current = activityMoves; }, [activityMoves]);
+  useEffect(() => { tradeContactsRef.current = tradeContacts; }, [tradeContacts]);
+  useEffect(() => { issueLogsRef.current = issueLogs; }, [issueLogs]);
+  useEffect(() => { programmeNotesRef.current = programmeNotes; }, [programmeNotes]);
+  useEffect(() => { plotTemplatesRef.current = plotTemplates; }, [plotTemplates]);
+  useEffect(() => { siteSetupRef.current = siteSetup; }, [siteSetup]);
+
   useEffect(() => {
     let mounted = true;
     async function loadPlanner() {
@@ -326,23 +346,32 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
               : plot.stage9CompleteWeek;
             return { ...plot, plotStartDate, plotCompletionDate, stage9CompleteWeek };
           });
-          setSitePlots(getSortedSitePlots(migratedPlots));
-          await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(getSortedSitePlots(migratedPlots)));
+          const sortedMigratedPlots = getSortedSitePlots(migratedPlots);
+          sitePlotsRef.current = sortedMigratedPlots;
+          setSitePlots(sortedMigratedPlots);
+          await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(sortedMigratedPlots));
+          activityDelaysRef.current = storedDelays;
           setActivityDelays(storedDelays);
+          activityMovesRef.current = storedMoves;
           setActivityMoves(storedMoves);
-          setTradeContacts(mergeDefaultTradeContacts(storedContacts));
+          const mergedContacts = mergeDefaultTradeContacts(storedContacts);
+          tradeContactsRef.current = mergedContacts;
+          setTradeContacts(mergedContacts);
           setIssueSettingsState(storedIssueSettings);
+          issueLogsRef.current = storedIssueLogs;
           setIssueLogs(storedIssueLogs);
+          programmeNotesRef.current = storedNotes;
           setProgrammeNotes(storedNotes);
           const houseTypesReset = await AsyncStorage.getItem(HOUSE_TYPES_RESET_KEY);
-          const mergedTemplates = houseTypesReset === 'done'
-            ? mergeDefaultTemplates(storedTemplates)
-            : DEFAULT_PLOT_TEMPLATES.map(normaliseTemplate);
+          const templatesForMigration = houseTypesReset === 'done'
+            ? storedTemplates
+            : storedTemplates.filter((template) => !LEGACY_DEMO_HOUSE_TYPE_IDS.has(template.id));
+          const mergedTemplates = mergeDefaultTemplates(templatesForMigration);
+          plotTemplatesRef.current = mergedTemplates;
           setPlotTemplates(mergedTemplates);
           await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(mergedTemplates));
-          if (houseTypesReset !== 'done') {
-            await AsyncStorage.setItem(HOUSE_TYPES_RESET_KEY, 'done');
-          }
+          await AsyncStorage.setItem(HOUSE_TYPES_RESET_KEY, 'done');
+          siteSetupRef.current = migratedSiteSetup;
           setSiteSetupState(migratedSiteSetup);
           await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(migratedSiteSetup));
         }
@@ -359,16 +388,21 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   }, []);
 
   const upsertSitePlot = async (input: SitePlotInput) => {
-    const nextPlots = applyPlotInputs(sitePlots, [input]);
+    const nextPlots = applyPlotInputs(sitePlotsRef.current, [input]);
+    sitePlotsRef.current = nextPlots;
     setSitePlots(nextPlots);
     await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(nextPlots));
   };
 
   const removeSitePlot = async (plotId: string) => {
-    const nextPlots = sitePlots.filter((plot) => plot.id !== plotId);
-    const nextDelays = activityDelays.filter((delay) => delay.plotId !== plotId);
-    const nextMoves = activityMoves.filter((move) => move.plotId !== plotId);
-    const nextNotes = programmeNotes.filter((note) => note.plotId !== plotId);
+    const nextPlots = sitePlotsRef.current.filter((plot) => plot.id !== plotId);
+    const nextDelays = activityDelaysRef.current.filter((delay) => delay.plotId !== plotId);
+    const nextMoves = activityMovesRef.current.filter((move) => move.plotId !== plotId);
+    const nextNotes = programmeNotesRef.current.filter((note) => note.plotId !== plotId);
+    sitePlotsRef.current = nextPlots;
+    activityDelaysRef.current = nextDelays;
+    activityMovesRef.current = nextMoves;
+    programmeNotesRef.current = nextNotes;
     setSitePlots(nextPlots);
     setActivityDelays(nextDelays);
     setActivityMoves(nextMoves);
@@ -383,6 +417,11 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   };
 
   const clearSitePlotData = async () => {
+    sitePlotsRef.current = [];
+    activityDelaysRef.current = [];
+    activityMovesRef.current = [];
+    programmeNotesRef.current = [];
+    issueLogsRef.current = [];
     setSitePlots([]);
     setActivityDelays([]);
     setActivityMoves([]);
@@ -400,7 +439,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   };
 
   const holdPlotAtStage = async (input: { plotId: string; holdStage?: ProgrammeStageNumber; holdReason?: string }) => {
-    const nextPlots = sitePlots.map((plot) => {
+    const nextPlots = sitePlotsRef.current.map((plot) => {
       if (plot.id !== input.plotId) return plot;
       if (!input.holdStage) {
         const { holdStage, holdReason, holdUpdatedAt, ...releasedPlot } = plot;
@@ -414,41 +453,54 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       };
     });
     const sorted = getSortedSitePlots(nextPlots);
+    sitePlotsRef.current = sorted;
     setSitePlots(sorted);
     await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(sorted));
   };
 
   const setActivityDelay = async (input: ActivityDelay) => {
     const nextDelays = [
-      ...activityDelays.filter((delay) => !(delay.plotId === input.plotId && delay.activityCode === input.activityCode)),
+      ...activityDelaysRef.current.filter((delay) => !(delay.plotId === input.plotId && delay.activityCode === input.activityCode)),
       input,
     ].filter((delay) => delay.delayDays !== 0);
+    activityDelaysRef.current = nextDelays;
     setActivityDelays(nextDelays);
     await AsyncStorage.setItem(SITE_DELAYS_KEY, JSON.stringify(nextDelays));
   };
 
   const setActivityMove = async (input: { plotId: string; activityCode: string; deltaDays: number }) => {
-    const existing = activityMoves.find((move) => move.plotId === input.plotId && move.activityCode === input.activityCode);
+    const currentMoves = activityMovesRef.current;
+    const existing = currentMoves.find((move) => move.plotId === input.plotId && move.activityCode === input.activityCode);
     const nextMove: ActivityMove = existing
       ? { ...existing, deltaDays: input.deltaDays, updatedAt: new Date().toISOString() }
       : { id: `activity-move-${Date.now()}`, plotId: input.plotId, activityCode: input.activityCode, deltaDays: input.deltaDays, updatedAt: new Date().toISOString() };
     const nextMoves = input.deltaDays === 0
-      ? activityMoves.filter((move) => !(move.plotId === input.plotId && move.activityCode === input.activityCode))
+      ? currentMoves.filter((move) => !(move.plotId === input.plotId && move.activityCode === input.activityCode))
       : existing
-        ? activityMoves.map((move) => (move.id === existing.id ? nextMove : move))
-        : [...activityMoves, nextMove];
+        ? currentMoves.map((move) => (move.id === existing.id ? nextMove : move))
+        : [...currentMoves, nextMove];
+    activityMovesRef.current = nextMoves;
     setActivityMoves(nextMoves);
     await AsyncStorage.setItem(ACTIVITY_MOVES_KEY, JSON.stringify(nextMoves));
   };
 
+  const adjustActivityMove = async (input: { plotId: string; activityCode: string; deltaDays: number }) => {
+    const existing = activityMovesRef.current.find((move) => move.plotId === input.plotId && move.activityCode === input.activityCode);
+    const nextDelta = (existing?.deltaDays ?? 0) + input.deltaDays;
+    await setActivityMove({ ...input, deltaDays: nextDelta });
+    return nextDelta;
+  };
+
   const resetActivityMovesForPlot = async (plotId: string) => {
-    const nextMoves = activityMoves.filter((move) => move.plotId !== plotId);
+    const nextMoves = activityMovesRef.current.filter((move) => move.plotId !== plotId);
+    activityMovesRef.current = nextMoves;
     setActivityMoves(nextMoves);
     await AsyncStorage.setItem(ACTIVITY_MOVES_KEY, JSON.stringify(nextMoves));
   };
 
   const upsertTradeContact = async (input: TradeContact) => {
-    const nextContacts = tradeContacts.map((contact) => (contact.id === input.id ? input : contact));
+    const nextContacts = tradeContactsRef.current.map((contact) => (contact.id === input.id ? input : contact));
+    tradeContactsRef.current = nextContacts;
     setTradeContacts(nextContacts);
     await AsyncStorage.setItem(TRADE_CONTACTS_KEY, JSON.stringify(nextContacts));
   };
@@ -459,16 +511,18 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   };
 
   const setProgrammeNote = async (input: { plotId: string; trade: string; startWeek: number; note: string }) => {
-    const existing = programmeNotes.find((item) => item.plotId === input.plotId && item.trade === input.trade && item.startWeek === input.startWeek);
+    const currentNotes = programmeNotesRef.current;
+    const existing = currentNotes.find((item) => item.plotId === input.plotId && item.trade === input.trade && item.startWeek === input.startWeek);
     const cleanedNote = input.note.trim();
     const nextNote: ProgrammeNote = existing
       ? { ...existing, note: cleanedNote, updatedAt: new Date().toISOString() }
       : { id: `programme-note-${Date.now()}`, plotId: input.plotId, trade: input.trade, startWeek: input.startWeek, note: cleanedNote, updatedAt: new Date().toISOString() };
     const nextNotes = cleanedNote
       ? existing
-        ? programmeNotes.map((item) => (item.id === existing.id ? nextNote : item))
-        : [...programmeNotes, nextNote]
-      : programmeNotes.filter((item) => item.id !== existing?.id);
+        ? currentNotes.map((item) => (item.id === existing.id ? nextNote : item))
+        : [...currentNotes, nextNote]
+      : currentNotes.filter((item) => item.id !== existing?.id);
+    programmeNotesRef.current = nextNotes;
     setProgrammeNotes(nextNotes);
     await AsyncStorage.setItem(PROGRAMME_NOTES_KEY, JSON.stringify(nextNotes));
   };
@@ -481,31 +535,35 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       note: input.note,
       issuedAt: new Date().toISOString(),
     };
-    const nextLogs = [nextLog, ...issueLogs].slice(0, 25);
+    const nextLogs = [nextLog, ...issueLogsRef.current].slice(0, 25);
+    issueLogsRef.current = nextLogs;
     setIssueLogs(nextLogs);
     await AsyncStorage.setItem(ISSUE_LOGS_KEY, JSON.stringify(nextLogs));
   };
 
   const updateSiteSetup = async (input: Partial<SiteProgrammeSetup>) => {
-    const nextSetup = { ...siteSetup, ...input, stageCount: 9 };
+    const nextSetup = { ...siteSetupRef.current, ...input, stageCount: 9 };
+    siteSetupRef.current = nextSetup;
     setSiteSetupState(nextSetup);
     await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(nextSetup));
   };
 
   const addPlotTemplate = async (input: { name: string; bedrooms: number; floors: number; baseTemplateId?: string }) => {
     const standardTemplateId = Math.round(Number(input.bedrooms)) === 4 ? 'fourBedStandard' : (input.baseTemplateId ?? 'threeBed');
-    const baseTemplate = plotTemplates.find((template) => template.id === standardTemplateId)
-      ?? plotTemplates.find((template) => template.id === 'threeBed')
-      ?? plotTemplates[0];
+    const baseTemplate = plotTemplatesRef.current.find((template) => template.id === standardTemplateId)
+      ?? plotTemplatesRef.current.find((template) => template.id === 'threeBed')
+      ?? plotTemplatesRef.current[0];
     const nextTemplate = createHouseTypeTemplate({ ...input, baseTemplate });
-    const nextTemplates = [...plotTemplates, nextTemplate];
+    const nextTemplates = [...plotTemplatesRef.current, nextTemplate];
+    plotTemplatesRef.current = nextTemplates;
     setPlotTemplates(nextTemplates);
     await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(nextTemplates));
     return nextTemplate;
   };
 
   const updatePlotTemplate = async (input: PlotTemplate) => {
-    const nextTemplates = plotTemplates.map((template) => (template.id === input.id ? input : template));
+    const nextTemplates = plotTemplatesRef.current.map((template) => (template.id === input.id ? input : template));
+    plotTemplatesRef.current = nextTemplates;
     setPlotTemplates(nextTemplates);
     await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(nextTemplates));
   };
@@ -520,6 +578,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
         ),
       };
     });
+    plotTemplatesRef.current = nextTemplates;
     setPlotTemplates(nextTemplates);
     await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(nextTemplates));
   };
@@ -543,6 +602,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       holdPlotAtStage,
       setActivityDelay,
       setActivityMove,
+      adjustActivityMove,
       resetActivityMovesForPlot,
       upsertTradeContact,
       setIssueSettings,

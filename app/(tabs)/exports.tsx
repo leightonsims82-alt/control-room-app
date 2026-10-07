@@ -20,7 +20,7 @@ function mailto(recipients: string[], subject: string, body: string) {
 }
 
 export default function ExportsScreen() {
-  const { sitePlots, activityDelays, plotTemplates, siteSetup, issueSettings, tradeContacts, setIssueSettings, recordIssue } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, issueSettings, tradeContacts, setIssueSettings, recordIssue } = useSitePlanner();
   const [smEmail, setSmEmail] = useState(issueSettings.managerEmail);
   const [assistantEmails, setAssistantEmails] = useState(issueSettings.assistantEmails ?? '');
   const [sendMaster, setSendMaster] = useState(issueSettings.sendMasterToSmTeam ?? true);
@@ -58,20 +58,20 @@ export default function ExportsScreen() {
 
   const exportSmPdfPack = () => {
     let opened = false;
-    if (sendMaster) opened = exportMasterProgrammePdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, plots: sitePlots, templates: plotTemplates }) || opened;
-    if (sendMainTwoWeek) opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates }) || opened;
-    if (sendTradeProgrammesToSmTeam) opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates, trades: allTradeNames }) || opened;
+    if (sendMaster) opened = exportMasterProgrammePdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, plots: sitePlots, delays: activityDelays, moves: activityMoves, templates: plotTemplates }) || opened;
+    if (sendMainTwoWeek) opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, moves: activityMoves, templates: plotTemplates }) || opened;
+    if (sendTradeProgrammesToSmTeam) opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, moves: activityMoves, templates: plotTemplates, trades: allTradeNames }) || opened;
     setStatus(opened ? 'PDF export opened — use Save as PDF in the print window' : 'Allow pop-ups to export PDF');
   };
 
   const exportTradePdfPack = () => {
     const trades = tradeNamesWithEmails.length ? tradeNamesWithEmails : allTradeNames;
-    const opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates, trades });
+    const opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, moves: activityMoves, templates: plotTemplates, trades });
     setStatus(opened ? 'Trade PDF export opened — use Save as PDF in the print window' : 'Allow pop-ups to export PDF');
   };
 
   const exportMainPdf = () => {
-    const opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, templates: plotTemplates });
+    const opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, moves: activityMoves, templates: plotTemplates });
     setStatus(opened ? 'Main 2-week PDF export opened' : 'Allow pop-ups to export PDF');
   };
 

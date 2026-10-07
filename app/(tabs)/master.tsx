@@ -15,7 +15,7 @@ import {
   removePlotMetadata,
   savePlotMetadata,
 } from '../../utils/plotMetadata';
-import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, shiftProgrammeDateWeeks, validatePlotCompletionDate } from '../../utils/programmeDates';
+import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, shiftProgrammeWorkingDays, validatePlotCompletionDate } from '../../utils/programmeDates';
 import {
   ConfiguredProgrammeStage,
   getConfiguredStageForProgrammeWeek,
@@ -27,6 +27,7 @@ import {
   getEffectiveProgrammeWeeks,
   getHouseTypeLabel,
   getHouseTypeTemplates,
+  getMasterProgrammeWeeks,
   getPlotBuildOrder,
   getPlotCompletionProgrammeWeek,
   getPlotHoldDetail,
@@ -34,17 +35,21 @@ import {
   getSortedSitePlots,
   getTemplateById,
   getTemplateForPlot,
+  getTemplateProgrammeWorkingDays,
 } from '../../utils/templateProgramme';
 
 type ResetMode = 'all' | 'single';
 type ProgrammeGenerationBasis = 'start' | 'completion';
 
 export default function MasterProgrammeScreen() {
-  const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
   const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
   const currentProgrammeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
-  const visibleWeeks = Array.from({ length: 23 }, (_, index) => currentProgrammeWeek + index);
+  const visibleWeeks = useMemo(
+    () => getMasterProgrammeWeeks(sitePlots, currentProgrammeWeek, activityDelays, activityMoves, plotTemplates, siteSetup),
+    [sitePlots, currentProgrammeWeek, activityDelays, activityMoves, plotTemplates, siteSetup],
+  );
   const initialStageCount = 9;
   const [plotNo, setPlotNo] = useState('');
   const [paperSize, setPaperSize] = useState<MasterPaperSize>('A3');
@@ -77,7 +82,9 @@ export default function MasterProgrammeScreen() {
     : Math.max(1, siteSetup.defaultProgrammeWeeks || 23);
   const nextCompletionWeek = (sitePlots.length ? Math.max(...sitePlots.map((plot) => getPlotCompletionProgrammeWeek(plot, siteSetup))) : 22) + 1;
   const nextCompletionHint = formatProgrammeDate(siteSetup.programmeStartDate, nextCompletionWeek);
-  const nextStartHint = formatProgrammeDate(siteSetup.programmeStartDate, Math.max(1, nextCompletionWeek - selectedProgrammeWeeks + 1));
+  const nextStartHint = selectedProgrammeTemplate
+    ? shiftProgrammeWorkingDays(nextCompletionHint, -(getTemplateProgrammeWorkingDays(selectedProgrammeTemplate) - 1), siteSetup.includeSaturday, siteSetup.includeSunday)
+    : formatProgrammeDate(siteSetup.programmeStartDate, Math.max(1, nextCompletionWeek - selectedProgrammeWeeks + 1));
 
   useEffect(() => {
     readPlotMetadata().then(setPlotMetadata).catch(() => setPlotMetadata({}));
@@ -97,7 +104,7 @@ export default function MasterProgrammeScreen() {
       .catch(() => {
         setStageDefinitions(PROGRAMME_STAGE_SEQUENCE.slice(0, 9).map((stage) => ({ ...stage })));
       });
-  }, []);
+  }, [siteSetup]);
 
   useEffect(() => {
     if (!selectedResetPlotId && sortedPlots[0]?.id) setSelectedResetPlotId(sortedPlots[0].id);
@@ -165,15 +172,15 @@ export default function MasterProgrammeScreen() {
 
     const programmeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : selectedHouseType.id;
     const programmeTemplate = getTemplateById(programmeTemplateId, plotTemplates);
-    const programmeWeeks = programmeTemplate
-      ? getEffectiveProgrammeWeeks(programmeTemplate, siteSetup)
-      : Math.max(1, siteSetup.defaultProgrammeWeeks || 23);
+    const programmeWorkingDays = programmeTemplate
+      ? getTemplateProgrammeWorkingDays(programmeTemplate)
+      : Math.max(1, (siteSetup.defaultProgrammeWeeks || 23) * (siteSetup.includeSunday ? 7 : siteSetup.includeSaturday ? 6 : 5));
     const exactStartDate = programmeGenerationBasis === 'start'
       ? selectedDate
-      : shiftProgrammeDateWeeks(selectedDate, -(programmeWeeks - 1));
+      : shiftProgrammeWorkingDays(selectedDate, -(programmeWorkingDays - 1), siteSetup.includeSaturday, siteSetup.includeSunday);
     const exactCompletionDate = programmeGenerationBasis === 'completion'
       ? selectedDate
-      : shiftProgrammeDateWeeks(selectedDate, programmeWeeks - 1);
+      : shiftProgrammeWorkingDays(selectedDate, programmeWorkingDays - 1, siteSetup.includeSaturday, siteSetup.includeSunday);
     const completionWeek = getProgrammeWeekForDate(siteSetup.programmeStartDate, exactCompletionDate);
     if (!completionWeek) {
       setPlotDateError('Unable to calculate the programme completion week for that date.');

@@ -112,7 +112,7 @@ export default function WalkScreen() {
       </View>
 
       <SectionCard title="Site Notes" subtitle={`Walk date: ${walkDate}`}>
-        <TextInput style={[styles.input, styles.siteNotes]} defaultValue={noteText} placeholder="General site notes and actions" multiline onBlur={(event: any) => saveWalkNotes(event.nativeEvent.text)} />
+        <DraftTextInput style={[styles.input, styles.siteNotes]} value={noteText} placeholder="General site notes and actions" multiline onCommit={saveWalkNotes} />
       </SectionCard>
 
       <SectionCard title="Plots in build" subtitle={`Walk date: ${walkDate}`}>
@@ -148,14 +148,20 @@ export default function WalkScreen() {
                 </Pressable>
               </View>
 
-              <TextInput style={[styles.input, styles.notes]} defaultValue={item.issueNotes} placeholder="Plot-specific issue or action" multiline onBlur={(event: any) => saveItem(plot.id, stage?.id, { issueNotes: event.nativeEvent.text, plotStageId: stage?.id })} />
-              <TextInput style={styles.input} defaultValue={item.actionOwner} placeholder="Action owner or trade" onBlur={(event: any) => saveItem(plot.id, stage?.id, { actionOwner: event.nativeEvent.text, plotStageId: stage?.id })} />
+              <DraftTextInput style={[styles.input, styles.notes]} value={item.issueNotes} placeholder="Plot-specific issue or action" multiline onCommit={(value) => saveItem(plot.id, stage?.id, { issueNotes: value, plotStageId: stage?.id })} />
+              <DraftTextInput style={styles.input} value={item.actionOwner} placeholder="Action owner or trade" onCommit={(value) => saveItem(plot.id, stage?.id, { actionOwner: value, plotStageId: stage?.id })} />
             </View>
           );
         })}
       </SectionCard>
     </AppScreen>
   );
+}
+
+function DraftTextInput({ value, onCommit, ...props }: { value: string; onCommit: (value: string) => void | Promise<void>; [key: string]: any }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return <TextInput {...props} value={draft} onChangeText={setDraft} onBlur={() => onCommit(draft)} />;
 }
 
 function AnswerRow({ label, value, onChange }: { label: string; value: ChecklistAnswer; onChange: (value: ChecklistAnswer) => void }) {

@@ -190,6 +190,16 @@ export default function SiteSetupScreen() {
         setMessage('House type name is required.');
         return;
       }
+      const activityNames = cleaned.activities.map((activity) => activity.code.trim());
+      if (activityNames.some((name) => !name)) {
+        setMessage('Every programme activity needs a task name before the house type can be saved.');
+        return;
+      }
+      const normalisedNames = activityNames.map((name) => name.toLowerCase());
+      if (new Set(normalisedNames).size !== normalisedNames.length) {
+        setMessage('Programme activity task names must be unique within a house type.');
+        return;
+      }
       await updatePlotTemplate(cleaned);
       setDraft(null);
       setMessage(`${getHouseTypeLabel(cleaned)} saved successfully.`);

@@ -71,6 +71,10 @@ export function FloatingFeedbackButton() {
     setStatus('');
     try {
       const result = await submitSiteProgFeedback({ page: pathname || '/', category, message, screenshotDataUrl: screenshotDataUrl || undefined });
+      if ('warning' in result && result.warning) {
+        setStatus(result.warning);
+        return;
+      }
       setStatus(result.synced ? 'Feedback sent — thank you.' : 'Saved on this device and will be available locally.');
       setMessage('');
       setScreenshotDataUrl('');

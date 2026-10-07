@@ -48,6 +48,7 @@ export default function HandoverScreen() {
   const { sitePlots } = useSitePlanner();
   const [records, setRecords] = useState<HandoverRecord[]>([]);
   const [selectedId, setSelectedId] = useState('');
+  const [notesDraft, setNotesDraft] = useState('');
 
   const plots = useMemo<HandoverPlot[]>(() => {
     const primary = plotProgrammes.map((plot) => ({ id: plot.id, name: plot.plotName, endDate: plot.endDate }));
@@ -72,6 +73,9 @@ export default function HandoverScreen() {
 
   const selected = plots.find((plot) => plot.id === selectedId) ?? plots[0];
   const record = selected ? records.find((item) => item.plotId === selected.id) : undefined;
+  useEffect(() => {
+    setNotesDraft(record?.notes ?? '');
+  }, [selected?.id, record?.notes]);
   const checklist = record?.items ?? {};
   const completed = DEFAULT_ITEMS.filter((item) => checklist[item]).length;
   const openDefects = selected ? defects.filter((item) => item.plotProgrammeId === selected.id && item.status !== 'Verified fixed') : [];
@@ -142,7 +146,7 @@ export default function HandoverScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.plotChips}>
               {plots.map((plot) => (
-                <Pressable key={plot.id} onPress={() => setSelectedId(plot.id)} style={[styles.plotChip, selected?.id === plot.id && styles.plotChipActive]}>
+                <Pressable key={plot.id} onPress={async () => { if (selected && notesDraft !== (record?.notes ?? '')) await updateNotes(notesDraft); setSelectedId(plot.id); }} style={[styles.plotChip, selected?.id === plot.id && styles.plotChipActive]}>
                   <Text style={[styles.plotChipText, selected?.id === plot.id && styles.plotChipTextActive]}>{plot.name}</Text>
                 </Pressable>
               ))}
@@ -191,10 +195,11 @@ export default function HandoverScreen() {
             <Text style={styles.cardTitle}>Handover notes</Text>
             <TextInput
               style={styles.notes}
-              defaultValue={record?.notes ?? ''}
+              value={notesDraft}
+              onChangeText={setNotesDraft}
               multiline
               placeholder="Outstanding items, customer demo notes, certificates, keys or access issues"
-              onBlur={(event: any) => updateNotes(event.nativeEvent.text)}
+              onBlur={() => updateNotes(notesDraft)}
             />
           </View>
 

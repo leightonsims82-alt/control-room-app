@@ -386,15 +386,17 @@ test('calendar weeks: Master uses ISO week numbers and Site Setup can override W
   });
 
   await page.addInitScript(({ startDate }) => {
-    localStorage.setItem('programme-buddy:programme-setup:v1', JSON.stringify({
-      siteName: 'Calendar QA',
-      defaultProgrammeWeeks: 25,
-      stageCount: 9,
-      workingWeek: '5 days - Monday to Friday',
-      includeSaturday: false,
-      includeSunday: false,
-      programmeStartDate: startDate,
-    }));
+    if (!localStorage.getItem('programme-buddy:programme-setup:v1')) {
+      localStorage.setItem('programme-buddy:programme-setup:v1', JSON.stringify({
+        siteName: 'Calendar QA',
+        defaultProgrammeWeeks: 25,
+        stageCount: 9,
+        workingWeek: '5 days - Monday to Friday',
+        includeSaturday: false,
+        includeSunday: false,
+        programmeStartDate: startDate,
+      }));
+    }
   }, calendar);
 
   await goto(page, '/master');

@@ -19,7 +19,7 @@ const TRADE_COLOURS = ['#334155', '#B45309', '#15803D', '#9A3412', '#7C3AED', '#
 type TradeMode = 'setup' | 'programme';
 
 function normaliseWeek(week: number) {
-  return ((((Math.round(week) - 1) % 52) + 52) % 52) + 1;
+  return Number.isFinite(week) ? Math.max(1, Math.round(week)) : 1;
 }
 
 function buildDays(startWeek: number, programmeStartDate: string) {
@@ -52,6 +52,7 @@ export default function TradesScreen() {
   const {
     sitePlots,
     activityDelays,
+    activityMoves,
     tradeContacts,
     plotTemplates,
     siteSetup,
@@ -87,6 +88,7 @@ export default function TradesScreen() {
       activityDelays,
       plotTemplates,
       siteSetup,
+      activityMoves,
     ).filter((activity) => activity.trade.toLowerCase() === selectedTrade.toLowerCase()));
 
     const cells = activitiesByDay.map((activities) => activities.map((activity) => activity.displayText).join('\n'));
@@ -100,6 +102,7 @@ export default function TradesScreen() {
     sitePlots,
     days,
     activityDelays,
+    activityMoves,
     plotTemplates,
     siteSetup,
     selectedTrade,
@@ -107,12 +110,17 @@ export default function TradesScreen() {
 
   const move = async (row: (typeof rows)[number], change: number) => {
     if (!row.active) return;
+    const nextDelay = row.delay + change;
+    if (row.active.durationDays + nextDelay < 1) {
+      setMessage(`Plot ${row.plot.plotNo} ${row.active.displayText || row.active.code} cannot be shorter than 1 working day.`);
+      return;
+    }
     await setActivityDelay({
       plotId: row.plot.id,
       activityCode: row.active.code,
-      delayDays: row.delay + change,
+      delayDays: nextDelay,
     });
-    setMessage(`Plot ${row.plot.plotNo} moved by ${change > 0 ? '+' : '-'}1 day`);
+    setMessage(`Plot ${row.plot.plotNo} duration changed by ${change > 0 ? '+' : '-'}1 working day`);
   };
 
   const openLive = () => {
@@ -122,10 +130,16 @@ export default function TradesScreen() {
 
   const copyLive = async () => {
     const link = supervisorLink(selectedTrade);
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-      await navigator.clipboard.writeText(link);
+    try {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(link);
+        setMessage(`Live supervisor link copied for ${selectedTrade}.`);
+        return;
+      }
+      setMessage(`Copy this supervisor link: ${link}`);
+    } catch {
+      setMessage(`Clipboard access was blocked. Copy this supervisor link manually: ${link}`);
     }
-    setMessage(`Live supervisor link copied for ${selectedTrade}.`);
   };
 
   const generatePdf = async () => {

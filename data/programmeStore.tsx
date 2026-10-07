@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { houseTypes as demoHouseTypes, plotProgrammes as demoPlots, plotStages as demoStages } from './demoData';
+import { houseTypes as demoHouseTypes } from './demoData';
 import { getInspectionTemplateForStage } from '../utils/inspectionTemplateResolver';
 import { DabsBriefingItem, UpdateDabsBriefingItemInput } from '../types/dabs';
 import {
@@ -19,6 +19,9 @@ import {
 } from '../types/models';
 import { FoundationType } from '../types/regulations';
 import { generateStagesForPlot } from '../utils/stageGeneration';
+import { getProgrammeDateForWorkingDayIndex } from '../utils/programmeDates';
+import { getActivityProgrammeRange, getTemplateForPlot, orderedActivities } from '../utils/templateProgramme';
+import { useSitePlanner } from './sitePlannerStore';
 
 const PLOTS_KEY = 'siteprog:plot-programmes:v1';
 const STAGES_KEY = 'siteprog:plot-stages:v1';
@@ -168,8 +171,9 @@ function createBlankDabsItem(plot: PlotProgramme, briefingDate: string, stage?: 
 }
 
 export function ProgrammeDataProvider({ children }: PropsWithChildren) {
-  const [plotProgrammes, setPlotProgrammes] = useState<PlotProgramme[]>(demoPlots);
-  const [plotStages, setPlotStages] = useState<PlotStage[]>(demoStages);
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, isSitePlannerLoaded } = useSitePlanner();
+  const [plotProgrammes, setPlotProgrammes] = useState<PlotProgramme[]>([]);
+  const [plotStages, setPlotStages] = useState<PlotStage[]>([]);
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);
   const [defects, setDefects] = useState<DefectAction[]>([]);
   const [dabsBriefings, setDabsBriefings] = useState<DabsBriefingItem[]>([]);
@@ -180,8 +184,8 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
     async function loadData() {
       try {
         const [plots, stages, storedInspections, storedDefects, storedDabs] = await Promise.all([
-          readArray<PlotProgramme>(PLOTS_KEY, demoPlots),
-          readArray<PlotStage>(STAGES_KEY, demoStages),
+          readArray<PlotProgramme>(PLOTS_KEY, []),
+          readArray<PlotStage>(STAGES_KEY, []),
           readArray<InspectionRecord>(INSPECTIONS_KEY, []),
           readArray<DefectAction>(DEFECTS_KEY, []),
           readArray<DabsBriefingItem>(DABS_KEY, []),
@@ -204,6 +208,93 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isLoaded || !isSitePlannerLoaded) return;
+
+    const existingPlots = plotProgrammes;
+    const existingStages = plotStages;
+    const canonicalPlots: PlotProgramme[] = sitePlots.map((plot) => {
+      const existing = existingPlots.find((item) => item.id === plot.id || item.plotName === plot.plotNo);
+      const template = getTemplateForPlot(plot, plotTemplates);
+      const ranges = orderedActivities(template).map((activity) => ({
+        activity,
+        range: getActivityProgrammeRange(plot, template, activity, activityDelays, activityMoves, siteSetup),
+      }));
+      const firstRange = ranges[0]?.range;
+      const lastRange = ranges.at(-1)?.range;
+      const calculatedStart = firstRange
+        ? getProgrammeDateForWorkingDayIndex(siteSetup.programmeStartDate, firstRange.start, siteSetup.includeSaturday, siteSetup.includeSunday)
+        : '';
+      const calculatedEnd = lastRange
+        ? getProgrammeDateForWorkingDayIndex(siteSetup.programmeStartDate, lastRange.finish, siteSetup.includeSaturday, siteSetup.includeSunday)
+        : '';
+      return {
+        id: plot.id,
+        plotName: plot.plotNo,
+        phase: existing?.phase ?? '',
+        houseTypeId: plot.houseTypeId ?? plot.templateId ?? existing?.houseTypeId ?? 'threeBed',
+        startDate: plot.plotStartDate || calculatedStart || existing?.startDate || '',
+        endDate: plot.plotCompletionDate || calculatedEnd || existing?.endDate || '',
+        mode: 'reverse',
+        isLocked: true,
+        sharedWithUserIds: existing?.sharedWithUserIds ?? [],
+        holdStatus: plot.holdStage ? 'On hold' : 'Active',
+        holdReason: plot.holdReason,
+        jurisdiction: existing?.jurisdiction ?? 'England',
+        foundationType: existing?.foundationType ?? 'Unknown',
+      };
+    });
+
+    const canonicalStages: PlotStage[] = sitePlots.flatMap((plot) => {
+      const template = getTemplateForPlot(plot, plotTemplates);
+      return orderedActivities(template).map((activity) => {
+        const existing = existingStages.find((item) => item.plotProgrammeId === plot.id && item.stageName === activity.code);
+        const range = getActivityProgrammeRange(plot, template, activity, activityDelays, activityMoves, siteSetup);
+        const startDate = getProgrammeDateForWorkingDayIndex(siteSetup.programmeStartDate, range.start, siteSetup.includeSaturday, siteSetup.includeSunday);
+        const endDate = getProgrammeDateForWorkingDayIndex(siteSetup.programmeStartDate, range.finish, siteSetup.includeSaturday, siteSetup.includeSunday);
+        const delayDays = activityDelays.find((item) => item.plotId === plot.id && item.activityCode === activity.code)?.delayDays ?? 0;
+        const held = Boolean(plot.holdStage && activity.stage >= plot.holdStage);
+        return {
+          id: existing?.id ?? `canonical-stage-${plot.id}-${activity.order}`,
+          plotProgrammeId: plot.id,
+          stageName: activity.code,
+          trade: activity.trade,
+          order: activity.order,
+          startDate,
+          endDate,
+          durationDays: Math.max(1, activity.durationDays + delayDays),
+          delayDays,
+          status: existing?.status ?? 'Not started',
+          holdStatus: held ? 'On hold' : existing?.holdStatus ?? 'Active',
+          holdReason: held ? plot.holdReason : existing?.holdReason,
+          isKeyStage: existing?.isKeyStage ?? false,
+          inspectionStatus: existing?.inspectionStatus ?? 'Not applicable',
+          inspectionWindowStart: existing?.inspectionWindowStart,
+          inspectionWindowEnd: existing?.inspectionWindowEnd,
+          inspectionNotes: existing?.inspectionNotes,
+        };
+      });
+    });
+
+    const canonicalPlotIds = new Set(canonicalPlots.map((plot) => plot.id));
+    const nextInspections = inspections.filter((inspection) => canonicalPlotIds.has(inspection.plotProgrammeId));
+    const nextDefects = defects.filter((defect) => canonicalPlotIds.has(defect.plotProgrammeId));
+    const nextDabs = dabsBriefings.filter((briefing) => canonicalPlotIds.has(briefing.plotProgrammeId));
+
+    setPlotProgrammes(canonicalPlots);
+    setPlotStages(canonicalStages);
+    setInspections(nextInspections);
+    setDefects(nextDefects);
+    setDabsBriefings(nextDabs);
+    Promise.all([
+      AsyncStorage.setItem(PLOTS_KEY, JSON.stringify(canonicalPlots)),
+      AsyncStorage.setItem(STAGES_KEY, JSON.stringify(canonicalStages)),
+      AsyncStorage.setItem(INSPECTIONS_KEY, JSON.stringify(nextInspections)),
+      AsyncStorage.setItem(DEFECTS_KEY, JSON.stringify(nextDefects)),
+      AsyncStorage.setItem(DABS_KEY, JSON.stringify(nextDabs)),
+    ]).catch((error) => console.warn('Unable to persist canonical programme projection', error));
+  }, [isLoaded, isSitePlannerLoaded, sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const createPlot = async (input: CreatePlotInput) => {
     const plotId = `plot-${Date.now()}`;

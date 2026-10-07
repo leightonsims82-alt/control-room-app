@@ -1,13 +1,15 @@
-import { ActivityDelay, WEEK_NUMBERS } from './siteProgrammeEngine';
-import { formatCalendarWeek, formatProgrammeDate } from './programmeDates';
+import { ActivityDelay } from './siteProgrammeEngine';
+import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek } from './programmeDates';
 import {
   getActivitiesForTemplateDay,
+  getMasterProgrammeWeeks,
   getMilestoneForPlotWeek,
   getPlotCompletionProgrammeWeek,
   getStage1StartWeekForPlot,
   getHouseTypeTemplates,
   getTemplateForPlot,
   normaliseProgrammeWeek,
+  ActivityMove,
   PlotTemplate,
   TemplateSitePlot,
 } from './templateProgramme';
@@ -82,14 +84,14 @@ function openPrintablePdf(title: string, htmlBody: string) {
   return true;
 }
 
-function cellActivities(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], trade?: string) {
-  return getActivitiesForTemplateDay(plot, week, day, delays, templates)
+function cellActivities(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], moves: ActivityMove[], templates: PlotTemplate[], programmeStartDate: string, trade?: string) {
+  return getActivitiesForTemplateDay(plot, week, day, delays, templates, { programmeStartDate }, moves)
     .filter((activity) => !trade || activity.trade === trade)
     .map((activity) => activity.displayText || activity.code)
     .join('<br/>');
 }
 
-export function exportMainTwoWeekPdf(input: { siteName: string; programmeStartDate: string; calendarWeekOne?: number; startWeek: number; plots: TemplateSitePlot[]; delays: ActivityDelay[]; templates: PlotTemplate[] }) {
+export function exportMainTwoWeekPdf(input: { siteName: string; programmeStartDate: string; calendarWeekOne?: number; startWeek: number; plots: TemplateSitePlot[]; delays: ActivityDelay[]; moves?: ActivityMove[]; templates: PlotTemplate[] }) {
   const windowDays = buildTwoWeekWindow(input.startWeek, input.programmeStartDate);
   const weekOne = windowDays[0].week;
   const weekTwo = windowDays[7].week;
@@ -102,7 +104,7 @@ export function exportMainTwoWeekPdf(input: { siteName: string; programmeStartDa
     const template = getTemplateForPlot(plot, input.templates);
     const houseType = getHouseTypeTemplates(input.templates).find((item) => item.id === (plot.houseTypeId ?? plot.templateId));
     const cells = windowDays.map((item) => {
-      const text = item.weekend ? '' : cellActivities(plot, item.week, item.day, input.delays, input.templates);
+      const text = item.weekend ? '' : cellActivities(plot, item.week, item.day, input.delays, input.moves ?? [], input.templates, input.programmeStartDate);
       const cls = item.weekend ? 'weekend' : text ? 'planned' : '';
       return `<td class="${cls}">${text}</td>`;
     }).join('');
@@ -115,7 +117,7 @@ export function exportMainTwoWeekPdf(input: { siteName: string; programmeStartDa
   );
 }
 
-export function exportTradeProgrammesPdf(input: { siteName: string; programmeStartDate: string; calendarWeekOne?: number; startWeek: number; plots: TemplateSitePlot[]; delays: ActivityDelay[]; templates: PlotTemplate[]; trades: string[] }) {
+export function exportTradeProgrammesPdf(input: { siteName: string; programmeStartDate: string; calendarWeekOne?: number; startWeek: number; plots: TemplateSitePlot[]; delays: ActivityDelay[]; moves?: ActivityMove[]; templates: PlotTemplate[]; trades: string[] }) {
   const windowDays = buildTwoWeekWindow(input.startWeek, input.programmeStartDate);
   const weekOne = windowDays[0].week;
   const weekTwo = windowDays[7].week;
@@ -127,7 +129,7 @@ export function exportTradeProgrammesPdf(input: { siteName: string; programmeSta
 
   const sections = input.trades.map((trade, index) => {
     const rows = input.plots.map((plot) => {
-      const cellTexts = windowDays.map((item) => (item.weekend ? '' : cellActivities(plot, item.week, item.day, input.delays, input.templates, trade)));
+      const cellTexts = windowDays.map((item) => (item.weekend ? '' : cellActivities(plot, item.week, item.day, input.delays, input.moves ?? [], input.templates, input.programmeStartDate, trade)));
       if (!cellTexts.some(Boolean)) return '';
       const firstFix = cellTexts.find(Boolean) ?? '-';
       const cells = cellTexts.map((text, cellIndex) => {
@@ -144,13 +146,22 @@ export function exportTradeProgrammesPdf(input: { siteName: string; programmeSta
   return openPrintablePdf(`${input.siteName} Trade Programmes ${calendarWeekOne}`, sections || `<h1>${escapeHtml(input.siteName)} - Trade Programmes</h1><p>No trade activity found for this 2-week window.</p>`);
 }
 
-export function exportMasterProgrammePdf(input: { siteName: string; programmeStartDate: string; calendarWeekOne?: number; plots: TemplateSitePlot[]; templates: PlotTemplate[] }) {
-  const header = `<tr><th style="width:55px">Plot</th><th style="width:80px">House</th><th style="width:85px">Plot Completion</th><th style="width:45px">Start</th>${WEEK_NUMBERS.map((week) => `<th>${formatCalendarWeek(input.programmeStartDate, week, input.calendarWeekOne)}<br/><span class="small">${formatProgrammeDate(input.programmeStartDate, week)}</span></th>`).join('')}</tr>`;
+export function exportMasterProgrammePdf(input: { siteName: string; programmeStartDate: string; calendarWeekOne?: number; plots: TemplateSitePlot[]; delays?: ActivityDelay[]; moves?: ActivityMove[]; templates: PlotTemplate[] }) {
+  const dateSetup = { programmeStartDate: input.programmeStartDate };
+  const currentProgrammeWeek = getCurrentProgrammeWeek(input.programmeStartDate);
+  const masterWeeks = getMasterProgrammeWeeks(
+    input.plots,
+    currentProgrammeWeek,
+    input.delays ?? [],
+    input.moves ?? [],
+    input.templates,
+    dateSetup,
+  );
+  const header = `<tr><th style="width:55px">Plot</th><th style="width:80px">House</th><th style="width:85px">Plot Completion</th><th style="width:45px">Start</th>${masterWeeks.map((week) => `<th>${formatCalendarWeek(input.programmeStartDate, week, input.calendarWeekOne)}<br/><span class="small">${formatProgrammeDate(input.programmeStartDate, week)}</span></th>`).join('')}</tr>`;
   const rows = input.plots.map((plot) => {
     const template = getTemplateForPlot(plot, input.templates);
     const houseType = getHouseTypeTemplates(input.templates).find((item) => item.id === (plot.houseTypeId ?? plot.templateId));
-    const dateSetup = { programmeStartDate: input.programmeStartDate };
-    const weeks = WEEK_NUMBERS.map((week) => `<td>${escapeHtml(getMilestoneForPlotWeek(plot, week, input.templates, dateSetup))}</td>`).join('');
+    const weeks = masterWeeks.map((week) => `<td>${escapeHtml(getMilestoneForPlotWeek(plot, week, input.templates, dateSetup))}</td>`).join('');
     const completionDate = plot.plotCompletionDate || formatProgrammeDate(input.programmeStartDate, getPlotCompletionProgrammeWeek(plot, dateSetup));
     return `<tr><td>${escapeHtml(plot.plotNo)}</td><td>${escapeHtml(houseType?.name ?? template.name)}</td><td>${escapeHtml(completionDate)}</td><td>${escapeHtml(formatCalendarWeek(input.programmeStartDate, getStage1StartWeekForPlot(plot, input.templates, dateSetup), input.calendarWeekOne))}</td>${weeks}</tr>`;
   }).join('');

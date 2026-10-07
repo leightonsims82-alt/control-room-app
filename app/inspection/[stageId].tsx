@@ -1,5 +1,5 @@
 import { Link, router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { PhotoCaptureField } from '../../components/PhotoCaptureField';
@@ -92,6 +92,12 @@ export default function StageInspectionScreen() {
   );
 }
 
+function DraftInspectionInput({ value, onCommit, ...props }: { value: string; onCommit: (value: string) => void | Promise<void>; [key: string]: any }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return <TextInput {...props} value={draft} onChangeText={setDraft} onBlur={() => onCommit(draft)} />;
+}
+
 function ChecklistRow({
   item,
   inspectionId,
@@ -122,11 +128,11 @@ function ChecklistRow({
             <Text key={label} style={styles.toleranceValue}>{label}: {String(value)}</Text>
           )) : null}
           {item.tolerance.measurementRequired ? (
-            <TextInput
+            <DraftInspectionInput
               style={styles.input}
               placeholder={`Measured value (${item.tolerance.unit})`}
-              defaultValue={item.measuredValue}
-              onBlur={(event: any) => update(inspectionId, item.id, { measuredValue: event.nativeEvent.text })}
+              value={item.measuredValue ?? ''}
+              onCommit={(value) => update(inspectionId, item.id, { measuredValue: value })}
             />
           ) : null}
         </View>
@@ -140,11 +146,11 @@ function ChecklistRow({
         ))}
       </View>
 
-      <TextInput
+      <DraftInspectionInput
         style={styles.input}
         placeholder="Observation / defect description"
-        defaultValue={item.description}
-        onBlur={(event: any) => update(inspectionId, item.id, { description: event.nativeEvent.text })}
+        value={item.description ?? ''}
+        onCommit={(value) => update(inspectionId, item.id, { description: value })}
       />
 
       <PhotoCaptureField

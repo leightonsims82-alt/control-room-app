@@ -47,11 +47,9 @@ jobs:
         run: node scripts/full-app-diagnostic.mjs
 
       - name: TypeScript diagnostic
-        continue-on-error: true
         run: npx tsc --noEmit
 
       - name: ESLint diagnostic
-        continue-on-error: true
         run: npm run lint
 
       - name: Run browser interaction diagnostics
@@ -64,7 +62,184 @@ jobs:
           EXPO_PID=$!
           trap 'kill $EXPO_PID 2>/dev/null || true' EXIT
           npx wait-on http://127.0.0.1:8084 --timeout 120000
-          npx playwright test tests/app-diagnostic.spec.mjs --workers=1 --reporter=line
+          cat > tests/live-programme-ci.spec.mjs <<'LIVEQA'
+          import { test, expect } from '@playwright/test';
+          const BASE = process.env.DIAGNOSTIC_BASE_URL || 'http://127.0.0.1:8084';
+
+          function gb(date) {
+            return String(date.getDate()).padStart(2,'0') + '/' + String(date.getMonth()+1).padStart(2,'0') + '/' + date.getFullYear();
+          }
+          function mondayFor(date) {
+            const copy = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            const day = copy.getDay() || 7;
+            copy.setDate(copy.getDate() - (day - 1));
+            return copy;
+          }
+          function addWorkingDays(date, count) {
+            const copy = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            let left = count;
+            while (left > 0) {
+              copy.setDate(copy.getDate() + 1);
+              const day = copy.getDay();
+              if (day >= 1 && day <= 5) left -= 1;
+            }
+            return copy;
+          }
+          async function open(page, route) {
+            await page.goto(BASE + route, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await page.waitForTimeout(700);
+            await expect(page.locator('body')).not.toContainText('Uncaught Error');
+          }
+          async function seedLivePlot(page) {
+            await page.addInitScript(() => {
+              if (localStorage.getItem('liveqa:seeded') === '1') return;
+              const now = new Date();
+              const day = now.getDay() || 7;
+              const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (day - 1));
+              const fmt = (d) => String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+              const addWork = (d, count) => {
+                const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                let left = count;
+                while (left > 0) {
+                  x.setDate(x.getDate() + 1);
+                  const n = x.getDay();
+                  if (n >= 1 && n <= 5) left -= 1;
+                }
+                return x;
+              };
+              const completion = addWork(now, 10);
+              localStorage.setItem('liveqa:completion', fmt(completion));
+              localStorage.setItem('programme-buddy:programme-setup:v1', JSON.stringify({
+                siteName: 'Live Site QA', defaultProgrammeWeeks: 3, stageCount: 9,
+                workingWeek: '5 days - Monday to Friday', includeSaturday: false, includeSunday: false,
+                programmeStartDate: fmt(monday)
+              }));
+              localStorage.setItem('programme-buddy:house-types-reset:v2', 'done');
+              localStorage.setItem('programme-buddy:plot-templates:v1', JSON.stringify([{
+                id: 'liveRoofHouse', name: 'Warrley Live QA', bedrooms: 3, floors: 2,
+                isHouseType: true, isSystemTemplate: false, description: 'Live position QA',
+                programmeWeeks: 3, stageCount: 9,
+                activities: [
+                  { order: 1, code: 'Roof framing', trade: 'Carpenter', displayText: 'ROOF', durationDays: 2, relativeWeek: 1, relativeDay: 1, stage: 5 },
+                  { order: 2, code: 'Windows', trade: 'Window Fitter', displayText: 'WINDOWS', durationDays: 1, relativeWeek: 1, relativeDay: 1, stage: 6 },
+                  { order: 3, code: '1st fix carpentry', trade: 'Carpenter', displayText: '1ST FIX', durationDays: 2, relativeWeek: 1, relativeDay: 1, stage: 6 }
+                ]
+              }]));
+              const completionWeek = Math.floor((completion.getTime() - monday.getTime()) / (7*86400000)) + 1;
+              localStorage.setItem('programme-buddy:plots:v1', JSON.stringify([{
+                id: 'plot-live-153', plotNo: '153', buildOrder: 1, stage9CompleteWeek: completionWeek,
+                plotCompletionDate: fmt(completion), templateId: 'liveRoofHouse', houseTypeId: 'liveRoofHouse',
+                constructionMethod: 'traditional'
+              }]));
+              localStorage.setItem('programme-buddy:activity-moves:v1', '[]');
+              localStorage.setItem('liveqa:seeded', '1');
+            });
+          }
+
+          test('actual progress anchors Plot 153 roof framing to today and moves all downstream work', async ({ page }) => {
+            await seedLivePlot(page);
+            await open(page, '/two-week');
+            await page.getByLabel('Select Plot 153 for actual progress').click();
+            await page.getByLabel('Select Roof framing as actual fix').click();
+            await page.getByLabel('Set selected actual fix to today').click();
+            await expect(page.getByText(/anchored to today; all following work moved with it/i)).toBeVisible();
+
+            const move = await page.evaluate(() => JSON.parse(localStorage.getItem('programme-buddy:activity-moves:v1') || '[]').find(x => x.plotId === 'plot-live-153' && x.activityCode === 'Roof framing'));
+            expect(move).toBeTruthy();
+            expect(move.deltaDays).not.toBe(0);
+
+            const roof = page.getByText('ROOF', { exact: true }).first();
+            const windows = page.getByText('WINDOWS', { exact: true }).first();
+            await expect(roof).toBeVisible();
+            await expect(windows).toBeVisible();
+            const roofBox = await roof.boundingBox();
+            const windowsBox = await windows.boundingBox();
+            expect(windowsBox.x).toBeGreaterThan(roofBox.x);
+
+            await expect(page.getByLabel('Move ROOF 1 day earlier for Plot 153')).toBeVisible();
+            await expect(page.getByLabel('Move ROOF 1 day later for Plot 153')).toBeVisible();
+            const before = move.deltaDays;
+            await page.getByLabel('Move ROOF 5 days later for Plot 153').click();
+            const after = await page.evaluate(() => {
+              const item = JSON.parse(localStorage.getItem('programme-buddy:activity-moves:v1') || '[]').find(x => x.plotId === 'plot-live-153' && x.activityCode === 'Roof framing');
+              return item?.deltaDays ?? 0;
+            });
+            expect(after).toBe(before + 5);
+
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await page.waitForTimeout(700);
+            const afterReload = await page.evaluate(() => {
+              const item = JSON.parse(localStorage.getItem('programme-buddy:activity-moves:v1') || '[]').find(x => x.plotId === 'plot-live-153' && x.activityCode === 'Roof framing');
+              return item?.deltaDays ?? 0;
+            });
+            expect(afterReload).toBe(after);
+
+            await open(page, '/master');
+            const expectedCompletion = await page.evaluate(() => localStorage.getItem('liveqa:completion'));
+            await expect(page.getByText(expectedCompletion, { exact: true })).toBeVisible();
+
+            await open(page, '/plots');
+            await expect(page.getByText('153', { exact: true }).first()).toBeVisible();
+
+            await open(page, '/supervisor?trade=carpenter');
+            await expect(page.getByText('153', { exact: true }).first()).toBeVisible();
+            await expect(page.getByText(/ROOF|1ST FIX/).first()).toBeVisible();
+
+            await open(page, '/supervisor-locked?trade=carpenter');
+            await expect(page.getByText('153', { exact: true }).first()).toBeVisible();
+          });
+
+          test('reset live movements removes only that plot movement state', async ({ page }) => {
+            await seedLivePlot(page);
+            await open(page, '/two-week');
+            await page.getByLabel('Select Roof framing as actual fix').click();
+            await page.getByLabel('Set selected actual fix to today').click();
+            await page.getByText('Reset Plot 153', { exact: true }).click();
+            const remaining = await page.evaluate(() => JSON.parse(localStorage.getItem('programme-buddy:activity-moves:v1') || '[]').filter(x => x.plotId === 'plot-live-153'));
+            expect(remaining).toHaveLength(0);
+          });
+
+          test('master extends through the final plot completion instead of stopping at a fixed window', async ({ page }) => {
+            await page.addInitScript(() => {
+              localStorage.setItem('programme-buddy:programme-setup:v1', JSON.stringify({
+                siteName: 'Long Master QA', defaultProgrammeWeeks: 25, stageCount: 9,
+                workingWeek: '5 days - Monday to Friday', includeSaturday: false, includeSunday: false,
+                programmeStartDate: '05/01/2026'
+              }));
+              localStorage.setItem('programme-buddy:plots:v1', JSON.stringify([{
+                id: 'plot-long-999', plotNo: '999', buildOrder: 1, stage9CompleteWeek: 60,
+                plotCompletionDate: '19/02/2027', templateId: 'threeBed', houseTypeId: 'threeBed',
+                constructionMethod: 'traditional'
+              }]));
+              localStorage.setItem('programme-buddy:activity-moves:v1', '[]');
+            });
+            await open(page, '/master');
+            await expect(page.getByText('19/02/2027', { exact: true })).toBeVisible();
+            await expect(page.getByText('15/02/2027', { exact: true }).first()).toBeVisible();
+          });
+
+          test('programme weeks and dates stay linear across year boundary', async ({ page }) => {
+            await page.addInitScript(() => {
+              localStorage.setItem('programme-buddy:programme-setup:v1', JSON.stringify({
+                siteName: 'Year Boundary QA', defaultProgrammeWeeks: 25, stageCount: 9,
+                workingWeek: '5 days - Monday to Friday', includeSaturday: false, includeSunday: false,
+                programmeStartDate: '28/12/2026'
+              }));
+              localStorage.setItem('programme-buddy:plots:v1', '[]');
+            });
+            await open(page, '/two-week');
+            await expect(page.getByText(/28\/12\/2026 - 10\/01\/2027/).first()).toBeVisible();
+            await page.getByText('Next week', { exact: true }).click();
+            await expect(page.getByText(/04\/01\/2027 - 17\/01\/2027/).first()).toBeVisible();
+          });
+          LIVEQA
+          npx playwright test tests/app-diagnostic.spec.mjs tests/live-programme-ci.spec.mjs --workers=1 --reporter=line
+
+      - name: Dependency advisory inventory
+        if: always()
+        run: |
+          mkdir -p diagnostics
+          npm audit --json > diagnostics/npm-audit.json || true
 
       - name: Production web export
         run: npx expo export --platform web
