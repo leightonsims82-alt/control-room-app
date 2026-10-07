@@ -467,9 +467,10 @@ export function getTemplateForPlot(plot: TemplateSitePlot, templates: PlotTempla
       ?? templates[0];
   }
   const houseTypeId = plot.houseTypeId ?? plot.templateId;
-  return templates.find((template) => template.id === houseTypeId)
-    ?? templates.find((template) => template.id === 'threeBed')
+  const template = templates.find((item) => item.id === houseTypeId)
+    ?? templates.find((item) => item.id === 'threeBed')
     ?? templates[0];
+  return template ? applyStandardHouseTypeStages(template) : template;
 }
 
 export function getTemplateById(templateId: string | undefined, templates: PlotTemplate[]) {
