@@ -139,6 +139,25 @@ export function formatProgrammeDate(programmeStartDate: string | undefined, week
   return formatBritishDate(getProgrammeDate(programmeStartDate, week, day));
 }
 
+export function getProgrammeWeekEndingDay(includeSaturday = false, includeSunday = false) {
+  if (includeSunday) return 7;
+  if (includeSaturday) return 6;
+  return 5;
+}
+
+export function formatProgrammeWeekEndingDate(
+  programmeStartDate: string | undefined,
+  week: number,
+  includeSaturday = false,
+  includeSunday = false,
+) {
+  return formatProgrammeDate(
+    programmeStartDate,
+    week,
+    getProgrammeWeekEndingDay(includeSaturday, includeSunday),
+  );
+}
+
 export function getProgrammeWeekForDate(programmeStartDate: string | undefined, completionDate: string) {
   const start = parseProgrammeDate(programmeStartDate);
   const completion = parseProgrammeDate(completionDate);
