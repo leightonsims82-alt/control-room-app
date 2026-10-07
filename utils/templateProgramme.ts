@@ -1,5 +1,18 @@
 import { getProgrammeDateForWorkingDayIndex, getProgrammeWeekForDate, getProgrammeWorkingDayIndexForDate } from './programmeDates';
 import { ActivityDelay, BUILD_SEQUENCE, getStageNumberForRelativeWeek, ProgrammeActivity, ProgrammeStageNumber, PROGRAMME_STAGE_SEQUENCE, SitePlot, TRADE_ORDER } from './siteProgrammeEngine';
+import { canonicaliseActivity } from '../core/programme/activityTruth';
+import {
+  buildV2TemplateRanges,
+  canV2AdjustFinalStage,
+  getV2ActivityRange,
+  getV2EffectiveProgrammeWeeks,
+  getV2FinalStageAdjustments,
+  getV2LiveFinishDate,
+  getV2LiveFinishWeek,
+  getV2MasterWeeks,
+  getV2StageDisplayForWeek,
+  getV2TemplateWorkingDays,
+} from '../core/programme/scheduleEngine';
 
 export type TemplateSitePlot = SitePlot & {
   templateId?: string;
@@ -423,11 +436,8 @@ function canonicalStageForActivity(activity: TemplateActivity): ProgrammeStageNu
  */
 export function applyStandardHouseTypeStages(template: PlotTemplate): PlotTemplate {
   if (template.id === 'timberFrame' || template.constructionMethod === 'timberFrame') return template;
-  const activities = template.activities.map((activity) => ({
-    ...activity,
-    stage: canonicalStageForActivity(activity),
-  }));
-  return { ...template, stageCount: 9, standardVersion: Math.max(4, template.standardVersion ?? 0), activities };
+  const activities = template.activities.map((activity) => canonicaliseActivity(activity));
+  return { ...template, stageCount: 9, standardVersion: Math.max(5, template.standardVersion ?? 0), activities };
 }
 
 function ordinal(value: number) {
@@ -558,38 +568,15 @@ export function orderedActivities(template: PlotTemplate) {
 }
 
 export function getTemplateActivityRanges(template: PlotTemplate) {
-  const ranges: { activity: TemplateActivity; start: number; finish: number }[] = [];
-  const byCode = new Map<string, { activity: TemplateActivity; start: number; finish: number }>();
-  let nextSequentialDay = 1;
-  orderedActivities(template).forEach((activity) => {
-    let start = nextSequentialDay;
-    if (activity.overlapAllowed && activity.overlapLinkCode) {
-      const linkedRange = byCode.get(activity.overlapLinkCode);
-      if (linkedRange) {
-        const lag = Math.max(0, activity.overlapLagDays ?? 0);
-        const anchor = activity.overlapStartFrom === 'finish' ? linkedRange.finish + 1 : linkedRange.start;
-        start = Math.max(1, anchor + lag);
-      }
-    }
-    const finish = start + Math.max(1, activity.durationDays) - 1;
-    const range = { activity, start, finish };
-    ranges.push(range);
-    byCode.set(activity.code, range);
-    nextSequentialDay = Math.max(nextSequentialDay, finish + 1);
-  });
-  return ranges;
+  return buildV2TemplateRanges(template.activities) as { activity: TemplateActivity; start: number; finish: number }[];
 }
 
 export function getEffectiveProgrammeWeeks(template: PlotTemplate, setup?: Partial<SiteProgrammeSetup>) {
-  const workingDays = workingDaysPerWeek(setup);
-  const ranges = getTemplateActivityRanges(template);
-  const lastFinish = ranges.length ? Math.max(...ranges.map((range) => range.finish)) : template.programmeWeeks * workingDays;
-  return Math.max(template.programmeWeeks, Math.ceil(lastFinish / workingDays));
+  return getV2EffectiveProgrammeWeeks(template, setup);
 }
 
 export function getTemplateProgrammeWorkingDays(template: PlotTemplate) {
-  const ranges = getTemplateActivityRanges(template);
-  return ranges.length ? Math.max(...ranges.map((range) => range.finish)) : Math.max(1, template.programmeWeeks * DEFAULT_WORKING_DAYS_IN_WEEK);
+  return getV2TemplateWorkingDays(template);
 }
 
 function getPlotActivityBaseOffset(plot: TemplateSitePlot, template: PlotTemplate, setup?: Partial<SiteProgrammeSetup>) {
@@ -597,12 +584,10 @@ function getPlotActivityBaseOffset(plot: TemplateSitePlot, template: PlotTemplat
     ? getProgrammeWorkingDayIndexForDate(setup.programmeStartDate, plot.plotCompletionDate, Boolean(setup.includeSaturday), Boolean(setup.includeSunday))
     : null;
   if (exactCompletionIndex) return exactCompletionIndex - getTemplateProgrammeWorkingDays(template);
-
   const exactStartIndex = plot.plotStartDate && setup?.programmeStartDate
     ? getProgrammeWorkingDayIndexForDate(setup.programmeStartDate, plot.plotStartDate, Boolean(setup.includeSaturday), Boolean(setup.includeSunday))
     : null;
   if (exactStartIndex) return exactStartIndex - 1;
-
   const linearStage1Week = getLinearStage1StartWeekForPlot(plot, [template], setup);
   return firstProgrammeDayIndexForWeek(linearStage1Week, setup) - 1;
 }
@@ -622,20 +607,18 @@ export function getPlotLiveFinishProgrammeWeek(
   setup?: Partial<SiteProgrammeSetup>,
 ) {
   const template = getTemplateForPlot(plot, templates);
-  const activities = orderedActivities(template);
-  if (!activities.length) return getPlotCompletionProgrammeWeek(plot, setup);
-  const latestWorkingDay = Math.max(
-    ...activities.map((activity) => getActivityProgrammeRange(plot, template, activity, delays, moves, setup).finish),
-  );
-  return Math.max(1, Math.ceil(latestWorkingDay / workingDaysPerWeek(setup)));
+  return getV2LiveFinishWeek(plot, template, delays, moves, setup);
 }
 
-export function getPlotLiveFinishDate(plot: TemplateSitePlot, delays: ActivityDelay[], moves: ActivityMove[], templates: PlotTemplate[], setup: Partial<SiteProgrammeSetup>) {
+export function getPlotLiveFinishDate(
+  plot: TemplateSitePlot,
+  delays: ActivityDelay[],
+  moves: ActivityMove[],
+  templates: PlotTemplate[],
+  setup: Partial<SiteProgrammeSetup>,
+) {
   const template = getTemplateForPlot(plot, templates);
-  const activities = orderedActivities(template);
-  if (!activities.length) return plot.plotCompletionDate ?? '';
-  const finish = Math.max(...activities.map((activity) => getActivityProgrammeRange(plot, template, activity, delays, moves, setup).finish));
-  return getProgrammeDateForWorkingDayIndex(setup.programmeStartDate, finish, setup.includeSaturday, setup.includeSunday);
+  return getV2LiveFinishDate(plot, template, delays, moves, setup);
 }
 
 export function getMasterProgrammeWeeks(
@@ -646,36 +629,25 @@ export function getMasterProgrammeWeeks(
   templates: PlotTemplate[],
   setup?: Partial<SiteProgrammeSetup>,
 ) {
-  const safeStart = Math.max(1, Math.round(startWeek || 1));
-  const lastWeek = plots.length
-    ? Math.max(
-        safeStart,
-        ...plots.map((plot) => plot.finalStageAdjustmentWeeks ? getPlotLiveFinishProgrammeWeek(plot, delays, moves, templates, setup) : Math.max(
-          getPlotCompletionProgrammeWeek(plot, setup),
-          getPlotLiveFinishProgrammeWeek(plot, delays, moves, templates, setup),
-        )),
-      )
-    : safeStart;
-  return Array.from({ length: lastWeek - safeStart + 1 }, (_, index) => safeStart + index);
+  return getV2MasterWeeks(
+    plots.map((plot) => ({ plot, template: getTemplateForPlot(plot, templates) })),
+    startWeek,
+    delays,
+    moves,
+    setup,
+  );
 }
 
-/** Weekly stages from the same moved/delayed activity ranges used by the live programme. */
 export function getLiveStageNumbersForPlotWeek(
-  plot: TemplateSitePlot, week: number, delays: ActivityDelay[], moves: ActivityMove[],
-  templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>,
+  plot: TemplateSitePlot,
+  week: number,
+  delays: ActivityDelay[],
+  moves: ActivityMove[],
+  templates: PlotTemplate[],
+  setup?: Partial<SiteProgrammeSetup>,
 ) {
   const template = getTemplateForPlot(plot, templates);
-  const days = workingDaysPerWeek(setup);
-  const firstDay = (week - 1) * days + 1;
-  const lastDay = week * days;
-  const stages = orderedActivities(template).filter((activity) => {
-    const range = getActivityProgrammeRange(plot, template, activity, delays, moves, setup);
-    return range.start <= lastDay && range.finish >= firstDay;
-  }).map((activity) => activity.stage);
-  const lowestStage = [...new Set(stages)].sort((a, b) => a - b)[0];
-  if (!lowestStage) return '';
-  if (!plot.holdStage || lowestStage < plot.holdStage) return String(lowestStage);
-  return lowestStage === plot.holdStage ? `${lowestStage}H` : `H${plot.holdStage}`;
+  return getV2StageDisplayForWeek(plot, template, week, delays, moves, setup);
 }
 
 export function getLinearStage1StartWeekForPlot(plot: TemplateSitePlot, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
@@ -732,51 +704,35 @@ function movementOffsetUpTo(plotId: string, activityOrder: number, moves: Activi
   }, 0);
 }
 
-export function getFinalStageAdjustmentDelays(plot: TemplateSitePlot, template: PlotTemplate, delays: ActivityDelay[], setup?: Partial<SiteProgrammeSetup>) {
-  if (!plot.finalStageAdjustmentWeeks) return [];
-  const activities = orderedActivities(template);
-  const last = activities.at(-1);
-  if (!last) return [];
-  const days = Math.round(plot.finalStageAdjustmentWeeks ?? 0) * workingDaysPerWeek(setup);
-  if (days >= 0) return days ? [{ plotId: plot.id, activityCode: last.code, delayDays: days }] : [];
-  let remaining = -days;
-  const adjustments: ActivityDelay[] = [];
-  for (const activity of activities.slice().reverse()) {
-    if (activity.stage !== last.stage) continue;
-    const existing = delays.filter((delay) => delay.plotId === plot.id && delay.activityCode === activity.code).reduce((sum, delay) => sum + delay.delayDays, 0);
-    const reduction = Math.min(remaining, Math.max(0, activity.durationDays + existing - 1));
-    if (reduction) adjustments.push({ plotId: plot.id, activityCode: activity.code, delayDays: -reduction });
-    remaining -= reduction;
-  }
-  return adjustments;
+export function getFinalStageAdjustmentDelays(
+  plot: TemplateSitePlot,
+  template: PlotTemplate,
+  delays: ActivityDelay[],
+  setup?: Partial<SiteProgrammeSetup>,
+) {
+  return getV2FinalStageAdjustments(plot, template, delays, setup) as ActivityDelay[];
 }
 
-export function canAdjustFinalStageWeek(plot: TemplateSitePlot, delta: -1 | 1, templates: PlotTemplate[], delays: ActivityDelay[], setup?: Partial<SiteProgrammeSetup>) {
-  const template = getTemplateForPlot(plot, templates);
-  const activities = orderedActivities(template);
-  if (!activities.length || plot.holdStage) return false;
-  const nextWeeks = (plot.finalStageAdjustmentWeeks ?? 0) + delta;
-  if (nextWeeks >= 0) return true;
-  // Compressing overlapping tasks requires an explicit replan, not an automatic week removal.
-  const lastStage = activities.at(-1)!.stage;
-  if (activities.some((activity) => activity.stage === lastStage && activity.overlapAllowed)) return false;
-  const applied = getFinalStageAdjustmentDelays({ ...plot, finalStageAdjustmentWeeks: nextWeeks }, template, delays, setup).reduce((sum, delay) => sum + delay.delayDays, 0);
-  return applied === nextWeeks * workingDaysPerWeek(setup);
+export function canAdjustFinalStageWeek(
+  plot: TemplateSitePlot,
+  delta: -1 | 1,
+  templates: PlotTemplate[],
+  delays: ActivityDelay[],
+  setup?: Partial<SiteProgrammeSetup>,
+) {
+  return canV2AdjustFinalStage(plot, delta, getTemplateForPlot(plot, templates), delays, setup);
 }
 
-export function getActivityProgrammeRange(plot: TemplateSitePlot, template: PlotTemplate, activity: TemplateActivity, delays: ActivityDelay[], moves: ActivityMove[] = [], setup?: Partial<SiteProgrammeSetup>) {
-  const scheduled = getTemplateActivityRanges(template).find((item) => item.activity.code === activity.code);
-  const relativeStart = scheduled?.start ?? 1;
-  const relativeFinish = scheduled?.finish ?? relativeStart;
-  const baseOffset = getPlotActivityBaseOffset(plot, template, setup);
-  const moveOffset = movementOffsetUpTo(plot.id, activity.order, moves, template.activities);
-  const liveDelays = [...delays, ...getFinalStageAdjustmentDelays(plot, template, delays, setup)];
-  return {
-    start: baseOffset + relativeStart + delayBefore(plot.id, activity.order, liveDelays, template.activities) + moveOffset,
-    finish: baseOffset + relativeFinish + delayUpTo(plot.id, activity.order, liveDelays, template.activities) + moveOffset,
-  };
+export function getActivityProgrammeRange(
+  plot: TemplateSitePlot,
+  template: PlotTemplate,
+  activity: TemplateActivity,
+  delays: ActivityDelay[],
+  moves: ActivityMove[] = [],
+  setup?: Partial<SiteProgrammeSetup>,
+) {
+  return getV2ActivityRange(plot, template, activity, delays, moves, setup);
 }
-
 
 export function getActivitiesForTemplateDay(plot: TemplateSitePlot, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>, moves: ActivityMove[] = []) {
   if (!isProgrammeWorkingDay(day, setup)) return [];
@@ -794,8 +750,8 @@ export function getPlotBreakdownTemplateText(plot: TemplateSitePlot, week: numbe
 }
 
 export function getTradeTemplateText(plot: TemplateSitePlot, trade: string, week: number, day: number, delays: ActivityDelay[], templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>, moves: ActivityMove[] = []) {
-  return getActivitiesForTemplateDay(plot, trade === 'All' ? 0 : week, day, delays, templates, setup, moves)
-    .filter((activity) => activity.trade === trade)
+  return getActivitiesForTemplateDay(plot, week, day, delays, templates, setup, moves)
+    .filter((activity) => trade === 'All' || activity.trade === trade)
     .map((activity) => activity.displayText)
     .join('\n');
 }
