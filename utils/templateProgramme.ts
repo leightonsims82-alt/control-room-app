@@ -317,7 +317,11 @@ export function getSortedSitePlots(plots: TemplateSitePlot[]) { return plots.sli
 export function getHouseTypeLabel(template: PlotTemplate) { return template.name.trim() || template.houseTypeCode?.trim() || 'House type'; }
 
 const LEGACY_THREE_STOREY_AUTO_CODES = new Set([
+  '2nd floor joist',
+  '2nd floor joists',
   '2nd floor joists and flooring',
+  '4th lift brickwork',
+  '4th lift scaffold',
   '5th lift brickwork',
   '5th lift scaffold',
 ]);
@@ -342,94 +346,6 @@ function reindexActivities(activities: TemplateActivity[]) {
  * 8 Patch/decorating/wall tile
  * 9 Finals/close-out
  */
-const HOUSE_TYPE_STAGE_TRUTH: Record<string, ProgrammeStageNumber> = {
-  'foundations': 1,
-  'substructure': 1,
-  'drainage': 1,
-  'qa drainage': 1,
-  'nhbc drainage': 1,
-
-  'band course': 2,
-  'slab pour': 2,
-  'qa slab': 2,
-
-  '1st lift brickwork': 3,
-  'base lift scaffold': 3,
-  '2nd lift brickwork': 3,
-  '2nd lift scaffold': 3,
-  'joist & flooring': 3,
-  'joist and flooring': 3,
-  '3rd lift brickwork': 3,
-  '3rd & bird scaffold': 3,
-  '3rd and bird scaffold': 3,
-  '4th lift brickwork': 3,
-  '4th lift scaffold': 3,
-  '2nd floor joist': 3,
-  '2nd floor joists': 3,
-  '2nd floor joists and flooring': 3,
-  '5th lift brickwork': 3,
-  '5th lift scaffold': 3,
-  'wall plate': 3,
-
-  'truss': 4,
-  'gables': 4,
-  'qa ss': 4,
-  'nhbc ss': 4,
-  'felt and batten': 4,
-  'felt & batten': 4,
-  'solar pv': 4,
-  'roof tile': 4,
-
-  'strip scaffold': 5,
-
-  '1st fix carp': 6,
-  '1st fix carpentry': 6,
-  'windows': 6,
-  '1st fix plumbing': 6,
-  '1st fix electrics': 6,
-  'cavity blown insulation': 6,
-  'qa pp': 6,
-  'nhbc pp': 6,
-  'plasterboard tacking': 6,
-  'plasterboard dabbing': 6,
-  'plasterboard taping': 6,
-  'groundwork externals': 6,
-  'drying': 6,
-  'plasterboard sand': 6,
-  'mist coat': 6,
-  'loft insulation': 6,
-
-  '2nd fix carpentry': 7,
-  '2nd fix plumbing': 7,
-  '2nd fix electrics': 7,
-  'kitchen installation': 7,
-
-  'patch': 8,
-  'pre paint clean': 8,
-  'decoration': 8,
-  'wall tile': 8,
-
-  'plumbing finals': 9,
-  'carpentry finals': 9,
-  'electrical finals inc pv': 9,
-  'electrical finals': 9,
-  'appliances': 9,
-  'snag patch': 9,
-  'dec finals': 9,
-  'build clean': 9,
-  'mastic': 9,
-};
-
-function normaliseActivityTruthKey(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-function canonicalStageForActivity(activity: TemplateActivity): ProgrammeStageNumber {
-  const code = normaliseActivityTruthKey(activity.code);
-  const display = normaliseActivityTruthKey(activity.displayText);
-  return HOUSE_TYPE_STAGE_TRUTH[code] ?? HOUSE_TYPE_STAGE_TRUTH[display] ?? activity.stage;
-}
-
 /**
  * The stage numbers shown in Site Setup are the fixed activity-to-stage truth
  * for every traditional house type. Activities/durations can vary by house
@@ -503,13 +419,10 @@ export function applyHouseTypeFloorConfiguration(template: PlotTemplate, floors:
   const wallPlateIndex = adjustedActivities.findIndex((activity) => activity.code.toLowerCase() === 'wall plate');
   const trussIndex = adjustedActivities.findIndex((activity) => activity.code.toLowerCase() === 'truss');
   const insertAt = wallPlateIndex >= 0 ? wallPlateIndex : trussIndex >= 0 ? trussIndex : adjustedActivities.length;
-  const preceding = adjustedActivities[Math.max(0, insertAt - 1)];
-  const structureStage = (preceding?.stage ?? 3) as ProgrammeActivity['stage'];
-
   const extras: TemplateActivity[] = [
-    { ...templateActivity(0, '2nd floor joists and flooring', 'Carpenter', '2F Joist & Floor', 2, structureStage), autoAddedForThreeStorey: true },
-    { ...templateActivity(0, `${liftLabel} lift brickwork`, 'Bricklayer', `${liftLabel} Lift`, 7, structureStage), autoAddedForThreeStorey: true },
-    { ...templateActivity(0, `${liftLabel} lift scaffold`, 'Scaffolder', `${liftLabel} Scaffold`, 2, structureStage), autoAddedForThreeStorey: true },
+    { ...templateActivity(0, '2nd Floor Joist', 'Carpenter', '2nd Joist', 1, 3), autoAddedForThreeStorey: true },
+    { ...templateActivity(0, `${liftLabel} lift brickwork`, 'Bricklayer', `${liftLabel} Lift`, 7, 3), autoAddedForThreeStorey: true },
+    { ...templateActivity(0, `${liftLabel} lift scaffold`, 'Scaffolder', `${liftLabel} Scaffold`, 2, 3), autoAddedForThreeStorey: true },
   ];
 
   const next = adjustedActivities.slice();
