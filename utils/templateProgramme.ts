@@ -328,65 +328,98 @@ function reindexActivities(activities: TemplateActivity[]) {
  * 8 Patch/decorating/wall tile
  * 9 Finals/close-out
  */
+const HOUSE_TYPE_STAGE_TRUTH: Record<string, ProgrammeStageNumber> = {
+  'foundations': 1,
+  'substructure': 1,
+  'drainage': 1,
+  'qa drainage': 1,
+  'nhbc drainage': 1,
+
+  'band course': 2,
+  'slab pour': 2,
+  'qa slab': 2,
+
+  '1st lift brickwork': 3,
+  'base lift scaffold': 3,
+  '2nd lift brickwork': 3,
+  '2nd lift scaffold': 3,
+  'joist & flooring': 3,
+  'joist and flooring': 3,
+  '3rd lift brickwork': 3,
+  '3rd & bird scaffold': 3,
+  '3rd and bird scaffold': 3,
+  '4th lift brickwork': 3,
+  '4th lift scaffold': 3,
+  '2nd floor joist': 3,
+  '2nd floor joists': 3,
+  '2nd floor joists and flooring': 3,
+  '5th lift brickwork': 3,
+  '5th lift scaffold': 3,
+  'wall plate': 3,
+
+  'truss': 4,
+  'gables': 4,
+  'qa ss': 4,
+  'nhbc ss': 4,
+  'felt and batten': 4,
+  'felt & batten': 4,
+  'solar pv': 4,
+  'roof tile': 4,
+
+  'strip scaffold': 5,
+
+  '1st fix carp': 6,
+  '1st fix carpentry': 6,
+  'windows': 6,
+  '1st fix plumbing': 6,
+  '1st fix electrics': 6,
+  'cavity blown insulation': 6,
+  'qa pp': 6,
+  'nhbc pp': 6,
+  'plasterboard tacking': 6,
+  'plasterboard dabbing': 6,
+  'plasterboard taping': 6,
+  'groundwork externals': 6,
+  'drying': 6,
+  'plasterboard sand': 6,
+  'mist coat': 6,
+  'loft insulation': 6,
+
+  '2nd fix carpentry': 7,
+  '2nd fix plumbing': 7,
+  '2nd fix electrics': 7,
+  'kitchen installation': 7,
+
+  'patch': 8,
+  'pre paint clean': 8,
+  'decoration': 8,
+  'wall tile': 8,
+
+  'plumbing finals': 9,
+  'carpentry finals': 9,
+  'electrical finals inc pv': 9,
+  'electrical finals': 9,
+  'appliances': 9,
+  'snag patch': 9,
+  'dec finals': 9,
+  'build clean': 9,
+  'mastic': 9,
+};
+
+function normaliseActivityTruthKey(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 function canonicalStageForActivity(activity: TemplateActivity): ProgrammeStageNumber {
-  const text = `${activity.code} ${activity.displayText} ${activity.trade}`.trim().toLowerCase();
-
-  const rules: Array<[ProgrammeStageNumber, RegExp[]]> = [
-    [1, [
-      /\bfoundations?\b/, /\bsubstructure\b/, /\bdrainage\b/, /\bqa\s+drainage\b/, /\bnhbc\s+drainage\b/,
-    ]],
-    [2, [
-      /\bband\s+course\b/, /\bslab(?:\s+pour)?\b/, /\bqa\s+slab\b/,
-    ]],
-    [3, [
-      /\b1st\s+(?:lift\s+)?brickwork\b/, /\bbase\s+lift\s+scaffold\b/,
-      /\b2nd\s+lift\s+brickwork\b/, /\b2nd\s+lift\s+scaffold\b/,
-      /\bjoist(?:s)?\b.*\bfloor(?:ing)?\b/, /\b3rd\s+lift\s+brickwork\b/,
-      /\b3rd(?:\s+&\s+bird)?\s+scaffold\b/, /\b4th\s+lift\s+brickwork\b/,
-      /\b4th\s+lift\s+scaffold\b/, /\b5th\s+lift\s+brickwork\b/,
-      /\b5th\s+lift\s+scaffold\b/, /\bwall\s+plate\b/,
-    ]],
-    [4, [
-      /\btruss\b/, /\bgables?\b/, /\bqa\s+ss\b/, /\bnhbc\s+ss\b/,
-      /\bfelt\s+(?:and|&)\s+batten\b/, /\bsolar\s+pv\b/, /\broof\s+tile\b/,
-    ]],
-    [5, [
-      /\bstrip\s+scaffold\b/,
-    ]],
-    [6, [
-      /\b1st\s+fix\s+carp(?:entry)?\b/, /\bwindows?\b/, /\b1st\s+fix\s+plumb(?:ing)?\b/,
-      /\b1st\s+fix\s+electrics?\b/, /\bcavity\s+blown\s+insulation\b/,
-      /\bqa\s+pp\b/, /\bnhbc\s+pp\b/, /\bplasterboard\s+tacking\b/,
-      /\bplasterboard\s+dabbing\b/, /\bplasterboard\s+taping\b/,
-      /\bgroundwork\s+externals\b/, /\bdrying\b/, /\bplasterboard\s+sand\b/,
-      /\bmist\s+coat\b/, /\bloft\s+insulation\b/,
-    ]],
-    [7, [
-      /\b2nd\s+fix\s+carp(?:entry)?\b/, /\b2nd\s+fix\s+plumb(?:ing)?\b/,
-      /\b2nd\s+fix\s+electrics?\b/, /\bkitchen\s+(?:installation|install|fit)\b/,
-    ]],
-    [8, [
-      /^patch\b/, /\bpre\s*paint\s+clean\b/, /^decoration\b/, /\bwall\s+tile\b/,
-    ]],
-    [9, [
-      /\bplumbing\s+finals?\b/, /\bcarpentry\s+finals?\b/, /\belectrical\s+finals?\b/,
-      /\bappliances?\b/, /\bsnag\s+patch\b/, /\bdec(?:oration)?\s+finals?\b/,
-      /\bbuild\s+clean\b/, /\bmastic\b/, /\bsealant\b/, /\bflooring\b/,
-      /\bdoors\s+over\s+carpets\b/, /\btouch\s*ups?\s+after\s+carpets\b/,
-      /\breclean\b/, /\bqa\s+pre\s+handover\b/, /\bhome\s+tour\b/, /\bpre\s*handover\b/,
-    ]],
-  ];
-
-  for (const [stage, patterns] of rules) {
-    if (patterns.some((pattern) => pattern.test(text))) return stage;
-  }
-  return activity.stage;
+  const code = normaliseActivityTruthKey(activity.code);
+  const display = normaliseActivityTruthKey(activity.displayText);
+  return HOUSE_TYPE_STAGE_TRUTH[code] ?? HOUSE_TYPE_STAGE_TRUTH[display] ?? activity.stage;
 }
 
 /**
- * Canonical activity-to-stage truth for every house type.
- * Stage is determined by the discipline/task itself, not by where it happens
- * to sit in a particular house-type programme.
+ * The stage numbers shown in Site Setup are the fixed activity-to-stage truth
+ * for every traditional house type. Activities/durations can vary by house
+ * type, but a named activity always belongs to the same stage.
  */
 export function applyStandardHouseTypeStages(template: PlotTemplate): PlotTemplate {
   if (template.id === 'timberFrame' || template.constructionMethod === 'timberFrame') return template;
@@ -394,7 +427,7 @@ export function applyStandardHouseTypeStages(template: PlotTemplate): PlotTempla
     ...activity,
     stage: canonicalStageForActivity(activity),
   }));
-  return { ...template, stageCount: 9, standardVersion: Math.max(3, template.standardVersion ?? 0), activities };
+  return { ...template, stageCount: 9, standardVersion: Math.max(4, template.standardVersion ?? 0), activities };
 }
 
 function ordinal(value: number) {
