@@ -193,6 +193,7 @@ function normalisePlots(stored: TemplateSitePlot[]) {
 }
 
 const LEGACY_PROPERTY_TEMPLATE_IDS = new Set(['apartment', 'twoBed', 'fourBed', 'fiveBed']);
+const LEGACY_DEMO_HOUSE_TYPE_IDS = new Set(['custom-cambridge', 'custom-ashford']);
 
 function normaliseTemplate(template: PlotTemplate) {
   const isSystemTemplate = template.isSystemTemplate ?? (template.id === 'threeBed' || template.id === 'fourBedStandard' || template.id === 'timberFrame');
@@ -361,7 +362,11 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           setIssueLogs(storedIssueLogs);
           programmeNotesRef.current = storedNotes;
           setProgrammeNotes(storedNotes);
-          const mergedTemplates = mergeDefaultTemplates(storedTemplates);
+          const houseTypesReset = await AsyncStorage.getItem(HOUSE_TYPES_RESET_KEY);
+          const templatesForMigration = houseTypesReset === 'done'
+            ? storedTemplates
+            : storedTemplates.filter((template) => !LEGACY_DEMO_HOUSE_TYPE_IDS.has(template.id));
+          const mergedTemplates = mergeDefaultTemplates(templatesForMigration);
           plotTemplatesRef.current = mergedTemplates;
           setPlotTemplates(mergedTemplates);
           await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(mergedTemplates));
