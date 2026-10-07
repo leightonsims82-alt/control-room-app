@@ -79,7 +79,7 @@ export default function SupervisorView() {
     style.innerHTML = `
       @page { size: A4 landscape; margin: 7mm; }
       @media print {
-        html, body { width: 297mm; min-height: 210mm; background: #fff !important; overflow: visible !important; }
+        html, body { width: 297mm; height: auto; background: #fff !important; overflow: visible !important; }
         * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         [data-testid="scroll-view"], div { overflow: visible !important; }
       }
