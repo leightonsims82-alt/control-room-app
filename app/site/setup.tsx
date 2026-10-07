@@ -9,7 +9,7 @@ import { useSitePlanner } from '../../data/sitePlannerStore';
 import { getCalendarWeekForDate, getProgrammeStartDateValue, normaliseBritishDate, validateWeekOneDate } from '../../utils/programmeDates';
 import { ConfiguredProgrammeStage, readStageConfiguration, saveStageConfiguration } from '../../utils/stageConfiguration';
 import { PROGRAMME_STAGE_SEQUENCE } from '../../utils/siteProgrammeEngine';
-import { applyHouseTypeFloorConfiguration, applyStandardHouseTypeStages, getEffectiveProgrammeWeeks, getHouseTypeLabel, getHouseTypeTemplates, getStandardTemplateIdForBedrooms, PlotTemplate, TemplateActivity } from '../../utils/templateProgramme';
+import { applyHouseTypeFloorConfiguration, getEffectiveProgrammeWeeks, getHouseTypeLabel, getHouseTypeTemplates, getStandardTemplateIdForBedrooms, PlotTemplate, TemplateActivity } from '../../utils/templateProgramme';
 
 const LOCKED_STANDARD_KEY = 'programme-buddy:locked-three-bed-standard:v1';
 const LOCKED_STAGE_COUNT = 9;
@@ -176,7 +176,7 @@ export default function SiteSetupScreen() {
     setSaving(true);
     try {
       const withFloors = applyHouseTypeFloorConfiguration(draft, draft.floors ?? 2);
-      const cleaned: PlotTemplate = applyStandardHouseTypeStages({
+      const cleaned: PlotTemplate = {
         ...withFloors,
         name: withFloors.name.trim(),
         houseTypeCode: withFloors.name.trim(),
@@ -185,7 +185,7 @@ export default function SiteSetupScreen() {
         isHouseType: true,
         isSystemTemplate: false,
         activities: orderedActivities(withFloors.activities),
-      });
+      };
       if (!cleaned.name) {
         setMessage('House type name is required.');
         return;
