@@ -587,7 +587,10 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   };
 
   const updatePlotTemplate = async (input: PlotTemplate) => {
-    const nextTemplates = plotTemplatesRef.current.map((template) => (template.id === input.id ? input : template));
+    const standardisedInput = input.id === 'timberFrame' || input.constructionMethod === 'timberFrame'
+      ? input
+      : applyStandardHouseTypeStages(input);
+    const nextTemplates = plotTemplatesRef.current.map((template) => (template.id === standardisedInput.id ? standardisedInput : template));
     plotTemplatesRef.current = nextTemplates;
     setPlotTemplates(nextTemplates);
     await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(nextTemplates));
