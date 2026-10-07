@@ -23,11 +23,13 @@ function downloadCsv(filename: string, rows: unknown[][]) {
 }
 
 export function exportActionLogCsv(actions: DefectAction[], plots: PlotProgramme[]) {
-  const plotName = (plotId: string) => plots.find((plot) => plot.id === plotId)?.plotName ?? plotId;
+  const plotFor = (plotId: string) => plots.find((plot) => plot.id === plotId);
+  const plotName = (plotId: string) => plotFor(plotId)?.plotName ?? plotId;
   const rows: unknown[][] = [
-    ['Plot', 'Stage', 'Trade', 'Type', 'Priority', 'Status', 'Description', 'Required action', 'Sent to trade', 'Fixed', 'Created', 'Closed'],
+    ['Plot', 'Plot completion', 'Stage', 'Trade', 'Type', 'Priority', 'Status', 'Description', 'Required action', 'Sent to trade', 'Fixed', 'Created', 'Closed'],
     ...actions.map((action) => [
       plotName(action.plotProgrammeId),
+      plotFor(action.plotProgrammeId)?.endDate ?? '',
       action.stage,
       action.trade,
       action.type,
@@ -45,14 +47,16 @@ export function exportActionLogCsv(actions: DefectAction[], plots: PlotProgramme
 }
 
 export function exportInspectionLogCsv(inspections: InspectionRecord[], plots: PlotProgramme[]) {
-  const plotName = (plotId: string) => plots.find((plot) => plot.id === plotId)?.plotName ?? plotId;
+  const plotFor = (plotId: string) => plots.find((plot) => plot.id === plotId);
+  const plotName = (plotId: string) => plotFor(plotId)?.plotName ?? plotId;
   const rows: unknown[][] = [
-    ['Plot', 'Inspection', 'Status', 'Started', 'Completed', 'Checks', 'Failed checks', 'Photos'],
+    ['Plot', 'Plot completion', 'Inspection', 'Status', 'Started', 'Completed', 'Checks', 'Failed checks', 'Photos'],
     ...inspections.map((inspection) => {
       const failed = inspection.items.filter((item) => item.compliant === 'No').length;
       const photos = inspection.items.filter((item) => item.imageUri || item.fixedImageUri).length;
       return [
         plotName(inspection.plotProgrammeId),
+        plotFor(inspection.plotProgrammeId)?.endDate ?? '',
         inspection.templateName,
         inspection.status,
         new Date(inspection.startedAt).toLocaleString('en-GB'),
