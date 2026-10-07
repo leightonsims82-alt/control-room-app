@@ -140,7 +140,7 @@ function makeFourBedroomStandardTemplate(): PlotTemplate {
     floors: 2,
     isHouseType: false,
     isSystemTemplate: true,
-    standardVersion: 1,
+    standardVersion: 2,
     programmeWeeks: 25,
     stageCount: 9,
     activities: [
@@ -270,9 +270,10 @@ const siteStandardTemplate: PlotTemplate = {
   floors: 2,
   isHouseType: false,
   isSystemTemplate: true,
+  standardVersion: 2,
 };
 
-const fourBedroomStandardTemplate = makeFourBedroomStandardTemplate();
+const fourBedroomStandardTemplate = applyStandardHouseTypeStages(makeFourBedroomStandardTemplate());
 
 const timberFrameSystemTemplate: PlotTemplate = {
   ...makeTimberFrameTemplate(),
@@ -281,7 +282,7 @@ const timberFrameSystemTemplate: PlotTemplate = {
 };
 
 export const DEFAULT_PLOT_TEMPLATES: PlotTemplate[] = [
-  siteStandardTemplate,
+  applyStandardHouseTypeStages(siteStandardTemplate),
   fourBedroomStandardTemplate,
   timberFrameSystemTemplate,
 ];
@@ -309,6 +310,47 @@ const LEGACY_THREE_STOREY_AUTO_CODES = new Set([
 
 function reindexActivities(activities: TemplateActivity[]) {
   return activities.map((activity, index) => ({ ...activity, order: index + 1 }));
+}
+
+/**
+ * One stage-number standard for every traditional house type.
+ * This changes stage ownership only; task names, durations and three-storey
+ * generated activities are preserved.
+ *
+ * Agreed boundaries:
+ * 1 Foundations/substructure/drainage
+ * 2 Band course/slab
+ * 3 Brickwork/joists/wall plate
+ * 4 Truss through roof tile
+ * 5 Strip scaffold
+ * 6 First fix through loft insulation
+ * 7 Second fix through kitchen
+ * 8 Patch/decorating/wall tile
+ * 9 Finals/close-out
+ */
+export function applyStandardHouseTypeStages(template: PlotTemplate): PlotTemplate {
+  if (template.id === 'timberFrame' || template.constructionMethod === 'timberFrame') return template;
+
+  let stage: ProgrammeStageNumber = 1;
+  const activities = template.activities
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((activity) => {
+      const code = activity.code.trim().toLowerCase();
+
+      if (/\bband course\b/.test(code) || /\bslab(?: pour)?\b/.test(code)) stage = 2;
+      if (/\b1st\s+(?:lift\s+)?brickwork\b/.test(code)) stage = 3;
+      if (/\btruss\b/.test(code)) stage = 4;
+      if (/\bstrip\s+scaffold\b/.test(code)) stage = 5;
+      if (/\b1st\s+fix\b/.test(code) || /\bwindows?\b/.test(code)) stage = 6;
+      if (/\b2nd\s+fix\b/.test(code) || /\bkitchen\s+(?:installation|install|fit)\b/.test(code)) stage = 7;
+      if (/\bpatch\b/.test(code) || /\bpre\s*paint\s+clean\b/.test(code) || /\bdecoration\b/.test(code) || /\bwall\s+tile\b/.test(code)) stage = 8;
+      if (/\bfinals?\b/.test(code) || /\bappliances?\b/.test(code) || /\bsnag\s+patch\b/.test(code) || /\bbuild\s+clean\b/.test(code) || /\bmastic\b/.test(code) || /\bhome\s+tour\b/.test(code) || /\bpre\s*handover\b/.test(code)) stage = 9;
+
+      return { ...activity, stage };
+    });
+
+  return { ...template, stageCount: 9, standardVersion: Math.max(2, template.standardVersion ?? 0), activities };
 }
 
 function ordinal(value: number) {
