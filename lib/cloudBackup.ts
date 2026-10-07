@@ -11,7 +11,8 @@ const BACKUP_KEYS = [
   'programme-buddy:plot-templates:v1',
   'programme-buddy:programme-setup:v1',
   'programme-buddy:programme-notes:v1',
-  'programme-buddy:stage-configuration:v1',
+  'programme-buddy:v2-migration:2026-10-07',
+  'programme-buddy:v2-legacy-snapshot:2026-10-07',
   'siteprog:plot-programmes:v1',
   'siteprog:plot-stages:v1',
   'siteprog:inspections:v1',
@@ -20,6 +21,7 @@ const BACKUP_KEYS = [
   'siteprog:8am-walk:v1',
   'siteprog:8am-walk-notes:v1',
   'siteprog:dabs-standalone-meetings:v1',
+  'siteprog:handover-readiness:v1',
   'siteprog:feedback:v1',
 ];
 
