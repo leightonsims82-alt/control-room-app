@@ -4,8 +4,11 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useProgrammeData } from '../../data/programmeStore';
+import { useSitePlanner } from '../../data/sitePlannerStore';
 import { ChecklistAnswer } from '../../types/models';
 import { getActiveStage } from '../../utils/programmeLogic';
+import { getCurrentProgrammeWeek } from '../../utils/programmeDates';
+import { getActivitiesForTemplateDay } from '../../utils/templateProgramme';
 
 const WALK_KEY = 'siteprog:8am-walk:v1';
 const WALK_NOTES_KEY = 'siteprog:8am-walk-notes:v1';
@@ -54,6 +57,7 @@ function blankItem(plotId: string, stageId?: string): WalkItem {
 
 export default function WalkScreen() {
   const { plotProgrammes, plotStages } = useProgrammeData();
+  const { sitePlots, plotTemplates, activityDelays, activityMoves, siteSetup } = useSitePlanner();
   const [items, setItems] = useState<WalkItem[]>([]);
   const [walkNotes, setWalkNotes] = useState<WalkNote[]>([]);
   const walkDate = today();
@@ -85,14 +89,30 @@ export default function WalkScreen() {
   }
 
   const rows = useMemo(() => {
-    return plotProgrammes
-      .map((plot) => {
-        const stage = getActiveStage(plot.id, plotStages) ?? plotStages.find((item) => item.plotProgrammeId === plot.id && item.status === 'In progress');
-        const saved = items.find((item) => item.plotProgrammeId === plot.id && item.walkDate === walkDate);
-        return { plot, stage, saved };
-      })
-      .filter((row) => row.stage?.status === 'In progress');
-  }, [items, plotProgrammes, plotStages, walkDate]);
+    const programmeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
+    const programmeDay = new Date().getDay() || 7;
+
+    return sitePlots.flatMap((sitePlot) => {
+      const plot = plotProgrammes.find((item) => item.id === sitePlot.id || item.plotName === sitePlot.plotNo);
+      if (!plot) return [];
+      const planned = getActivitiesForTemplateDay(
+        sitePlot,
+        programmeWeek,
+        programmeDay,
+        activityDelays,
+        plotTemplates,
+        siteSetup,
+        activityMoves,
+      );
+      const plannedStage = planned[0]
+        ? plotStages.find((item) => item.plotProgrammeId === plot.id && item.stageName === planned[0].code)
+        : undefined;
+      const stage = plannedStage ?? getActiveStage(plot.id, plotStages) ?? plotStages.find((item) => item.plotProgrammeId === plot.id && item.status === 'In progress');
+      if (!planned.length && stage?.status !== 'In progress') return [];
+      const saved = items.find((item) => item.plotProgrammeId === plot.id && item.walkDate === walkDate);
+      return [{ plot, stage, planned, saved }];
+    });
+  }, [items, plotProgrammes, plotStages, walkDate, sitePlots, plotTemplates, activityDelays, activityMoves, siteSetup]);
 
   const completeCount = rows.filter((row) => row.saved?.complete).length;
   const issuesCount = rows.filter((row) => row.saved?.issueFound).length;
@@ -102,7 +122,7 @@ export default function WalkScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>8am Walk</Text>
         <Text style={styles.title}>Morning Site Walk</Text>
-        <Text style={styles.subtitle}>Only plots currently in build are shown. Use the note box for general site observations.</Text>
+        <Text style={styles.subtitle}>Plots with work planned today are pulled directly from Programme V2. Manually active work is also retained.</Text>
       </View>
 
       <View style={styles.summaryRow}>
@@ -119,16 +139,16 @@ export default function WalkScreen() {
         {rows.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No plots currently in build</Text>
-            <Text style={styles.emptyText}>Plots appear here when they have a stage marked as In progress.</Text>
+            <Text style={styles.emptyText}>No plot has a planned activity today and no activity is manually marked In progress.</Text>
           </View>
-        ) : rows.map(({ plot, stage, saved }) => {
+        ) : rows.map(({ plot, stage, planned, saved }) => {
           const item = saved ?? blankItem(plot.id, stage?.id);
           return (
             <View key={plot.id} style={styles.card}>
               <View style={styles.cardHeader}>
                 <View style={styles.cardTitleWrap}>
                   <Text style={styles.plotName}>{plot.plotName}</Text>
-                  <Text style={styles.meta}>{plot.phase} · {stage?.stageName ?? 'No active stage'} · {stage?.trade ?? 'Trade pending'}</Text>
+                  <Text style={styles.meta}>{plot.phase} · {planned.length ? planned.map((activity) => activity.displayText || activity.code).join(' / ') : stage?.stageName ?? 'No active stage'} · {planned.length ? [...new Set(planned.map((activity) => activity.trade))].join(', ') : stage?.trade ?? 'Trade pending'}</Text>
                 </View>
                 <Pressable style={[styles.chip, item.plotChecked ? styles.darkChip : null]} onPress={() => saveItem(plot.id, stage?.id, { plotChecked: !item.plotChecked, plotStageId: stage?.id })}>
                   <Text style={[styles.chipText, item.plotChecked ? styles.lightText : null]}>{item.plotChecked ? 'Checked' : 'Check plot'}</Text>
