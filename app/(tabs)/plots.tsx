@@ -12,7 +12,7 @@ const DAY_WIDTH = 82;
 const WEEK_WIDTH = DAY_WIDTH * 5;
 
 export default function PlotsScreen() {
-  const { sitePlots, activityDelays, plotTemplates, siteSetup } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup } = useSitePlanner();
   const [selectedTemplateId, setSelectedTemplateId] = useState(ALL_TYPES);
   const houseTypes = getHouseTypeTemplates(plotTemplates);
   const filteredPlots = selectedTemplateId === ALL_TYPES ? sitePlots : sitePlots.filter((plot) => (plot.houseTypeId ?? plot.templateId) === selectedTemplateId);
@@ -81,7 +81,7 @@ export default function PlotsScreen() {
                     <Text style={[styles.stageStartCell, styles.stageCell]}>{formatCalendarWeek(siteSetup.programmeStartDate, getStage1StartWeekForPlot(plot, plotTemplates, siteSetup), siteSetup.calendarWeekOne)}</Text>
                     {WEEK_NUMBERS.flatMap((week) =>
                       DAY_NAMES.map((_, dayIndex) => {
-                        const text = getPlotBreakdownTemplateText(plot, week, dayIndex + 1, activityDelays, plotTemplates);
+                        const text = getPlotBreakdownTemplateText(plot, week, dayIndex + 1, activityDelays, plotTemplates, siteSetup, activityMoves);
                         return <Text key={`${plot.id}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
                       }),
                     )}
