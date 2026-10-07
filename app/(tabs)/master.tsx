@@ -26,6 +26,7 @@ import {
   getEffectiveProgrammeWeeks,
   getHouseTypeLabel,
   getHouseTypeTemplates,
+  getMasterProgrammeWeeks,
   getPlotBuildOrder,
   getPlotCompletionProgrammeWeek,
   getPlotHoldDetail,
@@ -40,11 +41,14 @@ type ResetMode = 'all' | 'single';
 type ProgrammeGenerationBasis = 'start' | 'completion';
 
 export default function MasterProgrammeScreen() {
-  const { sitePlots, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
   const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
   const currentProgrammeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
-  const visibleWeeks = Array.from({ length: 23 }, (_, index) => currentProgrammeWeek + index);
+  const visibleWeeks = useMemo(
+    () => getMasterProgrammeWeeks(sitePlots, currentProgrammeWeek, activityDelays, activityMoves, plotTemplates, siteSetup),
+    [sitePlots, currentProgrammeWeek, activityDelays, activityMoves, plotTemplates, siteSetup],
+  );
   const initialStageCount = 9;
   const [plotNo, setPlotNo] = useState('');
 
