@@ -93,6 +93,11 @@ function toIsoDate(value?: string) {
   return `${year}-${month}-${day}`;
 }
 
+function stableActivityStageId(plotId: string, activityCode: string) {
+  const slug = activityCode.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return `canonical-stage-${plotId}-${slug || 'activity'}`;
+}
+
 function getPlotForStage(stage: PlotStage, plots: PlotProgramme[]) {
   return plots.find((item) => item.id === stage.plotProgrammeId);
 }
@@ -256,15 +261,27 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
 
     const canonicalStages: PlotStage[] = sitePlots.flatMap((plot) => {
       const template = getTemplateForPlot(plot, plotTemplates);
+      const projectedPlot = existingPlots.find((item) => item.id === plot.id || item.plotName === plot.plotNo);
+      const buildType: BuildType | undefined = plot.constructionMethod === 'timberFrame'
+        ? 'Timber Frame'
+        : plot.constructionMethod === 'traditional'
+          ? 'Traditional'
+          : undefined;
+
       return orderedActivities(template).map((activity) => {
         const existing = existingStages.find((item) => item.plotProgrammeId === plot.id && item.stageName === activity.code);
         const range = getActivityProgrammeRange(plot, template, activity, activityDelays, activityMoves, siteSetup);
-        const startDate = getProgrammeDateForWorkingDayIndex(siteSetup.programmeStartDate, range.start, siteSetup.includeSaturday, siteSetup.includeSunday);
-        const endDate = getProgrammeDateForWorkingDayIndex(siteSetup.programmeStartDate, range.finish, siteSetup.includeSaturday, siteSetup.includeSunday);
+        const startDate = toIsoDate(getProgrammeDateForWorkingDayIndex(siteSetup.programmeStartDate, range.start, siteSetup.includeSaturday, siteSetup.includeSunday));
+        const endDate = toIsoDate(getProgrammeDateForWorkingDayIndex(siteSetup.programmeStartDate, range.finish, siteSetup.includeSaturday, siteSetup.includeSunday));
         const delayDays = activityDelays.find((item) => item.plotId === plot.id && item.activityCode === activity.code)?.delayDays ?? 0;
         const held = Boolean(plot.holdStage && activity.stage >= plot.holdStage);
+        const inspectionTemplate = getInspectionTemplateForStage(activity.code, buildType, projectedPlot?.foundationType);
+        const inspectionWindowEnd = inspectionTemplate
+          ? toIsoDate(shiftProgrammeWorkingDays(endDate, 2, siteSetup.includeSaturday, siteSetup.includeSunday))
+          : undefined;
+
         return {
-          id: existing?.id ?? `canonical-stage-${plot.id}-${activity.order}`,
+          id: existing?.id ?? stableActivityStageId(plot.id, activity.code),
           plotProgrammeId: plot.id,
           stageName: activity.code,
           trade: activity.trade,
@@ -276,10 +293,10 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
           status: existing?.status ?? 'Not started',
           holdStatus: held ? 'On hold' : existing?.holdStatus ?? 'Active',
           holdReason: held ? plot.holdReason : existing?.holdReason,
-          isKeyStage: existing?.isKeyStage ?? false,
-          inspectionStatus: existing?.inspectionStatus ?? 'Not applicable',
-          inspectionWindowStart: existing?.inspectionWindowStart,
-          inspectionWindowEnd: existing?.inspectionWindowEnd,
+          isKeyStage: Boolean(inspectionTemplate),
+          inspectionStatus: existing?.inspectionStatus ?? (inspectionTemplate ? 'Ready for inspection' : 'Not applicable'),
+          inspectionWindowStart: existing?.inspectionWindowStart ?? (inspectionTemplate ? endDate : undefined),
+          inspectionWindowEnd: existing?.inspectionWindowEnd ?? inspectionWindowEnd,
           inspectionNotes: existing?.inspectionNotes,
         };
       });
