@@ -84,7 +84,10 @@ export default function TwoWeekProgrammeScreen() {
   const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
   const actualProgressPlot = orderedSitePlots.find((plot) => plot.id === actualProgressPlotId) ?? orderedSitePlots[0];
   const actualProgressTemplate = actualProgressPlot ? getTemplateForPlot(actualProgressPlot, plotTemplates) : undefined;
-  const actualProgressActivities = actualProgressTemplate ? actualProgressTemplate.activities.slice().sort((a, b) => a.order - b.order) : [];
+  const actualProgressActivities = useMemo(
+    () => actualProgressTemplate ? actualProgressTemplate.activities.slice().sort((a, b) => a.order - b.order) : [],
+    [actualProgressTemplate],
+  );
   const actualProgressActivity = actualProgressActivities.find((activity) => activity.code === actualProgressActivityCode) ?? actualProgressActivities[0];
 
   useEffect(() => {
@@ -168,7 +171,7 @@ export default function TwoWeekProgrammeScreen() {
         <View style={styles.headerMain}>
           <Text style={styles.kicker}>Live lookahead</Text>
           <Text style={styles.title}>2 Week Programme</Text>
-          <Text style={styles.subtitle}>Use the arrows on the first day of a fix to move that fix and every following activity earlier or later. Use Today when the plot's real site position has reached that fix now.</Text>
+          <Text style={styles.subtitle}>Use the arrows on the first day of a fix to move that fix and every following activity earlier or later. Use Today when the plot’s real site position has reached that fix now.</Text>
         </View>
         <View style={styles.headerBadge}><Ionicons name="calendar-outline" size={16} color="#2563eb" /><Text style={styles.headerBadgeText}>{twoWeekDates}</Text></View>
       </View>
