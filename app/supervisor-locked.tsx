@@ -4,7 +4,7 @@ import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../components/AppScreen';
 import { useSitePlanner } from '../data/sitePlannerStore';
 import { formatProgrammeDate, getCurrentProgrammeWeek } from '../utils/programmeDates';
-import { getActivitiesForTemplateDay, normaliseProgrammeWeek } from '../utils/templateProgramme';
+import { getActivitiesForTemplateDay, isProgrammeWorkingDay, normaliseProgrammeWeek } from '../utils/templateProgramme';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const SCREEN_DAY_WIDTH = 82;
@@ -14,7 +14,7 @@ const SCREEN_TRADE_WIDTH = 110;
 const PRINT_PLOT_WIDTH = 46;
 const PRINT_TRADE_WIDTH = 76;
 
-function buildTwoWeekWindow(startWeek: number, programmeStartDate: string) {
+function buildTwoWeekWindow(startWeek: number, programmeStartDate: string, includeSaturday = false, includeSunday = false) {
   const baseIndex = (normaliseProgrammeWeek(startWeek) - 1) * 7;
   return Array.from({ length: 14 }, (_, index) => {
     const absoluteDayIndex = baseIndex + index;
@@ -27,7 +27,7 @@ function buildTwoWeekWindow(startWeek: number, programmeStartDate: string) {
       dayIndex,
       dayName: DAYS[dayIndex],
       date: formatProgrammeDate(programmeStartDate, week, dayIndex + 1),
-      weekend: dayIndex >= 5,
+      nonWorking: !isProgrammeWorkingDay(dayIndex + 1, { includeSaturday, includeSunday }),
     };
   });
 }
@@ -60,7 +60,7 @@ export default function SupervisorLockedView() {
   const lockedTrade = tradeContacts.find((trade) => slug(trade.trade) === slug(String(requestedTrade ?? '')))?.trade ?? tradeContacts[0]?.trade ?? 'Trade';
 
   const startWeek = normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate));
-  const days = useMemo(() => buildTwoWeekWindow(startWeek, siteSetup.programmeStartDate), [startWeek, siteSetup.programmeStartDate]);
+  const days = useMemo(() => buildTwoWeekWindow(startWeek, siteSetup.programmeStartDate, siteSetup.includeSaturday, siteSetup.includeSunday), [startWeek, siteSetup.programmeStartDate, siteSetup.includeSaturday, siteSetup.includeSunday]);
   const dateRange = `${days[0]?.date ?? ''} - ${days[13]?.date ?? ''}`;
   const latestIssue = issueLogs[0];
   const dayWidth = printMode ? PRINT_DAY_WIDTH : SCREEN_DAY_WIDTH;
@@ -138,19 +138,19 @@ export default function SupervisorLockedView() {
             <View style={styles.tableRow}>
               <Text style={[styles.tableHeader, { width: plotWidth }, printMode ? styles.printHeaderCell : null]}>Plot No</Text>
               <Text style={[styles.tableHeader, { width: tradeWidth }, printMode ? styles.printHeaderCell : null]}>Trade</Text>
-              {days.map((item) => <Text key={item.key} style={[styles.dayHeaderCell, { width: dayWidth }, item.weekend ? styles.weekendHeader : null, printMode ? styles.printHeaderCell : null]}>{item.dayName}</Text>)}
+              {days.map((item) => <Text key={item.key} style={[styles.dayHeaderCell, { width: dayWidth }, item.nonWorking ? styles.weekendHeader : null, printMode ? styles.printHeaderCell : null]}>{item.dayName}</Text>)}
             </View>
             <View style={styles.tableRow}>
               <Text style={[styles.dateBlankCell, { width: plotWidth }, printMode ? styles.printDateCell : null]} />
               <Text style={[styles.dateBlankCell, { width: tradeWidth }, printMode ? styles.printDateCell : null]} />
-              {days.map((item) => <Text key={`date-${item.key}`} style={[styles.dateHeaderCell, { width: dayWidth }, item.weekend ? styles.weekendDateCell : null, printMode ? styles.printDateCell : null]}>{item.date}</Text>)}
+              {days.map((item) => <Text key={`date-${item.key}`} style={[styles.dateHeaderCell, { width: dayWidth }, item.nonWorking ? styles.weekendDateCell : null, printMode ? styles.printDateCell : null]}>{item.date}</Text>)}
             </View>
             {rows.map((row, rowIndex) => (
               <View key={row.key} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                 <Text style={[styles.bodyCell, { width: plotWidth }, printMode ? styles.printBodyCell : null]}>{row.plotNo}</Text>
                 <Text style={[styles.bodyCell, { width: tradeWidth }, printMode ? styles.printBodyCell : null]}>{lockedTrade}</Text>
                 {row.cells.map((cell, index) => (
-                  <View key={`${row.key}-${days[index].key}`} style={[styles.dayBodyCell, { width: dayWidth }, days[index].weekend ? styles.weekendCell : null, cell ? styles.activeDayCell : null, printMode ? styles.printDayBodyCell : null]}>
+                  <View key={`${row.key}-${days[index].key}`} style={[styles.dayBodyCell, { width: dayWidth }, days[index].nonWorking ? styles.weekendCell : null, cell ? styles.activeDayCell : null, printMode ? styles.printDayBodyCell : null]}>
                     <Text style={[styles.dayBodyText, printMode ? styles.printDayBodyText : null]}>{cell}</Text>
                   </View>
                 ))}
