@@ -4,7 +4,7 @@ import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../components/AppScreen';
 import { useSitePlanner } from '../data/sitePlannerStore';
 import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek } from '../utils/programmeDates';
-import { getActivitiesForTemplateDay } from '../utils/templateProgramme';
+import { getActivitiesForTemplateDay, isProgrammeWorkingDay } from '../utils/templateProgramme';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const SCREEN_DAY_WIDTH = 82;
@@ -14,7 +14,7 @@ function normaliseWeek(week: number) {
   return Number.isFinite(week) ? Math.max(1, Math.round(week)) : 1;
 }
 
-function buildDays(startWeek: number, programmeStartDate: string) {
+function buildDays(startWeek: number, programmeStartDate: string, includeSaturday = false, includeSunday = false) {
   return Array.from({ length: 14 }, (_, index) => {
     const programmeWeek = normaliseWeek(startWeek + Math.floor(index / 7));
     const day = (index % 7) + 1;
@@ -24,7 +24,7 @@ function buildDays(startWeek: number, programmeStartDate: string) {
       day,
       name: DAYS[index % 7],
       date: formatProgrammeDate(programmeStartDate, programmeWeek, day),
-      weekend: day >= 6,
+      nonWorking: !isProgrammeWorkingDay(day, { includeSaturday, includeSunday }),
     };
   });
 }
@@ -60,8 +60,8 @@ export default function SupervisorView() {
 
   const firstProgrammeWeek = normaliseWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate));
   const days = useMemo(
-    () => buildDays(firstProgrammeWeek, siteSetup.programmeStartDate),
-    [firstProgrammeWeek, siteSetup.programmeStartDate],
+    () => buildDays(firstProgrammeWeek, siteSetup.programmeStartDate, siteSetup.includeSaturday, siteSetup.includeSunday),
+    [firstProgrammeWeek, siteSetup.programmeStartDate, siteSetup.includeSaturday, siteSetup.includeSunday],
   );
   const dateRange = `${days[0]?.date ?? ''} - ${days[13]?.date ?? ''}`;
   const firstCalendarWeek = formatCalendarWeek(siteSetup.programmeStartDate, days[0]?.programmeWeek ?? firstProgrammeWeek, siteSetup.calendarWeekOne);
@@ -136,19 +136,19 @@ export default function SupervisorView() {
             <View style={styles.row}>
               <Text style={[styles.headerCell, { width: plotWidth }]}>Plot No</Text>
               <Text style={[styles.headerCell, { width: tradeWidth }]}>Trade</Text>
-              {days.map((day) => <Text key={day.key} style={[styles.dayHeader, { width: dayWidth }, day.weekend ? styles.weekendHeader : null]}>{day.name}</Text>)}
+              {days.map((day) => <Text key={day.key} style={[styles.dayHeader, { width: dayWidth }, day.nonWorking ? styles.weekendHeader : null]}>{day.name}</Text>)}
             </View>
             <View style={styles.row}>
               <Text style={[styles.dateBlank, { width: plotWidth }]} />
               <Text style={[styles.dateBlank, { width: tradeWidth }]} />
-              {days.map((day) => <Text key={`date-${day.key}`} style={[styles.dateHeader, { width: dayWidth }, day.weekend ? styles.weekendDate : null]}>{day.date}</Text>)}
+              {days.map((day) => <Text key={`date-${day.key}`} style={[styles.dateHeader, { width: dayWidth }, day.nonWorking ? styles.weekendDate : null]}>{day.date}</Text>)}
             </View>
             {rows.map((row, rowIndex) => (
               <View key={row.id} style={[styles.row, rowIndex % 2 ? styles.altRow : null]}>
                 <Text style={[styles.bodyCell, { width: plotWidth }]}>{row.plotNo}</Text>
                 <Text style={[styles.bodyCell, { width: tradeWidth }]}>{selectedTrade}</Text>
                 {row.cells.map((cell, index) => (
-                  <View key={`${row.id}-${days[index].key}`} style={[styles.dayCell, { width: dayWidth }, days[index].weekend ? styles.weekendCell : null, cell ? styles.activeCell : null]}>
+                  <View key={`${row.id}-${days[index].key}`} style={[styles.dayCell, { width: dayWidth }, days[index].nonWorking ? styles.weekendCell : null, cell ? styles.activeCell : null]}>
                     <Text style={styles.dayText}>{cell}</Text>
                   </View>
                 ))}
