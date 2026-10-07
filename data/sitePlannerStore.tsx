@@ -334,15 +334,10 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           setIssueSettingsState(storedIssueSettings);
           setIssueLogs(storedIssueLogs);
           setProgrammeNotes(storedNotes);
-          const houseTypesReset = await AsyncStorage.getItem(HOUSE_TYPES_RESET_KEY);
-          const mergedTemplates = houseTypesReset === 'done'
-            ? mergeDefaultTemplates(storedTemplates)
-            : DEFAULT_PLOT_TEMPLATES.map(normaliseTemplate);
+          const mergedTemplates = mergeDefaultTemplates(storedTemplates);
           setPlotTemplates(mergedTemplates);
           await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(mergedTemplates));
-          if (houseTypesReset !== 'done') {
-            await AsyncStorage.setItem(HOUSE_TYPES_RESET_KEY, 'done');
-          }
+          await AsyncStorage.setItem(HOUSE_TYPES_RESET_KEY, 'done');
           setSiteSetupState(migratedSiteSetup);
           await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(migratedSiteSetup));
         }
