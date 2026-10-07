@@ -6,9 +6,7 @@ import { ProgrammeDatePicker } from '../../components/ProgrammeDatePicker';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
 import { getCalendarWeekForDate, getProgrammeStartDateValue, normaliseBritishDate, validateWeekOneDate } from '../../utils/programmeDates';
-import { ConfiguredProgrammeStage, readStageConfiguration, saveStageConfiguration } from '../../utils/stageConfiguration';
-import { PROGRAMME_STAGE_SEQUENCE } from '../../utils/siteProgrammeEngine';
-import { applyHouseTypeFloorConfiguration, applyStandardHouseTypeStages, getEffectiveProgrammeWeeks, getHouseTypeLabel, getHouseTypeTemplates, getStandardTemplateIdForBedrooms, PlotTemplate, TemplateActivity } from '../../utils/templateProgramme';
+import { applyHouseTypeFloorConfiguration, applyStandardHouseTypeStages, getEffectiveProgrammeWeeks, getHouseTypeLabel, getHouseTypeTemplates, getStandardTemplateIdForBedrooms, PlotTemplate, STAGE_LABELS, TemplateActivity } from '../../utils/templateProgramme';
 import { getCanonicalActivity } from '../../core/programme/activityTruth';
 
 const LOCKED_STAGE_COUNT = 9;
@@ -37,7 +35,6 @@ export default function SiteSetupScreen() {
   const [weekOneDate, setWeekOneDate] = useState(getProgrammeStartDateValue(siteSetup.programmeStartDate));
   const [calendarWeekOneInput, setCalendarWeekOneInput] = useState(String(siteSetup.calendarWeekOne ?? getCalendarWeekForDate(getProgrammeStartDateValue(siteSetup.programmeStartDate)) ?? 1));
   const [workingDays, setWorkingDays] = useState<5 | 6 | 7>(siteSetup.includeSunday ? 7 : siteSetup.includeSaturday ? 6 : 5);
-  const [stageDefinitions, setStageDefinitions] = useState<ConfiguredProgrammeStage[]>(PROGRAMME_STAGE_SEQUENCE.slice(0, LOCKED_STAGE_COUNT).map((stage) => ({ ...stage })));
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [draft, setDraft] = useState<PlotTemplate | null>(null);
   const [newHouseTypeName, setNewHouseTypeName] = useState('');
@@ -46,13 +43,6 @@ export default function SiteSetupScreen() {
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [weekOneDateError, setWeekOneDateError] = useState('');
-
-  useEffect(() => {
-    if (!isSitePlannerLoaded) return;
-    readStageConfiguration(LOCKED_STAGE_COUNT)
-      .then((stages) => setStageDefinitions(stages.slice(0, LOCKED_STAGE_COUNT)))
-      .catch(() => setStageDefinitions(PROGRAMME_STAGE_SEQUENCE.slice(0, LOCKED_STAGE_COUNT).map((stage) => ({ ...stage }))));
-  }, [isSitePlannerLoaded]);
 
   useEffect(() => {
     const savedWeekOneDate = getProgrammeStartDateValue(siteSetup.programmeStartDate);
@@ -81,12 +71,10 @@ export default function SiteSetupScreen() {
     if (dateError) return;
     setSaving(true);
     try {
-      const stages = stageDefinitions.slice(0, LOCKED_STAGE_COUNT).map((stage, index) => ({ ...stage, stage: index + 1 }));
       const derivedCalendarWeek = getCalendarWeekForDate(weekOneDate) ?? 1;
       const parsedCalendarWeek = Math.round(Number(calendarWeekOneInput));
       const calendarWeekOne = Number.isFinite(parsedCalendarWeek) && parsedCalendarWeek >= 1 && parsedCalendarWeek <= 53 ? parsedCalendarWeek : derivedCalendarWeek;
       setCalendarWeekOneInput(String(calendarWeekOne));
-      await saveStageConfiguration(stages);
       await updateSiteSetup({
         programmeStartDate: normaliseBritishDate(weekOneDate),
         calendarWeekOne,
@@ -99,15 +87,6 @@ export default function SiteSetupScreen() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const updateStage = (stageNo: number, changes: Partial<ConfiguredProgrammeStage>) => {
-    setStageDefinitions((current) => current.map((stage) => {
-      if (stage.stage !== stageNo) return stage;
-      const startWeek = toPositiveInt(String(changes.startWeek ?? stage.startWeek), stage.startWeek);
-      const finishCandidate = toPositiveInt(String(changes.finishWeek ?? stage.finishWeek), stage.finishWeek);
-      return { ...stage, ...changes, startWeek, finishWeek: Math.max(startWeek, finishCandidate) };
-    }));
   };
 
   const beginEditTemplate = () => {
@@ -328,17 +307,18 @@ export default function SiteSetupScreen() {
           <View style={styles.lockCard}><Text style={styles.lockLabel}>Programme stages</Text><Text style={styles.lockValue}>9</Text><Text style={styles.lockHint}>Locked site standard</Text></View>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator>
-          <View style={styles.stageTable}>
-            <View style={styles.stageRow}><Text style={[styles.th, styles.stageNo]}>Stage</Text><Text style={[styles.th, styles.stageLabel]}>Label</Text><Text style={[styles.th, styles.stageWeek]}>Start week</Text><Text style={[styles.th, styles.stageWeek]}>Finish week</Text></View>
-            {stageDefinitions.slice(0, LOCKED_STAGE_COUNT).map((stage) => <View key={stage.stage} style={styles.stageRow}>
-              <Text style={[styles.td, styles.stageNo]}>{stage.stage}</Text>
-              <TextInput value={stage.label} onChangeText={(value) => updateStage(stage.stage, { label: value })} style={[styles.input, styles.stageLabel]} />
-              <TextInput defaultValue={String(stage.startWeek)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => updateStage(stage.stage, { startWeek: toPositiveInt(nativeEvent.text, stage.startWeek) })} style={[styles.input, styles.stageWeek]} />
-              <TextInput defaultValue={String(stage.finishWeek)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => updateStage(stage.stage, { finishWeek: toPositiveInt(nativeEvent.text, stage.finishWeek) })} style={[styles.input, styles.stageWeek]} />
-            </View>)}
+        <View style={styles.lockedBanner}>
+          <Text style={styles.lockedTitle}>Nine-stage site standard</Text>
+          <Text style={styles.lockedText}>Stage timing is derived from the live house-type activities. There is no separate stage calendar to drift out of sync.</Text>
+          <View style={[styles.chips, { marginTop: 10 }]}>
+            {Object.entries(STAGE_LABELS).map(([stage, label]) => (
+              <View key={stage} style={styles.stageKeyPill}>
+                <Text style={styles.stageKeyNumber}>{stage}</Text>
+                <Text style={styles.stageKeyText}>{label}</Text>
+              </View>
+            ))}
           </View>
-        </ScrollView>
+        </View>
         <Pressable disabled={saving} style={styles.primaryButton} onPress={saveSiteSettings}><Text style={styles.primaryButtonText}>{saving ? 'Saving…' : 'Save Site Settings'}</Text></Pressable>
       </SectionCard>
 
@@ -484,6 +464,9 @@ const styles = StyleSheet.create({
   calculatedLabel: { color: '#1d4ed8', fontWeight: '900', fontSize: 11 },
   calculatedValue: { color: '#0f172a', fontWeight: '900', fontSize: 22 },
   lockedBanner: { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac', borderRadius: 12, padding: 13, gap: 3 },
+  stageKeyPill: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 999, backgroundColor: '#fff', paddingHorizontal: 10, paddingVertical: 7 },
+  stageKeyNumber: { color: '#fff', backgroundColor: '#173b5f', borderRadius: 999, minWidth: 22, textAlign: 'center', paddingVertical: 2, fontWeight: '900' },
+  stageKeyText: { color: '#334155', fontSize: 11, fontWeight: '800' },
   lockedTitle: { color: '#166534', fontWeight: '900', fontSize: 14 },
   lockedText: { color: '#166534', fontWeight: '700', fontSize: 12, lineHeight: 18 },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
