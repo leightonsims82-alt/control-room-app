@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { houseTypes as demoHouseTypes, plotProgrammes as demoPlots, plotStages as demoStages } from './demoData';
+import { houseTypes as demoHouseTypes } from './demoData';
 import { getInspectionTemplateForStage } from '../utils/inspectionTemplateResolver';
 import { DabsBriefingItem, UpdateDabsBriefingItemInput } from '../types/dabs';
 import {
