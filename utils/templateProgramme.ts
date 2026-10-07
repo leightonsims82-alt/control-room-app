@@ -494,6 +494,43 @@ export function getPlotCompletionProgrammeWeek(plot: TemplateSitePlot, setup?: P
   return exactWeek ?? plot.stage9CompleteWeek;
 }
 
+export function getPlotLiveFinishProgrammeWeek(
+  plot: TemplateSitePlot,
+  delays: ActivityDelay[],
+  moves: ActivityMove[],
+  templates: PlotTemplate[],
+  setup?: Partial<SiteProgrammeSetup>,
+) {
+  const template = getTemplateForPlot(plot, templates);
+  const activities = orderedActivities(template);
+  if (!activities.length) return getPlotCompletionProgrammeWeek(plot, setup);
+  const latestWorkingDay = Math.max(
+    ...activities.map((activity) => getActivityProgrammeRange(plot, template, activity, delays, moves, setup).finish),
+  );
+  return Math.max(1, Math.ceil(latestWorkingDay / workingDaysPerWeek(setup)));
+}
+
+export function getMasterProgrammeWeeks(
+  plots: TemplateSitePlot[],
+  startWeek: number,
+  delays: ActivityDelay[],
+  moves: ActivityMove[],
+  templates: PlotTemplate[],
+  setup?: Partial<SiteProgrammeSetup>,
+) {
+  const safeStart = Math.max(1, Math.round(startWeek || 1));
+  const lastWeek = plots.length
+    ? Math.max(
+        safeStart,
+        ...plots.map((plot) => Math.max(
+          getPlotCompletionProgrammeWeek(plot, setup),
+          getPlotLiveFinishProgrammeWeek(plot, delays, moves, templates, setup),
+        )),
+      )
+    : safeStart;
+  return Array.from({ length: lastWeek - safeStart + 1 }, (_, index) => safeStart + index);
+}
+
 export function getLinearStage1StartWeekForPlot(plot: TemplateSitePlot, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
   const template = getTemplateForPlot(plot, templates);
   return getPlotCompletionProgrammeWeek(plot, setup) - getEffectiveProgrammeWeeks(template, setup) + 1;
