@@ -19,7 +19,7 @@ const TRADE_COLOURS = ['#334155', '#B45309', '#15803D', '#9A3412', '#7C3AED', '#
 type TradeMode = 'setup' | 'programme';
 
 function normaliseWeek(week: number) {
-  return ((((Math.round(week) - 1) % 52) + 52) % 52) + 1;
+  return Number.isFinite(week) ? Math.max(1, Math.round(week)) : 1;
 }
 
 function buildDays(startWeek: number, programmeStartDate: string) {
@@ -52,6 +52,7 @@ export default function TradesScreen() {
   const {
     sitePlots,
     activityDelays,
+    activityMoves,
     tradeContacts,
     plotTemplates,
     siteSetup,
@@ -87,6 +88,7 @@ export default function TradesScreen() {
       activityDelays,
       plotTemplates,
       siteSetup,
+      activityMoves,
     ).filter((activity) => activity.trade.toLowerCase() === selectedTrade.toLowerCase()));
 
     const cells = activitiesByDay.map((activities) => activities.map((activity) => activity.displayText).join('\n'));
@@ -100,6 +102,7 @@ export default function TradesScreen() {
     sitePlots,
     days,
     activityDelays,
+    activityMoves,
     plotTemplates,
     siteSetup,
     selectedTrade,
