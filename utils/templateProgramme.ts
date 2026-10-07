@@ -1,4 +1,4 @@
-import { getProgrammeWeekForDate, getProgrammeWorkingDayIndexForDate } from './programmeDates';
+import { getProgrammeDateForWorkingDayIndex, getProgrammeWeekForDate, getProgrammeWorkingDayIndexForDate } from './programmeDates';
 import { ActivityDelay, BUILD_SEQUENCE, getStageNumberForRelativeWeek, ProgrammeActivity, ProgrammeStageNumber, PROGRAMME_STAGE_SEQUENCE, SitePlot, TRADE_ORDER } from './siteProgrammeEngine';
 
 export type TemplateSitePlot = SitePlot & {
@@ -11,6 +11,7 @@ export type TemplateSitePlot = SitePlot & {
   holdUpdatedAt?: string;
   plotStartDate?: string;
   plotCompletionDate?: string;
+  finalStageAdjustmentWeeks?: number;
 };
 
 export type ConstructionMethod = 'traditional' | 'timberFrame' | 'hybrid' | 'projectSpecific';
@@ -510,6 +511,14 @@ export function getPlotLiveFinishProgrammeWeek(
   return Math.max(1, Math.ceil(latestWorkingDay / workingDaysPerWeek(setup)));
 }
 
+export function getPlotLiveFinishDate(plot: TemplateSitePlot, delays: ActivityDelay[], moves: ActivityMove[], templates: PlotTemplate[], setup: Partial<SiteProgrammeSetup>) {
+  const template = getTemplateForPlot(plot, templates);
+  const activities = orderedActivities(template);
+  if (!activities.length) return plot.plotCompletionDate ?? '';
+  const finish = Math.max(...activities.map((activity) => getActivityProgrammeRange(plot, template, activity, delays, moves, setup).finish));
+  return getProgrammeDateForWorkingDayIndex(setup.programmeStartDate, finish, setup.includeSaturday, setup.includeSunday);
+}
+
 export function getMasterProgrammeWeeks(
   plots: TemplateSitePlot[],
   startWeek: number,
@@ -522,7 +531,7 @@ export function getMasterProgrammeWeeks(
   const lastWeek = plots.length
     ? Math.max(
         safeStart,
-        ...plots.map((plot) => Math.max(
+        ...plots.map((plot) => plot.finalStageAdjustmentWeeks ? getPlotLiveFinishProgrammeWeek(plot, delays, moves, templates, setup) : Math.max(
           getPlotCompletionProgrammeWeek(plot, setup),
           getPlotLiveFinishProgrammeWeek(plot, delays, moves, templates, setup),
         )),
@@ -604,15 +613,48 @@ function movementOffsetUpTo(plotId: string, activityOrder: number, moves: Activi
   }, 0);
 }
 
+export function getFinalStageAdjustmentDelays(plot: TemplateSitePlot, template: PlotTemplate, delays: ActivityDelay[], setup?: Partial<SiteProgrammeSetup>) {
+  if (!plot.finalStageAdjustmentWeeks) return [];
+  const activities = orderedActivities(template);
+  const last = activities.at(-1);
+  if (!last) return [];
+  const days = Math.round(plot.finalStageAdjustmentWeeks ?? 0) * workingDaysPerWeek(setup);
+  if (days >= 0) return days ? [{ plotId: plot.id, activityCode: last.code, delayDays: days }] : [];
+  let remaining = -days;
+  const adjustments: ActivityDelay[] = [];
+  for (const activity of activities.slice().reverse()) {
+    if (activity.stage !== last.stage) continue;
+    const existing = delays.filter((delay) => delay.plotId === plot.id && delay.activityCode === activity.code).reduce((sum, delay) => sum + delay.delayDays, 0);
+    const reduction = Math.min(remaining, Math.max(0, activity.durationDays + existing - 1));
+    if (reduction) adjustments.push({ plotId: plot.id, activityCode: activity.code, delayDays: -reduction });
+    remaining -= reduction;
+  }
+  return adjustments;
+}
+
+export function canAdjustFinalStageWeek(plot: TemplateSitePlot, delta: -1 | 1, templates: PlotTemplate[], delays: ActivityDelay[], setup?: Partial<SiteProgrammeSetup>) {
+  const template = getTemplateForPlot(plot, templates);
+  const activities = orderedActivities(template);
+  if (!activities.length || plot.holdStage) return false;
+  const nextWeeks = (plot.finalStageAdjustmentWeeks ?? 0) + delta;
+  if (nextWeeks >= 0) return true;
+  // Compressing overlapping tasks requires an explicit replan, not an automatic week removal.
+  const lastStage = activities.at(-1)!.stage;
+  if (activities.some((activity) => activity.stage === lastStage && activity.overlapAllowed)) return false;
+  const applied = getFinalStageAdjustmentDelays({ ...plot, finalStageAdjustmentWeeks: nextWeeks }, template, delays, setup).reduce((sum, delay) => sum + delay.delayDays, 0);
+  return applied === nextWeeks * workingDaysPerWeek(setup);
+}
+
 export function getActivityProgrammeRange(plot: TemplateSitePlot, template: PlotTemplate, activity: TemplateActivity, delays: ActivityDelay[], moves: ActivityMove[] = [], setup?: Partial<SiteProgrammeSetup>) {
   const scheduled = getTemplateActivityRanges(template).find((item) => item.activity.code === activity.code);
   const relativeStart = scheduled?.start ?? 1;
   const relativeFinish = scheduled?.finish ?? relativeStart;
   const baseOffset = getPlotActivityBaseOffset(plot, template, setup);
   const moveOffset = movementOffsetUpTo(plot.id, activity.order, moves, template.activities);
+  const liveDelays = [...delays, ...getFinalStageAdjustmentDelays(plot, template, delays, setup)];
   return {
-    start: baseOffset + relativeStart + delayBefore(plot.id, activity.order, delays, template.activities) + moveOffset,
-    finish: baseOffset + relativeFinish + delayUpTo(plot.id, activity.order, delays, template.activities) + moveOffset,
+    start: baseOffset + relativeStart + delayBefore(plot.id, activity.order, liveDelays, template.activities) + moveOffset,
+    finish: baseOffset + relativeFinish + delayUpTo(plot.id, activity.order, liveDelays, template.activities) + moveOffset,
   };
 }
 

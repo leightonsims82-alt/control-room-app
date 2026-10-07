@@ -4,6 +4,7 @@ import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek } from
 import {
   getActivitiesForTemplateDay,
   getMasterProgrammeWeeks,
+  getPlotLiveFinishDate,
   getLiveStageNumbersForPlotWeek,
   getPlotBuildOrder,
   getSortedSitePlots,
@@ -176,7 +177,7 @@ export function exportMasterProgrammePdf(input: { siteName: string; programmeSta
         route: plot.constructionMethod === 'timberFrame' ? 'Timber Frame' : 'Traditional',
         houseType: houseType?.name ?? template.name,
         start: formatCalendarWeek(input.programmeStartDate, getStage1StartWeekForPlot(plot, input.templates, dateSetup), input.calendarWeekOne),
-        completion: plot.plotCompletionDate || formatProgrammeDate(input.programmeStartDate, getPlotCompletionProgrammeWeek(plot, dateSetup)),
+        completion: plot.finalStageAdjustmentWeeks ? getPlotLiveFinishDate(plot, input.delays ?? [], input.moves ?? [], input.templates, dateSetup) : plot.plotCompletionDate || formatProgrammeDate(input.programmeStartDate, getPlotCompletionProgrammeWeek(plot, dateSetup)),
         stages: masterWeeks.map((week) => getLiveStageNumbersForPlotWeek(plot, week, input.delays ?? [], input.moves ?? [], input.templates, dateSetup)),
       };
     }),

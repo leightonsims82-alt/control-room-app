@@ -6,6 +6,7 @@ import { getPlotMetadataKey, readPlotMetadata } from '../utils/plotMetadata';
 import { ActivityDelay, ProgrammeStageNumber, TRADE_ORDER } from '../utils/siteProgrammeEngine';
 import {
   ActivityMove,
+  canAdjustFinalStageWeek,
   applyHouseTypeFloorConfiguration,
   ConstructionMethod,
   createHouseTypeTemplate,
@@ -110,6 +111,7 @@ type SitePlannerStore = {
   clearSitePlotData: () => Promise<void>;
   resetPlotData: () => Promise<void>;
   holdPlotAtStage: (input: { plotId: string; holdStage?: ProgrammeStageNumber; holdReason?: string }) => Promise<void>;
+  adjustFinalStageWeek: (plotId: string, delta: -1 | 1) => Promise<void>;
   setActivityDelay: (input: ActivityDelay) => Promise<void>;
   setActivityMove: (input: { plotId: string; activityCode: string; deltaDays: number }) => Promise<void>;
   adjustActivityMove: (input: { plotId: string; activityCode: string; deltaDays: number }) => Promise<number>;
@@ -302,6 +304,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   const [isSitePlannerLoaded, setIsSitePlannerLoaded] = useState(false);
 
   const sitePlotsRef = useRef(sitePlots);
+  const finalStageSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const activityDelaysRef = useRef(activityDelays);
   const activityMovesRef = useRef(activityMoves);
   const tradeContactsRef = useRef(tradeContacts);
@@ -458,6 +461,23 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
     await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(sorted));
   };
 
+  const adjustFinalStageWeek = (plotId: string, delta: -1 | 1) => {
+    const task = finalStageSaveQueue.current.then(async () => {
+      const plot = sitePlotsRef.current.find((item) => item.id === plotId);
+      if (!plot || !canAdjustFinalStageWeek(plot, delta, plotTemplatesRef.current, activityDelaysRef.current, siteSetupRef.current)) {
+        throw new Error('The final stage cannot be shortened further, has overlapping work, or is on hold.');
+      }
+      const next = sitePlotsRef.current.map((item) => item.id === plotId
+        ? { ...item, finalStageAdjustmentWeeks: (item.finalStageAdjustmentWeeks ?? 0) + delta }
+        : item);
+      await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(next));
+      sitePlotsRef.current = next;
+      setSitePlots(next);
+    });
+    finalStageSaveQueue.current = task.catch(() => {});
+    return task;
+  };
+
   const setActivityDelay = async (input: ActivityDelay) => {
     const nextDelays = [
       ...activityDelaysRef.current.filter((delay) => !(delay.plotId === input.plotId && delay.activityCode === input.activityCode)),
@@ -600,6 +620,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
       clearSitePlotData,
       resetPlotData: clearSitePlotData,
       holdPlotAtStage,
+      adjustFinalStageWeek,
       setActivityDelay,
       setActivityMove,
       adjustActivityMove,

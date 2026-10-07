@@ -50,6 +50,9 @@ jobs:
       - name: Static interaction and numeric-input audit
         run: node scripts/full-app-diagnostic.mjs
 
+      - name: Final-stage and dependency compatibility regression
+        run: node tests/final-stage.cjs
+
       - name: TypeScript diagnostic
         run: npx tsc --noEmit
 

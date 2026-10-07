@@ -69,3 +69,35 @@ test('Master stage cells and printout move with live progress across date sectio
   const moved = await stageCells(after);
   expect(moved.findIndex((s) => s.includes('5'))).toBe(first + 2);
 });
+
+test('Final-stage controls extend one week, persist and restore without moving earlier stages', async ({ page }) => {
+  await seed(page, 1);
+  await page.goto(BASE + '/master');
+  const extend = page.getByRole('button', { name: 'Extend final stage by one week for Plot 100' });
+  const shorten = page.getByRole('button', { name: 'Shorten final stage by one week for Plot 100' });
+  await expect(extend).toBeEnabled();
+  await expect(shorten).toBeDisabled();
+  const before = await preview(page, 'A3');
+  const cells = (popup) => popup.locator('tbody tr').evaluateAll((rows) => rows.flatMap((r) => [...r.cells].slice(6).map((c) => c.textContent)));
+  const original = await cells(before);
+  await before.close();
+  const controlPosition = () => extend.evaluate((element) => element.getBoundingClientRect().left - element.parentElement.parentElement.getBoundingClientRect().left);
+  const position = await controlPosition();
+  await extend.click();
+  await expect(page.getByText('Plot 100: final stage extended by one working week.')).toBeVisible();
+  expect(await controlPosition() - position).toBeCloseTo(92, 0);
+  await page.reload();
+  await expect(shorten).toBeEnabled();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('programme-buddy:plots:v1'))[0].finalStageAdjustmentWeeks)).toBe(1);
+  const after = await preview(page, 'A3');
+  const revised = await cells(after);
+  expect(revised.findIndex((value) => value.includes('5'))).toBe(original.findIndex((value) => value.includes('5')));
+  expect(revised.filter((value) => value.includes('6')).length).toBe(original.filter((value) => value.includes('6')).length + 1);
+  await expect(after.getByRole('button', { name: /final stage/ })).toHaveCount(0);
+  await after.close();
+  await shorten.click();
+  await expect(page.getByText('Plot 100: final stage shortened by one working week.')).toBeVisible();
+  await expect(shorten).toBeDisabled();
+  const restored = await preview(page, 'A3');
+  expect(await cells(restored)).toEqual(original);
+});

@@ -12,7 +12,8 @@
     "programme:clean": "npx kill-port 8081 8082 8083 && expo start -c --web --port 8082",
     "build": "expo export --platform web",
     "export:web": "expo export --platform web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "postinstall": "node scripts/patch-dependency-compat.cjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -45,6 +46,10 @@
     "typescript": "~5.9.2"
   },
   "overrides": {
-    "shell-quote": "1.11.0"
+    "shell-quote": "1.11.0",
+    "decode-uri-component": "0.5.0",
+    "image-size": "2.0.4",
+    "postcss": "8.5.29",
+    "uuid": "11.1.1"
   }
 }

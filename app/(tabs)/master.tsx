@@ -23,6 +23,9 @@ import {
 } from '../../utils/stageConfiguration';
 import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber } from '../../utils/siteProgrammeEngine';
 import {
+  canAdjustFinalStageWeek,
+  getPlotLiveFinishProgrammeWeek,
+  getPlotLiveFinishDate,
   getEffectiveProgrammeWeeks,
   getHouseTypeLabel,
   getHouseTypeTemplates,
@@ -42,7 +45,7 @@ type ResetMode = 'all' | 'single';
 type ProgrammeGenerationBasis = 'start' | 'completion';
 
 export default function MasterProgrammeScreen() {
-  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, upsertSitePlot, removeSitePlot, clearSitePlotData, holdPlotAtStage, adjustFinalStageWeek } = useSitePlanner();
   const sortedPlots = useMemo(() => getSortedSitePlots(sitePlots), [sitePlots]);
   const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
   const currentProgrammeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
@@ -54,6 +57,20 @@ export default function MasterProgrammeScreen() {
   const [plotNo, setPlotNo] = useState('');
   const [paperSize, setPaperSize] = useState<MasterPaperSize>('A3');
   const [printError, setPrintError] = useState('');
+  const [stageSaving, setStageSaving] = useState('');
+  const [stageMessage, setStageMessage] = useState('');
+  const matrixWeeks = [...visibleWeeks, (visibleWeeks.at(-1) ?? currentProgrammeWeek) + 1];
+  const changeFinalStage = async (plotId: string, plotNumber: string, delta: -1 | 1) => {
+    if (stageSaving) return;
+    setStageSaving(plotId);
+    setStageMessage('');
+    try {
+      await adjustFinalStageWeek(plotId, delta);
+      setStageMessage(`Plot ${plotNumber}: final stage ${delta > 0 ? 'extended' : 'shortened'} by one working week.`);
+    } catch (error) {
+      setStageMessage(error instanceof Error ? error.message : 'Unable to save the stage change. Please try again.');
+    } finally { setStageSaving(''); }
+  };
 
   const [programmeGenerationBasis, setProgrammeGenerationBasis] = useState<ProgrammeGenerationBasis>('completion');
   const [plotStartDate, setPlotStartDate] = useState('');
@@ -137,7 +154,7 @@ export default function MasterProgrammeScreen() {
           route: metadata?.buildRoute ?? (plot.constructionMethod === 'timberFrame' ? 'Timber Frame' : 'Traditional'),
           houseType: houseType?.name ?? metadata?.houseTypeName ?? getHouseTypeLabel(getTemplateForPlot(plot, plotTemplates)),
           start: formatCalendarWeek(siteSetup.programmeStartDate, getConfiguredStageProgrammeStartWeek(stageDefinitions, getPlotCompletionProgrammeWeek(plot, siteSetup)), siteSetup.calendarWeekOne),
-          completion: plot.plotCompletionDate || metadata?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, getPlotCompletionProgrammeWeek(plot, siteSetup)),
+          completion: plot.finalStageAdjustmentWeeks ? getPlotLiveFinishDate(plot, activityDelays, activityMoves, plotTemplates, siteSetup) : plot.plotCompletionDate || metadata?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, getPlotCompletionProgrammeWeek(plot, siteSetup)),
           stages: visibleWeeks.map((week) => getStageDisplayForWeek(plot, week)),
         };
       }),
@@ -428,7 +445,7 @@ export default function MasterProgrammeScreen() {
         </Pressable>
       </SectionCard>
 
-      <SectionCard title="Master stage-number matrix" subtitle={`The final configured stage is anchored to each plot's completion week. This programme uses ${stageDefinitions.length} stages.`}>
+      <SectionCard title="Master stage-number matrix" subtitle={`Stages follow the live programme. This programme uses ${stageDefinitions.length} stages.`}>
         <View style={styles.buttonRow}>
           {(['A3', 'A4'] as MasterPaperSize[]).map((size) => (
             <Pressable key={size} accessibilityRole="radio" accessibilityState={{ checked: paperSize === size }}
@@ -443,6 +460,8 @@ export default function MasterProgrammeScreen() {
           </Pressable>
         </View>
         <Text style={styles.subtitle}>{sortedPlots.length} plots · {Math.ceil(sortedPlots.length / 30) * Math.ceil(visibleWeeks.length / 23)} pages · Maximum 30 plots and 23 weeks per page. All date sections included. Print or save as PDF. Bedrooms, storeys and hold columns are omitted from the printout.</Text>
+        <Text style={styles.subtitle}>Use − / + after the last populated cell to shorten or extend the final stage by one working week. Earlier stages stay fixed. Shortening keeps at least one working day per activity.</Text>
+        {stageMessage ? <Text accessibilityRole="alert" style={styles.subtitle}>{stageMessage}</Text> : null}
         {printError ? <Text accessibilityRole="alert" style={styles.errorText}>{printError}</Text> : null}
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View>
@@ -456,7 +475,7 @@ export default function MasterProgrammeScreen() {
               <Text style={[styles.headerCell, styles.holdCell]}>Hold</Text>
               <Text style={[styles.headerCell, styles.weekInputCell]}>Start</Text>
               <Text style={[styles.headerCell, styles.completionCell]}>Plot Completion</Text>
-              {visibleWeeks.map((week) => (
+              {matrixWeeks.map((week) => (
                 <View key={week} style={styles.weekHeader}>
                   <Text style={styles.weekHeaderWeek}>{formatCalendarWeek(siteSetup.programmeStartDate, week, siteSetup.calendarWeekOne)}</Text>
                   <Text style={styles.weekHeaderDate}>{formatProgrammeDate(siteSetup.programmeStartDate, week)}</Text>
@@ -477,6 +496,7 @@ export default function MasterProgrammeScreen() {
               const houseTypeTemplateId = plot.houseTypeId ?? metadata?.houseTypeId ?? metadata?.bedroomTemplateId ?? plot.templateId;
               const houseType = houseTypes.find((template) => template.id === houseTypeTemplateId);
               const programmeTemplate = getTemplateForPlot(plot, plotTemplates);
+              const controlWeek = Math.max(currentProgrammeWeek, getPlotLiveFinishProgrammeWeek(plot, activityDelays, activityMoves, plotTemplates, siteSetup) + 1);
               return (
                 <View key={plot.id} style={[styles.tableRow, rowIndex % 2 ? styles.altRow : null]}>
                   <Text style={[styles.bodyCell, styles.buildCell]}>{getPlotBuildOrder(plot, rowIndex)}</Text>
@@ -487,8 +507,20 @@ export default function MasterProgrammeScreen() {
                   <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.floors ?? '-'}</Text>
                   <Text style={[styles.holdBodyCell, styles.holdCell, plot.holdStage ? styles.holdBodyCellActive : null]}>{getPlotHoldLabel(plot)}</Text>
                   <Text style={[styles.stageStartBody, styles.weekInputCell]}>{formatCalendarWeek(siteSetup.programmeStartDate, getConfiguredStageProgrammeStartWeek(stageDefinitions, getPlotCompletionProgrammeWeek(plot, siteSetup)), siteSetup.calendarWeekOne)}</Text>
-                  <Text style={[styles.weekInputBody, styles.completionCell]}>{plot.plotCompletionDate || metadata?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, getPlotCompletionProgrammeWeek(plot, siteSetup))}</Text>
-                  {visibleWeeks.map((week) => {
+                  <Text style={[styles.weekInputBody, styles.completionCell]}>{plot.plotCompletionDate || metadata?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, getPlotCompletionProgrammeWeek(plot, siteSetup))}{plot.finalStageAdjustmentWeeks ? `\nLive: ${getPlotLiveFinishDate(plot, activityDelays, activityMoves, plotTemplates, siteSetup)}` : ''}</Text>
+                  {matrixWeeks.map((week) => {
+                    if (week === controlWeek) return <View key={week} style={styles.finishControls}>
+                      {([-1, 1] as const).map((delta) => {
+                        const disabled = Boolean(stageSaving) || !canAdjustFinalStageWeek(plot, delta, plotTemplates, activityDelays, siteSetup);
+                        return <Pressable key={delta} accessibilityRole="button" disabled={disabled}
+                          accessibilityLabel={`${delta > 0 ? 'Extend' : 'Shorten'} final stage by one week for Plot ${plot.plotNo}`}
+                          onPress={() => changeFinalStage(plot.id, plot.plotNo, delta)}
+                          style={[styles.finishButton, disabled ? styles.disabledButton : null]}>
+                          <Text style={styles.saveButtonText}>{delta > 0 ? '+' : '−'}</Text>
+                        </Pressable>;
+                      })}
+                    </View>;
+
                     const stage = getStageDisplayForWeek(plot, week);
                     const heldStageCell = String(stage).includes('H');
                     return <Text key={week} style={[styles.weekCell, stage ? styles.activeWeekCell : null, heldStageCell ? styles.heldWeekCell : null]}>{stage}</Text>;
@@ -531,6 +563,8 @@ export default function MasterProgrammeScreen() {
 }
 
 const styles = StyleSheet.create({
+  finishControls: { width: 92, borderWidth: 1, borderColor: '#c8d7e6', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  finishButton: { backgroundColor: '#173b5f', padding: 8, borderRadius: 5, minWidth: 34, alignItems: 'center' },
   header: { gap: 4 },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
   subtitle: { color: '#64748b', fontSize: 14, lineHeight: 20 },
