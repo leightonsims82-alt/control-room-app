@@ -142,7 +142,7 @@ export default function MasterProgrammeScreen() {
       siteName: siteSetup.siteName,
       weeks: visibleWeeks.map((week) => ({
         label: formatCalendarWeek(siteSetup.programmeStartDate, week, siteSetup.calendarWeekOne),
-        date: formatProgrammeDate(siteSetup.programmeStartDate, week),
+        date: formatProgrammeDate(siteSetup.programmeStartDate, week, siteSetup.includeSunday ? 7 : siteSetup.includeSaturday ? 6 : 5),
       })),
       rows: sortedPlots.map((plot, rowIndex) => {
         const metadata = plotMetadata[getPlotMetadataKey(plot.plotNo)];
@@ -478,7 +478,7 @@ export default function MasterProgrammeScreen() {
               {matrixWeeks.map((week) => (
                 <View key={week} style={styles.weekHeader}>
                   <Text style={styles.weekHeaderWeek}>{formatCalendarWeek(siteSetup.programmeStartDate, week, siteSetup.calendarWeekOne)}</Text>
-                  <Text style={styles.weekHeaderDate}>{formatProgrammeDate(siteSetup.programmeStartDate, week)}</Text>
+                  <Text style={styles.weekHeaderDate}>{formatProgrammeDate(siteSetup.programmeStartDate, week, siteSetup.includeSunday ? 7 : siteSetup.includeSaturday ? 6 : 5)}</Text>
                 </View>
               ))}
               <Text style={[styles.headerCell, styles.actionCell]}>Action</Text>
