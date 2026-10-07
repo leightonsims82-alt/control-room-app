@@ -475,7 +475,6 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
         ? currentMoves.map((move) => (move.id === existing.id ? nextMove : move))
         : [...currentMoves, nextMove];
     activityMovesRef.current = nextMoves;
-    activityMovesRef.current = nextMoves;
     setActivityMoves(nextMoves);
     await AsyncStorage.setItem(ACTIVITY_MOVES_KEY, JSON.stringify(nextMoves));
   };
@@ -488,7 +487,8 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   };
 
   const resetActivityMovesForPlot = async (plotId: string) => {
-    const nextMoves = currentMoves.filter((move) => move.plotId !== plotId);
+    const nextMoves = activityMovesRef.current.filter((move) => move.plotId !== plotId);
+    activityMovesRef.current = nextMoves;
     setActivityMoves(nextMoves);
     await AsyncStorage.setItem(ACTIVITY_MOVES_KEY, JSON.stringify(nextMoves));
   };
@@ -547,7 +547,7 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
     const standardTemplateId = Math.round(Number(input.bedrooms)) === 4 ? 'fourBedStandard' : (input.baseTemplateId ?? 'threeBed');
     const baseTemplate = plotTemplatesRef.current.find((template) => template.id === standardTemplateId)
       ?? plotTemplatesRef.current.find((template) => template.id === 'threeBed')
-      ?? plotTemplates[0];
+      ?? plotTemplatesRef.current[0];
     const nextTemplate = createHouseTypeTemplate({ ...input, baseTemplate });
     const nextTemplates = [...plotTemplatesRef.current, nextTemplate];
     plotTemplatesRef.current = nextTemplates;
