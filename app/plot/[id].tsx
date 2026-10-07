@@ -159,6 +159,14 @@ export default function PlotDetailScreen() {
               {stage.delayDays > 0 ? <Text style={styles.delayText}>{stage.delayDays} day delay: {stage.delayReason}</Text> : null}
               {stage.inspectionStatus !== 'Not applicable' ? <Text style={styles.inspectionText}>Inspection: {stage.inspectionStatus}</Text> : null}
               <StageStatusControls stage={stage} onChange={updateStageStatus} />
+              {stage.isKeyStage ? (
+                <Link href={`/inspection/${stage.id}`} asChild>
+                  <Pressable style={styles.inspectButton}>
+                    <Ionicons name="shield-checkmark-outline" size={16} color="#ffffff" />
+                    <Text style={styles.inspectButtonText}>{stage.inspectionStatus === 'Passed' ? 'View Inspection' : 'Open Inspection'}</Text>
+                  </Pressable>
+                </Link>
+              ) : null}
             </View>
           </View>
         ))}
@@ -246,6 +254,8 @@ const styles = StyleSheet.create({
   stageMeta: { color: '#64748b', fontSize: 12, marginTop: 3 },
   delayText: { color: '#c2410c', fontSize: 12, fontWeight: '800' },
   inspectionText: { color: '#2563eb', fontSize: 12, fontWeight: '800' },
+  inspectButton: { alignSelf: 'flex-start', marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0f172a', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8 },
+  inspectButtonText: { color: '#ffffff', fontSize: 11, fontWeight: '900' },
   statusControls: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   statusButton: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: '#ffffff' },
   statusButtonSelected: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
