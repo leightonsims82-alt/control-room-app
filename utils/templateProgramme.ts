@@ -327,8 +327,21 @@ function shouldAddThreeStoreyFixDay(activity: TemplateActivity, roofTileOrder: n
 
 export function applyHouseTypeFloorConfiguration(template: PlotTemplate, floors: number): PlotTemplate {
   const normalisedFloors = Math.max(1, Math.min(3, Math.round(Number(floors) || 2)));
-  const baseActivities: TemplateActivity[] = template.activities
-    .filter((activity) => !activity.autoAddedForThreeStorey && !LEGACY_THREE_STOREY_AUTO_CODES.has(activity.code))
+  const hasThreeStoreyGeneratedRows = template.activities.some((activity) => activity.autoAddedForThreeStorey);
+
+  // Saving or re-editing an existing 3-storey house type must not regenerate its
+  // automatic rows, otherwise user changes to those rows are silently lost.
+  if (normalisedFloors === 3 && template.floors === 3 && hasThreeStoreyGeneratedRows) {
+    return { ...template, floors: 3, activities: reindexActivities(template.activities.slice().sort((a, b) => a.order - b.order)) };
+  }
+
+  const sourceActivities = template.activities.map((activity) =>
+    template.floors === 3 && LEGACY_THREE_STOREY_AUTO_CODES.has(activity.code)
+      ? { ...activity, autoAddedForThreeStorey: true }
+      : activity,
+  );
+  const baseActivities: TemplateActivity[] = sourceActivities
+    .filter((activity) => !activity.autoAddedForThreeStorey)
     .slice()
     .sort((a, b) => a.order - b.order)
     .map((activity) => ({
