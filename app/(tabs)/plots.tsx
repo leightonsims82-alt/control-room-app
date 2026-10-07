@@ -3,13 +3,12 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
-import { DAY_NAMES } from '../../utils/siteProgrammeEngine';
-import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek } from '../../utils/programmeDates';
-import { getHouseTypeTemplates, getPlotBreakdownTemplateText, getPlotCompletionProgrammeWeek, getStage1StartWeekForPlot, getTemplateForPlot } from '../../utils/templateProgramme';
+import { formatCalendarWeek, formatProgrammeDate, formatProgrammeWeekEndingDate, getCurrentProgrammeWeek } from '../../utils/programmeDates';
+import { getHouseTypeTemplates, getPlotBreakdownTemplateText, getPlotCompletionProgrammeWeek, getStage1StartWeekForPlot, getTemplateForPlot, getWorkingDayNumbers } from '../../utils/templateProgramme';
 
 const ALL_TYPES = 'All plot types';
 const DAY_WIDTH = 82;
-const WEEK_WIDTH = DAY_WIDTH * 5;
+const DAY_LABELS: Record<number, string> = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun' };
 
 export default function PlotsScreen() {
   const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup } = useSitePlanner();
@@ -18,6 +17,8 @@ export default function PlotsScreen() {
   const filteredPlots = selectedTemplateId === ALL_TYPES ? sitePlots : sitePlots.filter((plot) => (plot.houseTypeId ?? plot.templateId) === selectedTemplateId);
   const templateFilters = [ALL_TYPES, ...houseTypes.map((template) => template.id)];
   const currentProgrammeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
+  const workingDays = getWorkingDayNumbers(siteSetup);
+  const weekWidth = DAY_WIDTH * workingDays.length;
   const latestCompletionWeek = sitePlots.length ? Math.max(...sitePlots.map((plot) => getPlotCompletionProgrammeWeek(plot, siteSetup))) : 1;
   const displayWeekCount = Math.max(52, currentProgrammeWeek + 26, latestCompletionWeek + 4);
   const displayWeeks = Array.from({ length: displayWeekCount }, (_, index) => index + 1);
@@ -64,14 +65,14 @@ export default function PlotsScreen() {
                 <Text style={[styles.weekHeaderBlank, styles.templateCell]} />
                 <Text style={[styles.weekHeaderBlank, styles.stageCell]} />
                 <Text style={[styles.weekHeaderBlank, styles.stageCell]} />
-                {displayWeeks.map((week) => <Text key={week} style={styles.weekGroup}>{formatCalendarWeek(siteSetup.programmeStartDate, week, siteSetup.calendarWeekOne)} · {formatProgrammeDate(siteSetup.programmeStartDate, week)}</Text>)}
+                {displayWeeks.map((week) => <Text key={week} style={[styles.weekGroup, { width: weekWidth }]}>{formatCalendarWeek(siteSetup.programmeStartDate, week, siteSetup.calendarWeekOne)} · {formatProgrammeWeekEndingDate(siteSetup.programmeStartDate, week, siteSetup.includeSaturday, siteSetup.includeSunday)}</Text>)}
               </View>
               <View style={styles.tableRow}>
                 <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
                 <Text style={[styles.headerCell, styles.templateCell]}>Type</Text>
                 <Text style={[styles.headerCell, styles.stageCell]}>Plot Completion</Text>
                 <Text style={[styles.headerCell, styles.stageCell]}>Stage 1</Text>
-                {displayWeeks.flatMap((week) => DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>{day}</Text>))}
+                {displayWeeks.flatMap((week) => workingDays.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>{DAY_LABELS[day]}</Text>))}
               </View>
 
               {filteredPlots.map((plot, rowIndex) => {
@@ -84,9 +85,9 @@ export default function PlotsScreen() {
                     <Text style={[styles.bodyCell, styles.stageCell]}>{plot.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
                     <Text style={[styles.stageStartCell, styles.stageCell]}>{formatCalendarWeek(siteSetup.programmeStartDate, getStage1StartWeekForPlot(plot, plotTemplates, siteSetup), siteSetup.calendarWeekOne)}</Text>
                     {displayWeeks.flatMap((week) =>
-                      DAY_NAMES.map((_, dayIndex) => {
-                        const text = getPlotBreakdownTemplateText(plot, week, dayIndex + 1, activityDelays, plotTemplates, siteSetup, activityMoves);
-                        return <Text key={`${plot.id}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
+                      workingDays.map((day) => {
+                        const text = getPlotBreakdownTemplateText(plot, week, day, activityDelays, plotTemplates, siteSetup, activityMoves);
+                        return <Text key={`${plot.id}-${week}-${day}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
                       }),
                     )}
                   </View>
@@ -122,7 +123,7 @@ const styles = StyleSheet.create({
   tableRow: { flexDirection: 'row', alignItems: 'stretch' },
   altRow: { backgroundColor: '#f8fbff' },
   weekHeaderBlank: { backgroundColor: '#173b5f', borderRightWidth: 1, borderRightColor: '#9fb6ce', minHeight: 30 },
-  weekGroup: { width: WEEK_WIDTH, backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderRightWidth: 1, borderRightColor: '#9fb6ce', textAlign: 'center' },
+  weekGroup: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 8, borderRightWidth: 1, borderRightColor: '#9fb6ce', textAlign: 'center' },
   headerCell: { backgroundColor: '#173b5f', color: '#ffffff', fontWeight: '900', fontSize: 12, padding: 9, borderTopWidth: 1, borderTopColor: '#9fb6ce', borderRightWidth: 1, borderRightColor: '#9fb6ce', textAlign: 'center' },
   plotCell: { width: 92 },
   templateCell: { width: 118 },
