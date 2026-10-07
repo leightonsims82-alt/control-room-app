@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -9,9 +8,9 @@ import { useSitePlanner } from '../../data/sitePlannerStore';
 import { getCalendarWeekForDate, getProgrammeStartDateValue, normaliseBritishDate, validateWeekOneDate } from '../../utils/programmeDates';
 import { ConfiguredProgrammeStage, readStageConfiguration, saveStageConfiguration } from '../../utils/stageConfiguration';
 import { PROGRAMME_STAGE_SEQUENCE } from '../../utils/siteProgrammeEngine';
-import { applyHouseTypeFloorConfiguration, getEffectiveProgrammeWeeks, getHouseTypeLabel, getHouseTypeTemplates, getStandardTemplateIdForBedrooms, PlotTemplate, TemplateActivity } from '../../utils/templateProgramme';
+import { applyHouseTypeFloorConfiguration, applyStandardHouseTypeStages, getEffectiveProgrammeWeeks, getHouseTypeLabel, getHouseTypeTemplates, getStandardTemplateIdForBedrooms, PlotTemplate, TemplateActivity } from '../../utils/templateProgramme';
+import { getCanonicalActivity } from '../../core/programme/activityTruth';
 
-const LOCKED_STANDARD_KEY = 'programme-buddy:locked-three-bed-standard:v1';
 const LOCKED_STAGE_COUNT = 9;
 
 
@@ -39,7 +38,6 @@ export default function SiteSetupScreen() {
   const [calendarWeekOneInput, setCalendarWeekOneInput] = useState(String(siteSetup.calendarWeekOne ?? getCalendarWeekForDate(getProgrammeStartDateValue(siteSetup.programmeStartDate)) ?? 1));
   const [workingDays, setWorkingDays] = useState<5 | 6 | 7>(siteSetup.includeSunday ? 7 : siteSetup.includeSaturday ? 6 : 5);
   const [stageDefinitions, setStageDefinitions] = useState<ConfiguredProgrammeStage[]>(PROGRAMME_STAGE_SEQUENCE.slice(0, LOCKED_STAGE_COUNT).map((stage) => ({ ...stage })));
-  const [lockedThreeBed, setLockedThreeBed] = useState<PlotTemplate | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [draft, setDraft] = useState<PlotTemplate | null>(null);
   const [newHouseTypeName, setNewHouseTypeName] = useState('');
@@ -48,23 +46,6 @@ export default function SiteSetupScreen() {
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [weekOneDateError, setWeekOneDateError] = useState('');
-
-  useEffect(() => {
-    if (!isSitePlannerLoaded) return;
-    let active = true;
-    (async () => {
-      const liveThreeBed = plotTemplates.find((template) => template.id === 'threeBed');
-      if (!liveThreeBed) return;
-      const existing = await AsyncStorage.getItem(LOCKED_STANDARD_KEY);
-      const standard = existing ? JSON.parse(existing) as PlotTemplate : cloneTemplate(liveThreeBed);
-      if (!existing) await AsyncStorage.setItem(LOCKED_STANDARD_KEY, JSON.stringify(standard));
-      if (!active) return;
-      setLockedThreeBed(standard);
-      // Enforce the locked standard in the planner store as the source of truth.
-      if (JSON.stringify(liveThreeBed) !== JSON.stringify(standard)) await updatePlotTemplate(standard);
-    })().catch((error) => setMessage(`Unable to load locked 3 Bedroom standard: ${String(error)}`));
-    return () => { active = false; };
-  }, [isSitePlannerLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!isSitePlannerLoaded) return;
@@ -142,9 +123,7 @@ export default function SiteSetupScreen() {
 
   const standardForBedrooms = (bedrooms: number) => {
     const standardId = getStandardTemplateIdForBedrooms(bedrooms);
-    return standardId === 'threeBed'
-      ? lockedThreeBed
-      : plotTemplates.find((template) => template.id === standardId) ?? null;
+    return plotTemplates.find((template) => template.id === standardId) ?? null;
   };
 
   const applyBedroomStandardToDraft = (bedrooms: number) => {
@@ -176,7 +155,7 @@ export default function SiteSetupScreen() {
     setSaving(true);
     try {
       const withFloors = applyHouseTypeFloorConfiguration(draft, draft.floors ?? 2);
-      const cleaned: PlotTemplate = {
+      const cleaned: PlotTemplate = applyStandardHouseTypeStages({
         ...withFloors,
         name: withFloors.name.trim(),
         houseTypeCode: withFloors.name.trim(),
@@ -185,7 +164,7 @@ export default function SiteSetupScreen() {
         isHouseType: true,
         isSystemTemplate: false,
         activities: orderedActivities(withFloors.activities),
-      };
+      });
       if (!cleaned.name) {
         setMessage('House type name is required.');
         return;
@@ -429,6 +408,8 @@ export default function SiteSetupScreen() {
               <View style={styles.field}><Text style={styles.label}>Storeys</Text><View style={styles.chips}>{[1,2,3].map((count) => <Pressable key={count} onPress={() => patchDraftDetails({ floors: count })} style={[styles.chip, draft.floors === count ? styles.chipActive : null]}><Text style={[styles.chipText, draft.floors === count ? styles.chipTextActive : null]}>{count}</Text></Pressable>)}</View></View>
             </View> : null}
 
+            <View style={styles.lockedBanner}><Text style={styles.lockedTitle}>Activity-stage truth locked</Text><Text style={styles.lockedText}>Known programme activities keep the same trade and stage in every house type. You can change duration and sequence without changing what stage the activity belongs to.</Text></View>
+
             <ScrollView horizontal showsHorizontalScrollIndicator>
               <View style={styles.activityTable}>
                 <View style={styles.activityRow}>
@@ -436,10 +417,10 @@ export default function SiteSetupScreen() {
                 </View>
                 {rows.map((activity) => <View key={`activity-row-${activity.order}`} style={styles.activityRow}>
                   <Text style={[styles.td, styles.seqCol]}>{activity.order}</Text>
-                  {draft ? <TextInput value={activity.code} onChangeText={(value) => patchActivity(activity.order, { code: value })} style={[styles.input, styles.taskCol]} /> : <Text style={[styles.td, styles.taskCol]}>{activity.code}</Text>}
-                  {draft ? <TextInput value={activity.trade} onChangeText={(value) => patchActivity(activity.order, { trade: value })} style={[styles.input, styles.tradeCol]} /> : <Text style={[styles.td, styles.tradeCol]}>{activity.trade}</Text>}
-                  {draft ? <TextInput value={activity.displayText} onChangeText={(value) => patchActivity(activity.order, { displayText: value })} style={[styles.input, styles.displayCol]} /> : <Text style={[styles.td, styles.displayCol]}>{activity.displayText}</Text>}
-                  {draft ? <TextInput defaultValue={String(activity.stage)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => patchActivity(activity.order, { stage: Math.min(LOCKED_STAGE_COUNT, toPositiveInt(nativeEvent.text, Number(activity.stage))) as TemplateActivity['stage'] })} style={[styles.input, styles.smallCol]} /> : <Text style={[styles.td, styles.smallCol]}>{activity.stage}</Text>}
+                  {draft && !getCanonicalActivity(activity.code) ? <TextInput value={activity.code} onChangeText={(value) => patchActivity(activity.order, { code: value })} style={[styles.input, styles.taskCol]} /> : <Text style={[styles.td, styles.taskCol]}>{activity.code}</Text>}
+                  {draft && !getCanonicalActivity(activity.code) ? <TextInput value={activity.trade} onChangeText={(value) => patchActivity(activity.order, { trade: value })} style={[styles.input, styles.tradeCol]} /> : <Text style={[styles.td, styles.tradeCol]}>{activity.trade}</Text>}
+                  {draft && !getCanonicalActivity(activity.code) ? <TextInput value={activity.displayText} onChangeText={(value) => patchActivity(activity.order, { displayText: value })} style={[styles.input, styles.displayCol]} /> : <Text style={[styles.td, styles.displayCol]}>{activity.displayText}</Text>}
+                  <Text style={[styles.td, styles.smallCol]}>{activity.stage}</Text>
                   {draft ? <TextInput defaultValue={String(activity.durationDays)} keyboardType="number-pad" onEndEditing={({ nativeEvent }) => patchActivity(activity.order, { durationDays: toPositiveInt(nativeEvent.text, activity.durationDays) })} style={[styles.input, styles.smallCol, styles.daysInput]} /> : <Text style={[styles.td, styles.smallCol, styles.daysCell]}>{activity.durationDays}</Text>}
                   {draft ? <View style={styles.rowActions}>
                     <Pressable style={styles.miniButton} onPress={() => moveActivity(activity.order, -1)}><Text style={styles.miniButtonText}>↑</Text></Pressable>
