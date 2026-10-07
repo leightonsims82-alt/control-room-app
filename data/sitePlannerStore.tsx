@@ -27,7 +27,8 @@ const TRADE_CONTACTS_KEY = 'programme-buddy:trade-contacts:v1';
 const ISSUE_SETTINGS_KEY = 'programme-buddy:issue-settings:v1';
 const ISSUE_LOGS_KEY = 'programme-buddy:issue-logs:v1';
 const PLOT_TEMPLATES_KEY = 'programme-buddy:plot-templates:v1';
-const HOUSE_TYPES_RESET_KEY = 'programme-buddy:house-types-reset:v2';
+const PROGRAMME_V2_MIGRATION_KEY = 'programme-buddy:v2-migration:2026-10-07';
+const PROGRAMME_V2_BACKUP_KEY = 'programme-buddy:v2-legacy-snapshot:2026-10-07';
 const SITE_PROGRAMME_SETUP_KEY = 'programme-buddy:programme-setup:v1';
 const PROGRAMME_NOTES_KEY = 'programme-buddy:programme-notes:v1';
 
@@ -209,19 +210,25 @@ function normaliseTemplate(template: PlotTemplate) {
   };
 }
 
-function mergeDefaultTemplates(stored: PlotTemplate[]) {
-  const savedById = new Map(stored.map((template) => [template.id, normaliseTemplate(template)]));
-  const merged = DEFAULT_PLOT_TEMPLATES.map((template) => {
-    const saved = savedById.get(template.id) ?? normaliseTemplate(template);
-    return template.id === 'timberFrame' ? saved : applyStandardHouseTypeStages(saved);
-  });
-  const defaultIds = new Set(DEFAULT_PLOT_TEMPLATES.map((template) => template.id));
-  const custom = stored
-    .filter((template) => !defaultIds.has(template.id) && !LEGACY_PROPERTY_TEMPLATE_IDS.has(template.id))
-    .map(normaliseTemplate)
-    .filter((template) => template.isHouseType)
-    .map((template) => applyStandardHouseTypeStages(template));
-  return [...merged, ...custom];
+function mergeMissingSystemTemplates(stored: PlotTemplate[]) {
+  const normalisedStored = stored
+    .filter((template) => !LEGACY_PROPERTY_TEMPLATE_IDS.has(template.id))
+    .map(normaliseTemplate);
+  const savedById = new Map(normalisedStored.map((template) => [template.id, template]));
+  const missingSystem = DEFAULT_PLOT_TEMPLATES
+    .filter((template) => !savedById.has(template.id))
+    .map(normaliseTemplate);
+  return [...missingSystem, ...normalisedStored];
+}
+
+function migrateTemplatesToV2(stored: PlotTemplate[]) {
+  return mergeMissingSystemTemplates(stored)
+    .filter((template) => !LEGACY_DEMO_HOUSE_TYPE_IDS.has(template.id))
+    .map((template) => (
+      template.id === 'timberFrame' || template.constructionMethod === 'timberFrame'
+        ? template
+        : applyStandardHouseTypeStages(template)
+    ));
 }
 
 function cleanPlotInput(input: SitePlotInput, fallbackBuildOrder: number): SitePlotInput | null {
@@ -336,7 +343,6 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           const sortedMigratedPlots = getSortedSitePlots(migratedPlots);
           sitePlotsRef.current = sortedMigratedPlots;
           setSitePlots(sortedMigratedPlots);
-          await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(sortedMigratedPlots));
           activityDelaysRef.current = storedDelays;
           setActivityDelays(storedDelays);
           activityMovesRef.current = storedMoves;
@@ -349,18 +355,36 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           setIssueLogs(storedIssueLogs);
           programmeNotesRef.current = storedNotes;
           setProgrammeNotes(storedNotes);
-          const houseTypesReset = await AsyncStorage.getItem(HOUSE_TYPES_RESET_KEY);
-          const templatesForMigration = houseTypesReset === 'done'
-            ? storedTemplates
-            : storedTemplates.filter((template) => !LEGACY_DEMO_HOUSE_TYPE_IDS.has(template.id));
-          const mergedTemplates = mergeDefaultTemplates(templatesForMigration);
-          plotTemplatesRef.current = mergedTemplates;
-          setPlotTemplates(mergedTemplates);
-          await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(mergedTemplates));
-          await AsyncStorage.setItem(HOUSE_TYPES_RESET_KEY, 'done');
+          const migrationState = await AsyncStorage.getItem(PROGRAMME_V2_MIGRATION_KEY);
+          const isV2Migrated = migrationState === 'done';
+          const v2Templates = isV2Migrated ? mergeMissingSystemTemplates(storedTemplates) : migrateTemplatesToV2(storedTemplates);
+
+          if (!isV2Migrated) {
+            const legacySnapshot = {
+              createdAt: new Date().toISOString(),
+              plots: storedPlots,
+              delays: storedDelays,
+              moves: storedMoves,
+              contacts: storedContacts,
+              issueSettings: storedIssueSettings,
+              issueLogs: storedIssueLogs,
+              notes: storedNotes,
+              templates: storedTemplates,
+              siteSetup: storedSiteSetup,
+            };
+            await AsyncStorage.setItem(PROGRAMME_V2_BACKUP_KEY, JSON.stringify(legacySnapshot));
+            await Promise.all([
+              AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(v2Templates)),
+              AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(sortedMigratedPlots)),
+              AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(migratedSiteSetup)),
+              AsyncStorage.setItem(PROGRAMME_V2_MIGRATION_KEY, 'done'),
+            ]);
+          }
+
+          plotTemplatesRef.current = v2Templates;
+          setPlotTemplates(v2Templates);
           siteSetupRef.current = migratedSiteSetup;
           setSiteSetupState(migratedSiteSetup);
-          await AsyncStorage.setItem(SITE_PROGRAMME_SETUP_KEY, JSON.stringify(migratedSiteSetup));
         }
       } catch (error) {
         console.warn('Unable to load site planner data', error);
