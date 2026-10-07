@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { houseTypes as demoHouseTypes } from './demoData';
 import { getInspectionTemplateForStage } from '../utils/inspectionTemplateResolver';
 import { DabsBriefingItem, UpdateDabsBriefingItemInput } from '../types/dabs';
 import {
@@ -19,7 +18,7 @@ import {
 } from '../types/models';
 import { FoundationType } from '../types/regulations';
 import { getProgrammeDateForWorkingDayIndex, getProgrammeWeekForDate, normaliseBritishDate, parseProgrammeDate, shiftProgrammeWorkingDays } from '../utils/programmeDates';
-import { ConstructionMethod, getActivityProgrammeRange, getTemplateById, getTemplateForPlot, getTemplateProgrammeWorkingDays, orderedActivities } from '../utils/templateProgramme';
+import { ConstructionMethod, getActivityProgrammeRange, getTemplateById, getTemplateForPlot, getTemplateProgrammeWorkingDays, orderedActivities, TemplateSitePlot } from '../utils/templateProgramme';
 import { useSitePlanner } from './sitePlannerStore';
 
 const PLOTS_KEY = 'siteprog:plot-programmes:v1';
@@ -98,10 +97,11 @@ function getPlotForStage(stage: PlotStage, plots: PlotProgramme[]) {
   return plots.find((item) => item.id === stage.plotProgrammeId);
 }
 
-function getBuildTypeForStage(stage: PlotStage, plots: PlotProgramme[]): BuildType | undefined {
-  const plot = getPlotForStage(stage, plots);
-  const houseType = demoHouseTypes.find((item) => item.id === plot?.houseTypeId);
-  return houseType?.buildType;
+function getBuildTypeForStage(stage: PlotStage, sitePlots: TemplateSitePlot[]): BuildType | undefined {
+  const sitePlot = sitePlots.find((item) => item.id === stage.plotProgrammeId);
+  if (sitePlot?.constructionMethod === 'timberFrame') return 'Timber Frame';
+  if (sitePlot?.constructionMethod === 'traditional') return 'Traditional';
+  return undefined;
 }
 
 function getFoundationTypeForStage(stage: PlotStage, plots: PlotProgramme[]) {
@@ -159,8 +159,7 @@ function getInspectionStatusFromItems(items: InspectionChecklistItem[]): Inspect
   return 'Passed';
 }
 
-function createBlankDabsItem(plot: PlotProgramme, briefingDate: string, stage?: PlotStage): DabsBriefingItem {
-  const buildType = stage ? getBuildTypeForStage(stage, [plot]) : undefined;
+function createBlankDabsItem(plot: PlotProgramme, briefingDate: string, stage?: PlotStage, buildType?: BuildType): DabsBriefingItem {
   return {
     id: `dabs-${briefingDate}-${plot.id}`,
     briefingDate,
@@ -360,7 +359,7 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
   const startInspectionForStage = async (stageId: string) => {
     const stage = plotStages.find((item) => item.id === stageId);
     if (!stage) return undefined;
-    const buildType = getBuildTypeForStage(stage, plotProgrammes);
+    const buildType = getBuildTypeForStage(stage, sitePlots);
     const foundationType = getFoundationTypeForStage(stage, plotProgrammes);
     const template = getInspectionTemplateForStage(stage.stageName, buildType, foundationType);
     if (!template) return undefined;
@@ -449,8 +448,9 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
     if (!plot) return;
     const stage = input.plotStageId ? plotStages.find((item) => item.id === input.plotStageId) : plotStages.find((item) => item.plotProgrammeId === plotProgrammeId && item.status !== 'Complete');
     const existing = dabsBriefings.find((item) => item.plotProgrammeId === plotProgrammeId && item.briefingDate === briefingDate);
+    const buildType = stage ? getBuildTypeForStage(stage, sitePlots) : undefined;
     const updated: DabsBriefingItem = {
-      ...(existing ?? createBlankDabsItem(plot, briefingDate, stage)),
+      ...(existing ?? createBlankDabsItem(plot, briefingDate, stage, buildType)),
       ...input,
       updatedAt: new Date().toISOString(),
     };
