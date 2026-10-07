@@ -32,18 +32,18 @@ export default function MoreScreen() {
       </SectionCard>
 
       <SectionCard title="Build Status" subtitle="Current programme app state">
-        <InfoRow label="App" value="Site Programme Control Room" />
-        <InfoRow label="Mode" value="Local pilot build" />
-        <InfoRow label="Week-based plots" value={`${sitePlots.length}`} />
+        <InfoRow label="App" value="SiteProg Programme V2" />
+        <InfoRow label="Mode" value="Programme V2 · single schedule engine" />
+        <InfoRow label="Live plots" value={`${sitePlots.length}`} />
         <InfoRow label="Trade contacts" value={`${tradeContacts.length}`} />
         <InfoRow label="Issue logs" value={`${issueLogs.length}`} />
         <InfoRow label="Inspections saved" value={`${inspections.length}`} />
         <InfoRow label="Trade actions" value={`${defects.length}`} />
       </SectionCard>
 
-      <SectionCard title="Live control modules" subtitle="Base44 ideas now carried into the VS Code build">
+      <SectionCard title="Live control modules" subtitle="All live modules consume the same Programme V2 schedule">
         <Text style={styles.item}>Plot setup with house type, build method and forward/reverse programme generation</Text>
-        <Text style={styles.item}>Master programme date control without extra +/- controls</Text>
+        <Text style={styles.item}>Master programme from current week to final live finish, with final-stage − / + control</Text>
         <Text style={styles.item}>Interactive 2-week programme with activity movement controls</Text>
         <Text style={styles.item}>Expanded plot breakdown with programme health, next 14 days and QA blockers</Text>
         <Text style={styles.item}>Trade supervisor setup and trade-filtered live 2-week programmes</Text>
