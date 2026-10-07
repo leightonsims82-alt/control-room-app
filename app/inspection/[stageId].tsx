@@ -5,6 +5,7 @@ import { AppScreen } from '../../components/AppScreen';
 import { PhotoCaptureField } from '../../components/PhotoCaptureField';
 import { SectionCard } from '../../components/SectionCard';
 import { UpdateInspectionItemInput, useProgrammeData } from '../../data/programmeStore';
+import { useSitePlanner } from '../../data/sitePlannerStore';
 import { ChecklistAnswer, InspectionChecklistItem } from '../../types/models';
 import { getInspectionTemplateForStage } from '../../utils/inspectionTemplateResolver';
 
@@ -13,9 +14,16 @@ const answers: ChecklistAnswer[] = ['Yes', 'No', 'N/A'];
 export default function StageInspectionScreen() {
   const { stageId } = useLocalSearchParams<{ stageId: string }>();
   const store = useProgrammeData();
+  const { sitePlots } = useSitePlanner();
   const stage = store.plotStages.find((item) => item.id === stageId);
   const plot = stage ? store.plotProgrammes.find((item) => item.id === stage.plotProgrammeId) : undefined;
-  const template = stage ? getInspectionTemplateForStage(stage.stageName) : undefined;
+  const sitePlot = stage ? sitePlots.find((item) => item.id === stage.plotProgrammeId) : undefined;
+  const buildType = sitePlot?.constructionMethod === 'timberFrame'
+    ? 'Timber Frame'
+    : sitePlot?.constructionMethod === 'traditional'
+      ? 'Traditional'
+      : undefined;
+  const template = stage ? getInspectionTemplateForStage(stage.stageName, buildType, plot?.foundationType) : undefined;
   const inspection = store.inspections.find((item) => item.plotStageId === stageId);
 
   useEffect(() => {
