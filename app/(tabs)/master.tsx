@@ -16,12 +16,7 @@ import {
   savePlotMetadata,
 } from '../../utils/plotMetadata';
 import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek, getProgrammeWeekForDate, shiftProgrammeWorkingDays, validatePlotCompletionDate } from '../../utils/programmeDates';
-import {
-  ConfiguredProgrammeStage,
-  getConfiguredStageProgrammeStartWeek,
-  readStageConfiguration,
-} from '../../utils/stageConfiguration';
-import { PROGRAMME_STAGE_SEQUENCE, ProgrammeStageNumber } from '../../utils/siteProgrammeEngine';
+import { ProgrammeStageNumber } from '../../utils/siteProgrammeEngine';
 import {
   canAdjustFinalStageWeek,
   getPlotLiveFinishProgrammeWeek,
@@ -36,6 +31,8 @@ import {
   getPlotHoldDetail,
   getPlotHoldLabel,
   getSortedSitePlots,
+  getStage1StartWeekForPlot,
+  STAGE_LABELS,
   getTemplateById,
   getTemplateForPlot,
   getTemplateProgrammeWorkingDays,
@@ -53,7 +50,6 @@ export default function MasterProgrammeScreen() {
     () => getMasterProgrammeWeeks(sitePlots, currentProgrammeWeek, activityDelays, activityMoves, plotTemplates, siteSetup),
     [sitePlots, currentProgrammeWeek, activityDelays, activityMoves, plotTemplates, siteSetup],
   );
-  const initialStageCount = 9;
   const [plotNo, setPlotNo] = useState('');
   const [paperSize, setPaperSize] = useState<MasterPaperSize>('A3');
   const [printError, setPrintError] = useState('');
@@ -79,9 +75,6 @@ export default function MasterProgrammeScreen() {
   const [buildRoute, setBuildRoute] = useState<PlotBuildRoute>('Traditional');
   const [houseTypeId, setHouseTypeId] = useState('');
   const [plotMetadata, setPlotMetadata] = useState<PlotMetadataMap>({});
-  const [stageDefinitions, setStageDefinitions] = useState<ConfiguredProgrammeStage[]>(
-    PROGRAMME_STAGE_SEQUENCE.slice(0, initialStageCount).map((stage) => ({ ...stage })),
-  );
   const [resetMode, setResetMode] = useState<ResetMode>('single');
   const [selectedResetPlotId, setSelectedResetPlotId] = useState('');
   const [clearConfirm, setClearConfirm] = useState(false);
@@ -116,14 +109,6 @@ export default function MasterProgrammeScreen() {
 
 
   useEffect(() => {
-    readStageConfiguration(9)
-      .then((stages) => setStageDefinitions(stages.slice(0, 9)))
-      .catch(() => {
-        setStageDefinitions(PROGRAMME_STAGE_SEQUENCE.slice(0, 9).map((stage) => ({ ...stage })));
-      });
-  }, [siteSetup]);
-
-  useEffect(() => {
     if (!selectedResetPlotId && sortedPlots[0]?.id) setSelectedResetPlotId(sortedPlots[0].id);
     if (!holdPlotId && sortedPlots[0]?.id) {
       setHoldPlotId(sortedPlots[0].id);
@@ -131,6 +116,8 @@ export default function MasterProgrammeScreen() {
       setHoldReason(sortedPlots[0].holdReason ?? '');
     }
   }, [holdPlotId, selectedResetPlotId, sortedPlots]);
+
+  const stageKey = Object.entries(STAGE_LABELS).map(([stage, label]) => ({ stage: Number(stage), label }));
 
   const getStageDisplayForWeek = (plot: (typeof sitePlots)[number], week: number) => {
     return getLiveStageNumbersForPlotWeek(plot, week, activityDelays, activityMoves, plotTemplates, siteSetup);
@@ -153,12 +140,12 @@ export default function MasterProgrammeScreen() {
           plot: plot.plotNo,
           route: metadata?.buildRoute ?? (plot.constructionMethod === 'timberFrame' ? 'Timber Frame' : 'Traditional'),
           houseType: houseType?.name ?? metadata?.houseTypeName ?? getHouseTypeLabel(getTemplateForPlot(plot, plotTemplates)),
-          start: formatCalendarWeek(siteSetup.programmeStartDate, getConfiguredStageProgrammeStartWeek(stageDefinitions, getPlotCompletionProgrammeWeek(plot, siteSetup)), siteSetup.calendarWeekOne),
+          start: formatCalendarWeek(siteSetup.programmeStartDate, getStage1StartWeekForPlot(plot, plotTemplates, siteSetup), siteSetup.calendarWeekOne),
           completion: plot.finalStageAdjustmentWeeks ? getPlotLiveFinishDate(plot, activityDelays, activityMoves, plotTemplates, siteSetup) : plot.plotCompletionDate || metadata?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, getPlotCompletionProgrammeWeek(plot, siteSetup)),
           stages: visibleWeeks.map((week) => getStageDisplayForWeek(plot, week)),
         };
       }),
-      stageKey: stageDefinitions,
+      stageKey,
     });
     setPrintError(error ?? '');
   };
@@ -283,8 +270,8 @@ export default function MasterProgrammeScreen() {
   return (
     <AppScreen>
       <View style={styles.header}>
-        <Text style={styles.title}>Master 23 Week Programme</Text>
-        <Text style={styles.subtitle}>The programme starts at the current week and shows the following 22 weeks.</Text>
+        <Text style={styles.title}>Master Programme</Text>
+        <Text style={styles.subtitle}>Live stage-number programme from the current week through to the final live plot finish.</Text>
       </View>
 
       <SectionCard title="Plot input" subtitle="Choose whether the programme is driven from the plot start date or the completion date, then add the plot in sequence.">
@@ -459,7 +446,7 @@ export default function MasterProgrammeScreen() {
             <Text style={styles.saveButtonText}>Print all live pages</Text>
           </Pressable>
         </View>
-        <Text style={styles.subtitle}>{sortedPlots.length} plots · {Math.ceil(sortedPlots.length / 30) * Math.ceil(visibleWeeks.length / 23)} pages · Maximum 30 plots and 23 weeks per page. All date sections included. Print or save as PDF. Bedrooms, storeys and hold columns are omitted from the printout.</Text>
+        <Text style={styles.subtitle}>{sortedPlots.length} plots · {Math.ceil(sortedPlots.length / 30) * Math.ceil(visibleWeeks.length / 23)} pages · Maximum 30 plots and 23 weeks per printed page. All date sections included. Print or save as PDF. Bedrooms, storeys and hold columns are omitted from the printout.</Text>
         <Text style={styles.subtitle}>Use − / + after the last populated cell to shorten or extend the final stage by one working week. Earlier stages stay fixed. Shortening keeps at least one working day per activity.</Text>
         {stageMessage ? <Text accessibilityRole="alert" style={styles.subtitle}>{stageMessage}</Text> : null}
         {printError ? <Text accessibilityRole="alert" style={styles.errorText}>{printError}</Text> : null}
@@ -506,7 +493,7 @@ export default function MasterProgrammeScreen() {
                   <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.bedrooms ?? '-'}</Text>
                   <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.floors ?? '-'}</Text>
                   <Text style={[styles.holdBodyCell, styles.holdCell, plot.holdStage ? styles.holdBodyCellActive : null]}>{getPlotHoldLabel(plot)}</Text>
-                  <Text style={[styles.stageStartBody, styles.weekInputCell]}>{formatCalendarWeek(siteSetup.programmeStartDate, getConfiguredStageProgrammeStartWeek(stageDefinitions, getPlotCompletionProgrammeWeek(plot, siteSetup)), siteSetup.calendarWeekOne)}</Text>
+                  <Text style={[styles.stageStartBody, styles.weekInputCell]}>{formatCalendarWeek(siteSetup.programmeStartDate, getStage1StartWeekForPlot(plot, plotTemplates, siteSetup), siteSetup.calendarWeekOne)}</Text>
                   <Text style={[styles.weekInputBody, styles.completionCell]}>{plot.plotCompletionDate || metadata?.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, getPlotCompletionProgrammeWeek(plot, siteSetup))}{plot.finalStageAdjustmentWeeks ? `\nLive: ${getPlotLiveFinishDate(plot, activityDelays, activityMoves, plotTemplates, siteSetup)}` : ''}</Text>
                   {matrixWeeks.map((week) => {
                     if (week === controlWeek) return <View key={week} style={styles.finishControls}>
