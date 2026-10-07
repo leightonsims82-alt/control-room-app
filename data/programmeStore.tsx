@@ -277,11 +277,22 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
       });
     });
 
+    const canonicalPlotIds = new Set(canonicalPlots.map((plot) => plot.id));
+    const nextInspections = inspections.filter((inspection) => canonicalPlotIds.has(inspection.plotProgrammeId));
+    const nextDefects = defects.filter((defect) => canonicalPlotIds.has(defect.plotProgrammeId));
+    const nextDabs = dabsBriefings.filter((briefing) => canonicalPlotIds.has(briefing.plotProgrammeId));
+
     setPlotProgrammes(canonicalPlots);
     setPlotStages(canonicalStages);
+    setInspections(nextInspections);
+    setDefects(nextDefects);
+    setDabsBriefings(nextDabs);
     Promise.all([
       AsyncStorage.setItem(PLOTS_KEY, JSON.stringify(canonicalPlots)),
       AsyncStorage.setItem(STAGES_KEY, JSON.stringify(canonicalStages)),
+      AsyncStorage.setItem(INSPECTIONS_KEY, JSON.stringify(nextInspections)),
+      AsyncStorage.setItem(DEFECTS_KEY, JSON.stringify(nextDefects)),
+      AsyncStorage.setItem(DABS_KEY, JSON.stringify(nextDabs)),
     ]).catch((error) => console.warn('Unable to persist canonical programme projection', error));
   }, [isLoaded, isSitePlannerLoaded, sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup]); // eslint-disable-line react-hooks/exhaustive-deps
 
