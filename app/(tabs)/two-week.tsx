@@ -71,7 +71,7 @@ function simplifyActivity(text: string) {
 }
 
 export default function TwoWeekProgrammeScreen() {
-  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, setActivityDelay, setActivityMove, resetActivityMovesForPlot } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, setActivityDelay, setActivityMove, adjustActivityMove, resetActivityMovesForPlot } = useSitePlanner();
   const [startWeek, setStartWeek] = useState(() => normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate)));
   const [viewDayOffset, setViewDayOffset] = useState(0);
   const [moveMessage, setMoveMessage] = useState('');
@@ -110,8 +110,7 @@ export default function TwoWeekProgrammeScreen() {
     activityMoves.find((move) => move.plotId === plotId && move.activityCode === activityCode)?.deltaDays ?? 0;
 
   const moveActivityAndFollowing = async (plot: TemplateSitePlot, activity: TemplateActivity, change: number) => {
-    const next = getMoveDays(plot.id, activity.code) + change;
-    await setActivityMove({ plotId: plot.id, activityCode: activity.code, deltaDays: next });
+    await adjustActivityMove({ plotId: plot.id, activityCode: activity.code, deltaDays: change });
     const direction = change > 0 ? 'later' : 'earlier';
     setMoveMessage(`Plot ${plot.plotNo}: ${activity.displayText || activity.code} and all following work moved ${Math.abs(change)} working day${Math.abs(change) === 1 ? '' : 's'} ${direction}.`);
   };
