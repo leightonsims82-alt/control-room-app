@@ -77,6 +77,12 @@ export default function TwoWeekProgrammeScreen() {
   const [moveMessage, setMoveMessage] = useState('');
   const [actualProgressPlotId, setActualProgressPlotId] = useState('');
   const [actualProgressActivityCode, setActualProgressActivityCode] = useState('');
+
+  useEffect(() => {
+    setStartWeek(normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate)));
+    setViewDayOffset(0);
+  }, [siteSetup.programmeStartDate]);
+
   const windowDays = useMemo(() => buildTwoWeekWindow(startWeek, viewDayOffset, siteSetup), [startWeek, viewDayOffset, siteSetup]);
   const twoWeekDates = formatDateRange(windowDays);
   const weekGroups = [windowDays[0].week, windowDays[7].week];
