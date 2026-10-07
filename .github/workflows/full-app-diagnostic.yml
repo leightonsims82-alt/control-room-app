@@ -18,6 +18,8 @@ on:
       - 'package-lock.json'
       - 'scripts/full-app-diagnostic.mjs'
       - '.github/workflows/full-app-diagnostic.yml'
+      - 'playwright.config.cjs'
+      - 'scripts/patch-dependency-compat.cjs'
 
 permissions:
   contents: read
@@ -44,8 +46,15 @@ jobs:
       - name: Install diagnostic browser tools
         run: npm install --no-save --package-lock=false --no-audit --no-fund @playwright/test@1.55.1 wait-on@8.0.4
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Prepare browser
+        timeout-minutes: 5
+        run: |
+          if command -v google-chrome >/dev/null 2>&1; then
+            google-chrome --version
+            echo "PLAYWRIGHT_CHANNEL=chrome" >> "$GITHUB_ENV"
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       - name: Static interaction and numeric-input audit
         run: node scripts/full-app-diagnostic.mjs
