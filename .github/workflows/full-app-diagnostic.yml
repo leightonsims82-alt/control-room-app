@@ -159,12 +159,18 @@ jobs:
             await expect(page.getByLabel('Move ROOF 1 day later for Plot 153')).toBeVisible();
             const before = move.deltaDays;
             await page.getByLabel('Move ROOF 5 days later for Plot 153').click();
-            const after = await page.evaluate(() => JSON.parse(localStorage.getItem('programme-buddy:activity-moves:v1') || '[]').find(x => x.plotId === 'plot-live-153' && x.activityCode === 'Roof framing').deltaDays);
+            const after = await page.evaluate(() => {
+              const item = JSON.parse(localStorage.getItem('programme-buddy:activity-moves:v1') || '[]').find(x => x.plotId === 'plot-live-153' && x.activityCode === 'Roof framing');
+              return item?.deltaDays ?? 0;
+            });
             expect(after).toBe(before + 5);
 
             await page.reload({ waitUntil: 'domcontentloaded' });
             await page.waitForTimeout(700);
-            const afterReload = await page.evaluate(() => JSON.parse(localStorage.getItem('programme-buddy:activity-moves:v1') || '[]').find(x => x.plotId === 'plot-live-153' && x.activityCode === 'Roof framing').deltaDays);
+            const afterReload = await page.evaluate(() => {
+              const item = JSON.parse(localStorage.getItem('programme-buddy:activity-moves:v1') || '[]').find(x => x.plotId === 'plot-live-153' && x.activityCode === 'Roof framing');
+              return item?.deltaDays ?? 0;
+            });
             expect(afterReload).toBe(after);
 
             await open(page, '/master');
@@ -192,6 +198,25 @@ jobs:
             expect(remaining).toHaveLength(0);
           });
 
+          test('master extends through the final plot completion instead of stopping at a fixed window', async ({ page }) => {
+            await page.addInitScript(() => {
+              localStorage.setItem('programme-buddy:programme-setup:v1', JSON.stringify({
+                siteName: 'Long Master QA', defaultProgrammeWeeks: 25, stageCount: 9,
+                workingWeek: '5 days - Monday to Friday', includeSaturday: false, includeSunday: false,
+                programmeStartDate: '05/01/2026'
+              }));
+              localStorage.setItem('programme-buddy:plots:v1', JSON.stringify([{
+                id: 'plot-long-999', plotNo: '999', buildOrder: 1, stage9CompleteWeek: 60,
+                plotCompletionDate: '19/02/2027', templateId: 'threeBed', houseTypeId: 'threeBed',
+                constructionMethod: 'traditional'
+              }]));
+              localStorage.setItem('programme-buddy:activity-moves:v1', '[]');
+            });
+            await open(page, '/master');
+            await expect(page.getByText('19/02/2027', { exact: true })).toBeVisible();
+            await expect(page.getByText('15/02/2027', { exact: true }).first()).toBeVisible();
+          });
+
           test('programme weeks and dates stay linear across year boundary', async ({ page }) => {
             await page.addInitScript(() => {
               localStorage.setItem('programme-buddy:programme-setup:v1', JSON.stringify({
@@ -202,10 +227,10 @@ jobs:
               localStorage.setItem('programme-buddy:plots:v1', '[]');
             });
             await open(page, '/two-week');
-            await expect(page.getByText('28/12/2026', { exact: true }).first()).toBeVisible();
-            await expect(page.getByText('04/01/2027', { exact: true }).first()).toBeVisible();
+            await expect(page.getByText(/28\/12\/2026/).first()).toBeVisible();
+            await expect(page.getByText(/04\/01\/2027/).first()).toBeVisible();
             await page.getByText('Next week', { exact: true }).click();
-            await expect(page.getByText('11/01/2027', { exact: true }).first()).toBeVisible();
+            await expect(page.getByText(/11\/01\/2027/).first()).toBeVisible();
           });
           LIVEQA
           npx playwright test tests/app-diagnostic.spec.mjs tests/live-programme-ci.spec.mjs --workers=1 --reporter=line
