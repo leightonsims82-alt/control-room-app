@@ -3,9 +3,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { useSitePlanner } from '../../data/sitePlannerStore';
-import { DAY_NAMES, WEEK_NUMBERS } from '../../utils/siteProgrammeEngine';
-import { formatCalendarWeek, formatProgrammeDate } from '../../utils/programmeDates';
-import { getHouseTypeTemplates, getPlotBreakdownTemplateText, getStage1StartWeekForPlot, getTemplateForPlot } from '../../utils/templateProgramme';
+import { DAY_NAMES } from '../../utils/siteProgrammeEngine';
+import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek } from '../../utils/programmeDates';
+import { getHouseTypeTemplates, getPlotBreakdownTemplateText, getPlotCompletionProgrammeWeek, getStage1StartWeekForPlot, getTemplateForPlot } from '../../utils/templateProgramme';
 
 const ALL_TYPES = 'All plot types';
 const DAY_WIDTH = 82;
@@ -17,6 +17,10 @@ export default function PlotsScreen() {
   const houseTypes = getHouseTypeTemplates(plotTemplates);
   const filteredPlots = selectedTemplateId === ALL_TYPES ? sitePlots : sitePlots.filter((plot) => (plot.houseTypeId ?? plot.templateId) === selectedTemplateId);
   const templateFilters = [ALL_TYPES, ...houseTypes.map((template) => template.id)];
+  const currentProgrammeWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
+  const latestCompletionWeek = sitePlots.length ? Math.max(...sitePlots.map((plot) => getPlotCompletionProgrammeWeek(plot, siteSetup))) : 1;
+  const displayWeekCount = Math.max(52, currentProgrammeWeek + 26, latestCompletionWeek + 4);
+  const displayWeeks = Array.from({ length: displayWeekCount }, (_, index) => index + 1);
 
   return (
     <AppScreen>
@@ -60,14 +64,14 @@ export default function PlotsScreen() {
                 <Text style={[styles.weekHeaderBlank, styles.templateCell]} />
                 <Text style={[styles.weekHeaderBlank, styles.stageCell]} />
                 <Text style={[styles.weekHeaderBlank, styles.stageCell]} />
-                {WEEK_NUMBERS.map((week) => <Text key={week} style={styles.weekGroup}>{formatCalendarWeek(siteSetup.programmeStartDate, week, siteSetup.calendarWeekOne)} · {formatProgrammeDate(siteSetup.programmeStartDate, week)}</Text>)}
+                {displayWeeks.map((week) => <Text key={week} style={styles.weekGroup}>{formatCalendarWeek(siteSetup.programmeStartDate, week, siteSetup.calendarWeekOne)} · {formatProgrammeDate(siteSetup.programmeStartDate, week)}</Text>)}
               </View>
               <View style={styles.tableRow}>
                 <Text style={[styles.headerCell, styles.plotCell]}>Plot</Text>
                 <Text style={[styles.headerCell, styles.templateCell]}>Type</Text>
                 <Text style={[styles.headerCell, styles.stageCell]}>Plot Completion</Text>
                 <Text style={[styles.headerCell, styles.stageCell]}>Stage 1</Text>
-                {WEEK_NUMBERS.flatMap((week) => DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>{day}</Text>))}
+                {displayWeeks.flatMap((week) => DAY_NAMES.map((day) => <Text key={`${week}-${day}`} style={styles.dayHeader}>{day}</Text>))}
               </View>
 
               {filteredPlots.map((plot, rowIndex) => {
@@ -79,7 +83,7 @@ export default function PlotsScreen() {
                     <Text style={[styles.bodyCell, styles.templateCell]}>{houseType?.name ?? template.name}</Text>
                     <Text style={[styles.bodyCell, styles.stageCell]}>{plot.plotCompletionDate || formatProgrammeDate(siteSetup.programmeStartDate, plot.stage9CompleteWeek)}</Text>
                     <Text style={[styles.stageStartCell, styles.stageCell]}>{formatCalendarWeek(siteSetup.programmeStartDate, getStage1StartWeekForPlot(plot, plotTemplates, siteSetup), siteSetup.calendarWeekOne)}</Text>
-                    {WEEK_NUMBERS.flatMap((week) =>
+                    {displayWeeks.flatMap((week) =>
                       DAY_NAMES.map((_, dayIndex) => {
                         const text = getPlotBreakdownTemplateText(plot, week, dayIndex + 1, activityDelays, plotTemplates, siteSetup, activityMoves);
                         return <Text key={`${plot.id}-${week}-${dayIndex}`} style={[styles.dayCell, text ? styles.activeDayCell : null]}>{text}</Text>;
