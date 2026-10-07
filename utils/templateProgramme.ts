@@ -553,10 +553,10 @@ export function getLiveStageNumbersForPlotWeek(
     const range = getActivityProgrammeRange(plot, template, activity, delays, moves, setup);
     return range.start <= lastDay && range.finish >= firstDay;
   }).map((activity) => activity.stage);
-  return [...new Set(stages)].sort((a, b) => a - b).map((stage) => {
-    if (!plot.holdStage || stage < plot.holdStage) return String(stage);
-    return stage === plot.holdStage ? `${stage}H` : `H${plot.holdStage}`;
-  }).filter((stage, index, all) => all.indexOf(stage) === index).join('/');
+  const lowestStage = [...new Set(stages)].sort((a, b) => a - b)[0];
+  if (!lowestStage) return '';
+  if (!plot.holdStage || lowestStage < plot.holdStage) return String(lowestStage);
+  return lowestStage === plot.holdStage ? `${lowestStage}H` : `H${plot.holdStage}`;
 }
 
 export function getLinearStage1StartWeekForPlot(plot: TemplateSitePlot, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
