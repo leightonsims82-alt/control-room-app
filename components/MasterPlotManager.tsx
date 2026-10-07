@@ -2,9 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSitePlanner } from '../data/sitePlannerStore';
-import { formatProgrammeDate, getProgrammeWeekForDate, shiftProgrammeDateWeeks, validatePlotCompletionDate } from '../utils/programmeDates';
+import { formatProgrammeDate, getProgrammeWeekForDate, shiftProgrammeWorkingDays, validatePlotCompletionDate } from '../utils/programmeDates';
 import { getPlotMetadataKey, PlotBuildRoute, readPlotMetadata, removePlotMetadata, savePlotMetadata } from '../utils/plotMetadata';
-import { getEffectiveProgrammeWeeks, getHouseTypeTemplates, getTemplateById } from '../utils/templateProgramme';
+import { getHouseTypeTemplates, getTemplateById, getTemplateProgrammeWorkingDays } from '../utils/templateProgramme';
 
 type ManagePlotListener = (plotId: string) => void;
 const managePlotListeners = new Set<ManagePlotListener>();
@@ -25,7 +25,7 @@ export function MasterPlotManager() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
   const selectedPlot = sitePlots.find((plot) => plot.id === selectedId) ?? sitePlots[0];
-  const selectedHouseType = houseTypes.find((template) => template.id === houseTypeId) ?? houseTypes[0];
+  const selectedHouseType = plotTemplates.find((template) => template.id === houseTypeId) ?? houseTypes[0];
 
   const loadPlot = async (plotId: string) => {
     const plot = sitePlots.find((item) => item.id === plotId) ?? sitePlots[0];
@@ -73,8 +73,8 @@ export function MasterPlotManager() {
       if (!selectedHouseType) { setMessage('Create and select a house type before saving this plot.'); return; }
       const programmeTemplateId = buildRoute === 'Timber Frame' ? 'timberFrame' : selectedHouseType.id;
       const programmeTemplate = getTemplateById(programmeTemplateId, plotTemplates);
-      const programmeWeeks = getEffectiveProgrammeWeeks(programmeTemplate, siteSetup);
-      const exactStartDate = shiftProgrammeDateWeeks(completionDate, -(programmeWeeks - 1));
+      const programmeWorkingDays = getTemplateProgrammeWorkingDays(programmeTemplate);
+      const exactStartDate = shiftProgrammeWorkingDays(completionDate, -(programmeWorkingDays - 1), siteSetup.includeSaturday, siteSetup.includeSunday);
       await upsertSitePlot({
         plotNo: selectedPlot.plotNo,
         buildOrder: selectedPlot.buildOrder,
