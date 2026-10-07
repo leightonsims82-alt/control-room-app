@@ -39,8 +39,9 @@ export default function ProgrammeIssueCentre() {
       setNotice('Cannot issue an empty programme. Add plots first.');
       return;
     }
+    const startWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
     await recordIssue({
-      startWeek: 0,
+      startWeek,
       recipientCount: supervisorCount,
       note: `${nextRevision} | 2 Week Programme | PDF + Supervisor App | ${getCurrentWeekLabel()}`,
     });
