@@ -11,7 +11,7 @@ const SCREEN_DAY_WIDTH = 82;
 const PRINT_DAY_WIDTH = 56;
 
 function normaliseWeek(week: number) {
-  return ((((Math.round(week) - 1) % 52) + 52) % 52) + 1;
+  return Number.isFinite(week) ? Math.max(1, Math.round(week)) : 1;
 }
 
 function buildDays(startWeek: number, programmeStartDate: string) {
@@ -51,7 +51,7 @@ function shortActivity(text: string) {
 
 export default function SupervisorView() {
   const params = useLocalSearchParams<{ trade?: string; print?: string }>();
-  const { sitePlots, activityDelays, plotTemplates, tradeContacts, siteSetup } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, tradeContacts, siteSetup } = useSitePlanner();
   const requestedTrade = Array.isArray(params.trade) ? params.trade[0] : params.trade;
   const printMode = String(Array.isArray(params.print) ? params.print[0] : params.print ?? '') === '1';
   const selectedTrade = tradeContacts.find((item) => slug(item.trade) === slug(String(requestedTrade ?? '')))?.trade
@@ -100,6 +100,7 @@ export default function SupervisorView() {
       activityDelays,
       plotTemplates,
       siteSetup,
+      activityMoves,
     ).filter((activity) => activity.trade.toLowerCase() === selectedTrade.toLowerCase())
       .map((activity) => shortActivity(activity.displayText || activity.code))
       .join('\n'));
@@ -108,6 +109,7 @@ export default function SupervisorView() {
     sitePlots,
     days,
     activityDelays,
+    activityMoves,
     plotTemplates,
     siteSetup,
     selectedTrade,
