@@ -211,12 +211,16 @@ function normaliseTemplate(template: PlotTemplate) {
 
 function mergeDefaultTemplates(stored: PlotTemplate[]) {
   const savedById = new Map(stored.map((template) => [template.id, normaliseTemplate(template)]));
-  const merged = DEFAULT_PLOT_TEMPLATES.map((template) => savedById.get(template.id) ?? normaliseTemplate(template));
+  const merged = DEFAULT_PLOT_TEMPLATES.map((template) => {
+    const saved = savedById.get(template.id) ?? normaliseTemplate(template);
+    return template.id === 'timberFrame' ? saved : applyStandardHouseTypeStages(saved);
+  });
   const defaultIds = new Set(DEFAULT_PLOT_TEMPLATES.map((template) => template.id));
   const custom = stored
     .filter((template) => !defaultIds.has(template.id) && !LEGACY_PROPERTY_TEMPLATE_IDS.has(template.id))
     .map(normaliseTemplate)
-    .filter((template) => template.isHouseType);
+    .filter((template) => template.isHouseType)
+    .map((template) => applyStandardHouseTypeStages(template));
   return [...merged, ...custom];
 }
 
@@ -562,7 +566,10 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
   };
 
   const updatePlotTemplate = async (input: PlotTemplate) => {
-    const nextTemplates = plotTemplatesRef.current.map((template) => (template.id === input.id ? input : template));
+    const nextInput = input.id === 'timberFrame' || input.constructionMethod === 'timberFrame'
+      ? input
+      : applyStandardHouseTypeStages(input);
+    const nextTemplates = plotTemplatesRef.current.map((template) => (template.id === nextInput.id ? nextInput : template));
     plotTemplatesRef.current = nextTemplates;
     setPlotTemplates(nextTemplates);
     await AsyncStorage.setItem(PLOT_TEMPLATES_KEY, JSON.stringify(nextTemplates));
