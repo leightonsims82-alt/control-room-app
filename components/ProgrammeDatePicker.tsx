@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatBritishDate, parseProgrammeDate } from '../utils/programmeDates';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -83,7 +83,7 @@ export function ProgrammeDatePicker({
         </View>
       </Pressable>
 
-      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
+      <Modal visible={visible} transparent animationType={Platform.OS === 'web' ? 'none' : 'fade'} onRequestClose={() => setVisible(false)}>
         <View style={styles.overlay}>
           <View style={styles.calendarCard}>
             <View style={styles.calendarHeader}>
