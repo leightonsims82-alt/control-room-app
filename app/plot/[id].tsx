@@ -4,10 +4,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
 import { StageStatusPill } from '../../components/StageStatusPill';
-import { houseTypes } from '../../data/demoData';
 import { useProgrammeData } from '../../data/programmeStore';
+import { useSitePlanner } from '../../data/sitePlannerStore';
 import { PlotStage, StageStatus } from '../../types/models';
 import { getActiveStage, getPlotProgress, getStagesForPlot } from '../../utils/programmeLogic';
+import { getHouseTypeLabel, getTemplateForPlot } from '../../utils/templateProgramme';
 
 const stageStatuses: StageStatus[] = ['Not started', 'In progress', 'Complete'];
 
@@ -18,6 +19,7 @@ function dateOnly(value: Date) {
 export default function PlotDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { plotProgrammes, plotStages, inspections, defects, updateStageStatus } = useProgrammeData();
+  const { sitePlots, plotTemplates } = useSitePlanner();
   const plot = plotProgrammes.find((item) => item.id === id);
 
   if (!plot) {
@@ -32,7 +34,8 @@ export default function PlotDetailScreen() {
   const stages = getStagesForPlot(plot.id, plotStages);
   const progress = getPlotProgress(plot.id, plotStages);
   const activeStage = getActiveStage(plot.id, plotStages);
-  const houseType = houseTypes.find((item) => item.id === plot.houseTypeId);
+  const sitePlot = sitePlots.find((item) => item.id === plot.id || item.plotNo === plot.plotName);
+  const template = sitePlot ? getTemplateForPlot(sitePlot, plotTemplates) : plotTemplates.find((item) => item.id === plot.houseTypeId);
   const today = dateOnly(new Date());
   const horizon = new Date();
   horizon.setDate(horizon.getDate() + 14);
@@ -56,7 +59,7 @@ export default function PlotDetailScreen() {
       <View style={styles.hero}>
         <View style={styles.heroTextWrap}>
           <Text style={styles.heroTitle}>{plot.plotName}</Text>
-          <Text style={styles.heroSubtitle}>{plot.phase} · {houseType?.name ?? 'House type pending'}</Text>
+          <Text style={styles.heroSubtitle}>{plot.phase} · {template ? getHouseTypeLabel(template) : 'House type pending'}</Text>
           <View style={[styles.healthPill, healthTone]}><Text style={styles.healthText}>{programmeHealth}</Text></View>
         </View>
         <View style={styles.progressCircle}>
