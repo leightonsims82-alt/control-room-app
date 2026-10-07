@@ -93,6 +93,7 @@ jobs:
           }
           async function seedLivePlot(page) {
             await page.addInitScript(() => {
+              if (localStorage.getItem('liveqa:seeded') === '1') return;
               const now = new Date();
               const day = now.getDay() || 7;
               const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (day - 1));
@@ -132,6 +133,7 @@ jobs:
                 constructionMethod: 'traditional'
               }]));
               localStorage.setItem('programme-buddy:activity-moves:v1', '[]');
+              localStorage.setItem('liveqa:seeded', '1');
             });
           }
 
@@ -227,10 +229,9 @@ jobs:
               localStorage.setItem('programme-buddy:plots:v1', '[]');
             });
             await open(page, '/two-week');
-            await expect(page.getByText(/28\/12\/2026/).first()).toBeVisible();
-            await expect(page.getByText(/04\/01\/2027/).first()).toBeVisible();
+            await expect(page.getByText(/28\/12\/2026 - 10\/01\/2027/).first()).toBeVisible();
             await page.getByText('Next week', { exact: true }).click();
-            await expect(page.getByText(/11\/01\/2027/).first()).toBeVisible();
+            await expect(page.getByText(/04\/01\/2027 - 17\/01\/2027/).first()).toBeVisible();
           });
           LIVEQA
           npx playwright test tests/app-diagnostic.spec.mjs tests/live-programme-ci.spec.mjs --workers=1 --reporter=line
