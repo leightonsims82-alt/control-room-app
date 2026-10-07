@@ -58,9 +58,9 @@ export default function ExportsScreen() {
 
   const exportSmPdfPack = () => {
     let opened = false;
-    if (sendMaster) opened = exportMasterProgrammePdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, plots: sitePlots, delays: activityDelays, moves: activityMoves, templates: plotTemplates }) || opened;
-    if (sendMainTwoWeek) opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, moves: activityMoves, templates: plotTemplates }) || opened;
-    if (sendTradeProgrammesToSmTeam) opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, moves: activityMoves, templates: plotTemplates, trades: allTradeNames }) || opened;
+    if (sendMaster) opened = exportMasterProgrammePdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, includeSaturday: siteSetup.includeSaturday, includeSunday: siteSetup.includeSunday, plots: sitePlots, delays: activityDelays, moves: activityMoves, templates: plotTemplates }) || opened;
+    if (sendMainTwoWeek) opened = exportMainTwoWeekPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, includeSaturday: siteSetup.includeSaturday, includeSunday: siteSetup.includeSunday, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, moves: activityMoves, templates: plotTemplates }) || opened;
+    if (sendTradeProgrammesToSmTeam) opened = exportTradeProgrammesPdf({ siteName: siteSetup.siteName, programmeStartDate: siteSetup.programmeStartDate, calendarWeekOne: siteSetup.calendarWeekOne, includeSaturday: siteSetup.includeSaturday, includeSunday: siteSetup.includeSunday, startWeek: parsedStartWeek, plots: sitePlots, delays: activityDelays, moves: activityMoves, templates: plotTemplates, trades: allTradeNames }) || opened;
     setStatus(opened ? 'PDF export opened — use Save as PDF in the print window' : 'Allow pop-ups to export PDF');
   };
 
