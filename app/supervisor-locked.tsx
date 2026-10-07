@@ -54,13 +54,12 @@ function shortActivity(text: string) {
 
 export default function SupervisorLockedView() {
   const params = useLocalSearchParams<{ trade?: string; print?: string }>();
-  const { sitePlots, activityDelays, plotTemplates, tradeContacts, issueLogs, siteSetup } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, tradeContacts, issueLogs, siteSetup } = useSitePlanner();
   const requestedTrade = Array.isArray(params.trade) ? params.trade[0] : params.trade;
   const printMode = String(Array.isArray(params.print) ? params.print[0] : params.print ?? '') === '1';
   const lockedTrade = tradeContacts.find((trade) => slug(trade.trade) === slug(String(requestedTrade ?? '')))?.trade ?? tradeContacts[0]?.trade ?? 'Trade';
 
-  // Week 1 is the next full programme week. Week 2 is the week after.
-  const startWeek = normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate) + 1);
+  const startWeek = normaliseProgrammeWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate));
   const days = useMemo(() => buildTwoWeekWindow(startWeek, siteSetup.programmeStartDate), [startWeek, siteSetup.programmeStartDate]);
   const dateRange = `${days[0]?.date ?? ''} - ${days[13]?.date ?? ''}`;
   const latestIssue = issueLogs[0];
@@ -77,7 +76,7 @@ export default function SupervisorLockedView() {
       style.innerHTML = `
         @page { size: A4 landscape; margin: 7mm; }
         @media print {
-          html, body { width: 297mm; min-height: 210mm; background: #fff !important; overflow: visible !important; }
+          html, body { width: 297mm; height: auto; background: #fff !important; overflow: visible !important; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           [data-testid="scroll-view"], div { overflow: visible !important; }
         }
@@ -93,13 +92,13 @@ export default function SupervisorLockedView() {
 
   const rows = useMemo(() => {
     return sitePlots.map((plot) => {
-      const cells = days.map((day) => getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates, siteSetup)
+      const cells = days.map((day) => getActivitiesForTemplateDay(plot, day.week, day.day, activityDelays, plotTemplates, siteSetup, activityMoves)
         .filter((activity) => activity.trade.toLowerCase() === lockedTrade.toLowerCase())
         .map((activity) => shortActivity(activity.displayText || activity.code))
         .join('\n'));
       return { key: plot.id, plotNo: plot.plotNo, cells };
     }).filter((row) => row.cells.some(Boolean));
-  }, [sitePlots, days, activityDelays, plotTemplates, siteSetup, lockedTrade]);
+  }, [sitePlots, days, activityDelays, activityMoves, plotTemplates, siteSetup, lockedTrade]);
 
   return (
     <AppScreen>
