@@ -60,11 +60,13 @@ export async function submitSiteProgFeedback(input: {
 
   const id = `feedback-${Date.now()}`;
   let screenshotPath: string | undefined;
+  let screenshotUploadFailed = false;
 
   if (supabase && input.screenshotDataUrl) {
     try {
       screenshotPath = await uploadScreenshot(input.screenshotDataUrl, id);
     } catch (error) {
+      screenshotUploadFailed = true;
       console.warn('Unable to upload feedback screenshot', error);
     }
   }
@@ -92,7 +94,9 @@ export async function submitSiteProgFeedback(input: {
     if (!error) {
       const syncedItem = { ...item, synced: true };
       await saveLocal(syncedItem);
-      return syncedItem;
+      return screenshotUploadFailed
+        ? { ...syncedItem, warning: 'Feedback text sent, but the screenshot could not be uploaded. The screenshot has been kept in the local feedback copy.' }
+        : syncedItem;
     }
   }
 
