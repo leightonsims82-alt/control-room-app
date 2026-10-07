@@ -18,9 +18,8 @@ import {
   StageStatus,
 } from '../types/models';
 import { FoundationType } from '../types/regulations';
-import { generateStagesForPlot } from '../utils/stageGeneration';
-import { getProgrammeDateForWorkingDayIndex } from '../utils/programmeDates';
-import { getActivityProgrammeRange, getTemplateForPlot, orderedActivities } from '../utils/templateProgramme';
+import { getProgrammeDateForWorkingDayIndex, getProgrammeWeekForDate, normaliseBritishDate, parseProgrammeDate, shiftProgrammeWorkingDays } from '../utils/programmeDates';
+import { ConstructionMethod, getActivityProgrammeRange, getTemplateById, getTemplateForPlot, getTemplateProgrammeWorkingDays, orderedActivities } from '../utils/templateProgramme';
 import { useSitePlanner } from './sitePlannerStore';
 
 const PLOTS_KEY = 'siteprog:plot-programmes:v1';
@@ -39,6 +38,7 @@ export type CreatePlotInput = {
   mode: 'forward' | 'reverse';
   jurisdiction?: RegulationsJurisdiction;
   foundationType?: FoundationType;
+  constructionMethod?: ConstructionMethod;
 };
 
 export type UpdateInspectionItemInput = {
@@ -83,6 +83,15 @@ async function readArray<T>(key: string, fallback: T[]) {
     return fallback;
   }
   return JSON.parse(stored) as T[];
+}
+
+function toIsoDate(value?: string) {
+  const date = parseProgrammeDate(value);
+  if (!date) return value ?? '';
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function getPlotForStage(stage: PlotStage, plots: PlotProgramme[]) {
@@ -171,7 +180,7 @@ function createBlankDabsItem(plot: PlotProgramme, briefingDate: string, stage?: 
 }
 
 export function ProgrammeDataProvider({ children }: PropsWithChildren) {
-  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, isSitePlannerLoaded } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, isSitePlannerLoaded, upsertSitePlot } = useSitePlanner();
   const [plotProgrammes, setPlotProgrammes] = useState<PlotProgramme[]>([]);
   const [plotStages, setPlotStages] = useState<PlotStage[]>([]);
   const [inspections, setInspections] = useState<InspectionRecord[]>([]);
@@ -234,8 +243,8 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
         plotName: plot.plotNo,
         phase: existing?.phase ?? '',
         houseTypeId: plot.houseTypeId ?? plot.templateId ?? existing?.houseTypeId ?? 'threeBed',
-        startDate: plot.plotStartDate || calculatedStart || existing?.startDate || '',
-        endDate: plot.plotCompletionDate || calculatedEnd || existing?.endDate || '',
+        startDate: toIsoDate(plot.plotStartDate || calculatedStart || existing?.startDate || ''),
+        endDate: toIsoDate(plot.plotCompletionDate || calculatedEnd || existing?.endDate || ''),
         mode: 'reverse',
         isLocked: true,
         sharedWithUserIds: existing?.sharedWithUserIds ?? [],
@@ -297,22 +306,38 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
   }, [isLoaded, isSitePlannerLoaded, sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const createPlot = async (input: CreatePlotInput) => {
-    const plotId = `plot-${Date.now()}`;
-    const anchorDate = input.mode === 'reverse' ? input.endDate : input.startDate;
-    const generatedStages = generateStagesForPlot(plotId, anchorDate, {
-      mode: input.mode,
-      bedroomSize: input.bedroomSize,
+    const template = getTemplateById(input.houseTypeId, plotTemplates);
+    if (!template) throw new Error('Select a valid house type before creating the plot.');
+
+    const workingDays = getTemplateProgrammeWorkingDays(template);
+    const suppliedStart = normaliseBritishDate(input.startDate);
+    const suppliedEnd = normaliseBritishDate(input.endDate);
+    const exactStart = input.mode === 'forward'
+      ? suppliedStart
+      : shiftProgrammeWorkingDays(suppliedEnd, -(workingDays - 1), siteSetup.includeSaturday, siteSetup.includeSunday);
+    const exactEnd = input.mode === 'reverse'
+      ? suppliedEnd
+      : shiftProgrammeWorkingDays(suppliedStart, workingDays - 1, siteSetup.includeSaturday, siteSetup.includeSunday);
+    const completionWeek = getProgrammeWeekForDate(siteSetup.programmeStartDate, exactEnd);
+    if (!exactStart || !exactEnd || !completionWeek) throw new Error('Unable to calculate the plot programme dates.');
+
+    const saved = await upsertSitePlot({
+      plotNo: input.plotName.trim(),
+      stage9CompleteWeek: completionWeek,
+      plotStartDate: exactStart,
+      plotCompletionDate: exactEnd,
+      templateId: input.houseTypeId,
       houseTypeId: input.houseTypeId,
+      constructionMethod: input.constructionMethod ?? 'traditional',
     });
-    const firstStage = generatedStages[0];
-    const lastStage = generatedStages[generatedStages.length - 1];
+
     const newPlot: PlotProgramme = {
-      id: plotId,
-      plotName: input.plotName.trim(),
+      id: saved.id,
+      plotName: saved.plotNo,
       phase: input.phase.trim().toUpperCase(),
       houseTypeId: input.houseTypeId,
-      startDate: firstStage?.startDate || input.startDate || anchorDate,
-      endDate: lastStage?.endDate || input.endDate || anchorDate,
+      startDate: toIsoDate(exactStart),
+      endDate: toIsoDate(exactEnd),
       mode: input.mode,
       isLocked: true,
       sharedWithUserIds: [],
@@ -320,14 +345,9 @@ export function ProgrammeDataProvider({ children }: PropsWithChildren) {
       jurisdiction: input.jurisdiction ?? 'England',
       foundationType: input.foundationType ?? 'Unknown',
     };
-    const nextPlots = [...plotProgrammes, newPlot];
-    const nextStages = [...plotStages, ...generatedStages];
+    const nextPlots = [...plotProgrammes.filter((plot) => plot.id !== saved.id && plot.plotName !== saved.plotNo), newPlot];
     setPlotProgrammes(nextPlots);
-    setPlotStages(nextStages);
-    await Promise.all([
-      AsyncStorage.setItem(PLOTS_KEY, JSON.stringify(nextPlots)),
-      AsyncStorage.setItem(STAGES_KEY, JSON.stringify(nextStages)),
-    ]);
+    await AsyncStorage.setItem(PLOTS_KEY, JSON.stringify(nextPlots));
     return newPlot;
   };
 
