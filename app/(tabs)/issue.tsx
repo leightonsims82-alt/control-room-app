@@ -58,6 +58,8 @@ export default function ProgrammeIssueCentre() {
       siteName: siteSetup.siteName,
       programmeStartDate: siteSetup.programmeStartDate,
       calendarWeekOne: siteSetup.calendarWeekOne,
+      includeSaturday: siteSetup.includeSaturday,
+      includeSunday: siteSetup.includeSunday,
       startWeek,
       plots: sitePlots,
       delays: activityDelays,
