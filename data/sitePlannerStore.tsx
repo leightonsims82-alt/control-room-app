@@ -108,7 +108,7 @@ type SitePlannerStore = {
   plotTemplates: PlotTemplate[];
   siteSetup: SiteProgrammeSetup;
   isSitePlannerLoaded: boolean;
-  upsertSitePlot: (input: SitePlotInput) => Promise<void>;
+  upsertSitePlot: (input: SitePlotInput) => Promise<TemplateSitePlot>;
   removeSitePlot: (plotId: string) => Promise<void>;
   clearSitePlotData: () => Promise<void>;
   resetPlotData: () => Promise<void>;
@@ -400,9 +400,12 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
 
   const upsertSitePlot = async (input: SitePlotInput) => {
     const nextPlots = applyPlotInputs(sitePlotsRef.current, [input]);
+    const savedPlot = nextPlots.find((plot) => plot.plotNo.toLowerCase() === input.plotNo.trim().toLowerCase());
+    if (!savedPlot) throw new Error('Unable to save plot programme.');
     sitePlotsRef.current = nextPlots;
     setSitePlots(nextPlots);
     await AsyncStorage.setItem(SITE_PLOTS_KEY, JSON.stringify(nextPlots));
+    return savedPlot;
   };
 
   const removeSitePlot = async (plotId: string) => {
