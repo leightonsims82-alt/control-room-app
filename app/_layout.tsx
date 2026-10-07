@@ -5,11 +5,11 @@ import { SitePlannerProvider } from '../data/sitePlannerStore';
 
 export default function RootLayout() {
   return (
-    <ProgrammeDataProvider>
-      <SitePlannerProvider>
+    <SitePlannerProvider>
+      <ProgrammeDataProvider>
         <AutoCloudBackup />
         <Stack screenOptions={{ headerShown: false }} />
-      </SitePlannerProvider>
-    </ProgrammeDataProvider>
+      </ProgrammeDataProvider>
+    </SitePlannerProvider>
   );
 }
