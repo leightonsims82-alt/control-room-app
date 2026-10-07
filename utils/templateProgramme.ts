@@ -1,5 +1,5 @@
 import { getProgrammeDateForWorkingDayIndex, getProgrammeWeekForDate, getProgrammeWorkingDayIndexForDate } from './programmeDates';
-import { ActivityDelay, BUILD_SEQUENCE, getStageNumberForRelativeWeek, ProgrammeActivity, ProgrammeStageNumber, PROGRAMME_STAGE_SEQUENCE, SitePlot, TRADE_ORDER } from './siteProgrammeEngine';
+import { ActivityDelay, BUILD_SEQUENCE, ProgrammeActivity, ProgrammeStageNumber, PROGRAMME_STAGE_SEQUENCE, SitePlot, TRADE_ORDER } from './siteProgrammeEngine';
 import { canonicaliseActivity } from '../core/programme/activityTruth';
 import {
   buildV2TemplateRanges,
@@ -79,15 +79,15 @@ export const DEFAULT_SITE_PROGRAMME_SETUP: SiteProgrammeSetup = {
 };
 
 export const STAGE_LABELS: Record<number, string> = {
-  1: 'Foundations',
-  2: 'Oversite / slab',
-  3: 'Superstructure start',
-  4: 'Wall plate',
-  5: 'Roof',
+  1: 'Foundations / substructure',
+  2: 'Band course / slab',
+  3: 'Superstructure',
+  4: 'Roof',
+  5: 'Strip scaffold',
   6: '1st fix / pre-plaster',
-  7: '2nd Fix',
-  8: 'Decoration / finish',
-  9: 'Handover',
+  7: '2nd fix / kitchen',
+  8: 'Patch / decoration',
+  9: 'Finals / close-out',
 };
 
 const WEEKS_IN_YEAR = 52;
@@ -133,7 +133,8 @@ function makeTemplate(id: string, name: string, description: string, programmeWe
     stageCount: 9,
     activities: BUILD_SEQUENCE.map((activity) => ({
       ...activity,
-      overlapAllowed: false,
+      overlapAllowed: activity.code === 'Drying',
+      overlapLinkCode: activity.code === 'Drying' ? 'Groundwork Externals' : undefined,
       overlapStartFrom: 'start' as OverlapStartFrom,
       overlapLagDays: 0,
     })).filter((activity) => activity.durationDays > 0),
@@ -659,25 +660,24 @@ export function getStage1StartWeekForPlot(plot: TemplateSitePlot, templates: Plo
   return normaliseProgrammeWeek(getLinearStage1StartWeekForPlot(plot, templates, setup));
 }
 
-export function getStageNumberForPlotWeek(plot: TemplateSitePlot, week: number, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
-  const relativeWeek = week - getStage1StartWeekForPlot(plot, templates, setup) + 1;
-  if (relativeWeek < 1 || relativeWeek > 23) return '';
-  const stage = getStageNumberForRelativeWeek(relativeWeek);
-  if (!plot.holdStage || !stage || stage < plot.holdStage) return stage;
-  return stage === plot.holdStage ? `${stage}H` : `H${plot.holdStage}`;
+export function getStageNumberForPlotWeek(
+  plot: TemplateSitePlot,
+  week: number,
+  templates: PlotTemplate[],
+  setup?: Partial<SiteProgrammeSetup>,
+) {
+  return getV2StageDisplayForWeek(plot, getTemplateForPlot(plot, templates), week, [], [], setup);
 }
+
 export function getStageLabelForNumber(stage: ProgrammeStageNumber) { return PROGRAMME_STAGE_SEQUENCE.find((item) => item.stage === stage)?.label ?? `Stage ${stage}`; }
 
-export function getMilestoneForPlotWeek(plot: TemplateSitePlot, week: number, templates: PlotTemplate[], setup?: Partial<SiteProgrammeSetup>) {
-  const template = getTemplateForPlot(plot, templates);
-  const effectiveWeeks = getEffectiveProgrammeWeeks(template, setup);
-  const displayWeek = normaliseProgrammeWeek(week);
-  for (let stage = 1; stage <= template.stageCount; stage += 1) {
-    const weeksFromHandover = Math.round(((template.stageCount - stage) * (effectiveWeeks - 1)) / Math.max(1, template.stageCount - 1));
-    const milestoneWeek = normaliseProgrammeWeek(getPlotCompletionProgrammeWeek(plot, setup) - weeksFromHandover);
-    if (milestoneWeek === displayWeek) return String(stage);
-  }
-  return '';
+export function getMilestoneForPlotWeek(
+  plot: TemplateSitePlot,
+  week: number,
+  templates: PlotTemplate[],
+  setup?: Partial<SiteProgrammeSetup>,
+) {
+  return getStageNumberForPlotWeek(plot, week, templates, setup);
 }
 
 function delayBefore(plotId: string, activityOrder: number, delays: ActivityDelay[], activities: TemplateActivity[]) {
