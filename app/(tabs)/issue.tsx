@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { useSitePlanner } from '../../data/sitePlannerStore';
+import { exportMainTwoWeekPdf } from '../../utils/programmePdfExport';
+import { getCurrentProgrammeWeek } from '../../utils/programmeDates';
 
 function toRevisionLabel(index: number) {
   const letterIndex = Math.max(0, index % 26);
@@ -16,7 +18,7 @@ function getCurrentWeekLabel() {
 }
 
 export default function ProgrammeIssueCentre() {
-  const { sitePlots, issueLogs, tradeContacts, recordIssue } = useSitePlanner();
+  const { sitePlots, activityDelays, activityMoves, plotTemplates, siteSetup, issueLogs, tradeContacts, recordIssue } = useSitePlanner();
   const [notice, setNotice] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
   const nextRevision = useMemo(() => toRevisionLabel(issueLogs.length), [issueLogs.length]);
@@ -47,12 +49,22 @@ export default function ProgrammeIssueCentre() {
   };
 
   const downloadPdf = () => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.print();
-      setNotice('Print view opened. Choose Save as PDF to download the programme.');
+    if (Platform.OS !== 'web') {
+      setNotice('PDF export is ready in the web app.');
       return;
     }
-    setNotice('PDF export is ready for web print/save. Native mobile PDF export can be added later.');
+    const startWeek = getCurrentProgrammeWeek(siteSetup.programmeStartDate);
+    const opened = exportMainTwoWeekPdf({
+      siteName: siteSetup.siteName,
+      programmeStartDate: siteSetup.programmeStartDate,
+      calendarWeekOne: siteSetup.calendarWeekOne,
+      startWeek,
+      plots: sitePlots,
+      delays: activityDelays,
+      moves: activityMoves,
+      templates: plotTemplates,
+    });
+    setNotice(opened ? 'Current live 2 Week Programme opened. Choose Save as PDF in the print window.' : 'Allow pop-ups to export the programme PDF.');
   };
 
   const copySupervisorLink = async () => {
