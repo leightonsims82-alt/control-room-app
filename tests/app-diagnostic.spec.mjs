@@ -517,11 +517,11 @@ test('master: different exact completion dates drive different stage positions e
 
   const row153 = completion153.locator('xpath=..');
   const row154 = completion154.locator('xpath=..');
-  const stage9Box153 = await row153.getByText('9', { exact: true }).boundingBox();
-  const stage9Box154 = await row154.getByText('9', { exact: true }).boundingBox();
+  const stage9Box153 = await row153.getByText('9', { exact: true }).last().boundingBox();
+  const stage9Box154 = await row154.getByText('9', { exact: true }).last().boundingBox();
   expect(stage9Box153).not.toBeNull();
   expect(stage9Box154).not.toBeNull();
-  expect((stage9Box154?.x ?? 0) - (stage9Box153?.x ?? 0)).toBeGreaterThan(50);
+  // Stage 9 may span several live weeks; its final week must shift exactly one column.\n  expect((stage9Box154?.x ?? 0) - (stage9Box153?.x ?? 0)).toBeCloseTo(92, 0);
 
   const storedPlots = await page.evaluate(() => JSON.parse(localStorage.getItem('programme-buddy:plots:v1') || '[]'));
   expect(storedPlots.find((plot) => plot.plotNo === '153')?.plotCompletionDate).toBe('04/12/2026');
@@ -583,7 +583,7 @@ test('master: exact plot completion date is preserved instead of the week Monday
   const row = completion.locator('xpath=..');
   await expect(row.getByText('07/12/2026', { exact: true })).toHaveCount(0);
   await expect(row.getByText('WK29', { exact: true })).toBeVisible();
-  await expect(row.getByText('9', { exact: true })).toBeVisible();
+  await expect(row.getByText('9', { exact: true }).last()).toBeVisible();
 });
 
 test('master: matrix Manage button opens the selected plot editor', async ({ page }) => {
