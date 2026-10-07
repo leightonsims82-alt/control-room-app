@@ -6,7 +6,7 @@ import { SectionCard } from '../../components/SectionCard';
 import { TradeContact, useSitePlanner } from '../../data/sitePlannerStore';
 import { siteprogTheme } from '../../theme/siteprogTheme';
 import { formatCalendarWeek, formatProgrammeDate, getCurrentProgrammeWeek } from '../../utils/programmeDates';
-import { getActivitiesForTemplateDay } from '../../utils/templateProgramme';
+import { getActivitiesForTemplateDay, isProgrammeWorkingDay } from '../../utils/templateProgramme';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAY_WIDTH = 82;
@@ -22,7 +22,7 @@ function normaliseWeek(week: number) {
   return Number.isFinite(week) ? Math.max(1, Math.round(week)) : 1;
 }
 
-function buildDays(startWeek: number, programmeStartDate: string) {
+function buildDays(startWeek: number, programmeStartDate: string, includeSaturday = false, includeSunday = false) {
   return Array.from({ length: 14 }, (_, index) => {
     const programmeWeek = normaliseWeek(startWeek + Math.floor(index / 7));
     const day = (index % 7) + 1;
@@ -32,7 +32,7 @@ function buildDays(startWeek: number, programmeStartDate: string) {
       day,
       name: DAYS[index % 7],
       date: formatProgrammeDate(programmeStartDate, programmeWeek, day),
-      weekend: day >= 6,
+      nonWorking: !isProgrammeWorkingDay(day, { includeSaturday, includeSunday }),
     };
   });
 }
@@ -73,8 +73,8 @@ export default function TradesScreen() {
 
   const firstProgrammeWeek = normaliseWeek(getCurrentProgrammeWeek(siteSetup.programmeStartDate));
   const days = useMemo(
-    () => buildDays(firstProgrammeWeek, siteSetup.programmeStartDate),
-    [firstProgrammeWeek, siteSetup.programmeStartDate],
+    () => buildDays(firstProgrammeWeek, siteSetup.programmeStartDate, siteSetup.includeSaturday, siteSetup.includeSunday),
+    [firstProgrammeWeek, siteSetup.programmeStartDate, siteSetup.includeSaturday, siteSetup.includeSunday],
   );
   const dateRange = `${days[0]?.date ?? ''} - ${days[13]?.date ?? ''}`;
   const firstCalendarWeek = formatCalendarWeek(siteSetup.programmeStartDate, days[0]?.programmeWeek ?? firstProgrammeWeek, siteSetup.calendarWeekOne);
@@ -225,7 +225,7 @@ export default function TradesScreen() {
                 <Text style={[styles.headerCell, styles.plot]}>Plot No</Text>
                 <Text style={[styles.headerCell, styles.trade]}>Trade</Text>
                 {days.map((day) => (
-                  <Text key={day.key} style={[styles.dayHeader, day.weekend ? styles.weekendHeader : null]}>{day.name}</Text>
+                  <Text key={day.key} style={[styles.dayHeader, day.nonWorking ? styles.weekendHeader : null]}>{day.name}</Text>
                 ))}
               </View>
 
@@ -233,7 +233,7 @@ export default function TradesScreen() {
                 <Text style={[styles.dateBlank, styles.plot]} />
                 <Text style={[styles.dateBlank, styles.trade]} />
                 {days.map((day) => (
-                  <Text key={`date-${day.key}`} style={[styles.dateHeader, day.weekend ? styles.weekendDate : null]}>{day.date}</Text>
+                  <Text key={`date-${day.key}`} style={[styles.dateHeader, day.nonWorking ? styles.weekendDate : null]}>{day.date}</Text>
                 ))}
               </View>
 
@@ -252,7 +252,7 @@ export default function TradesScreen() {
                       key={`${row.plot.id}-${days[index].key}`}
                       style={[
                         styles.dayCell,
-                        days[index].weekend ? styles.weekendCell : null,
+                        days[index].nonWorking ? styles.weekendCell : null,
                         cell ? styles.activeCell : null,
                         index === row.last ? styles.finalCell : null,
                       ]}
