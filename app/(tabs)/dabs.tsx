@@ -1,8 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { SectionCard } from '../../components/SectionCard';
+import { useSitePlanner } from '../../data/sitePlannerStore';
+import { formatBritishDate, getProgrammeWeekForDate } from '../../utils/programmeDates';
+import { getActivitiesForTemplateDay, getWorkingDayNumbers } from '../../utils/templateProgramme';
 
 const DABS_MEETING_KEY = 'siteprog:dabs-standalone-meetings:v1';
 
@@ -24,6 +27,18 @@ function getTodayDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function getNextProgrammeWorkingDate(includeSaturday: boolean, includeSunday: boolean) {
+  const workingDays = [1, 2, 3, 4, 5, ...(includeSaturday ? [6] : []), ...(includeSunday ? [7] : [])];
+  const now = new Date();
+  const date = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  for (let guard = 0; guard < 8; guard += 1) {
+    date.setUTCDate(date.getUTCDate() + 1);
+    const day = date.getUTCDay() || 7;
+    if (workingDays.includes(day)) return date;
+  }
+  return date;
+}
+
 function createBlankMeeting(): DabsMeeting {
   const today = getTodayDate();
   return {
@@ -42,6 +57,7 @@ function createBlankMeeting(): DabsMeeting {
 }
 
 export default function DabsScreen() {
+  const { sitePlots, plotTemplates, activityDelays, activityMoves, siteSetup } = useSitePlanner();
   const [meeting, setMeeting] = useState<DabsMeeting>(createBlankMeeting());
   const [savedMeetings, setSavedMeetings] = useState<DabsMeeting[]>([]);
 
@@ -68,6 +84,25 @@ export default function DabsScreen() {
 
   const completedCount = savedMeetings.filter((item) => item.completed).length;
 
+  const tomorrowProgramme = useMemo(() => {
+    const targetDate = getNextProgrammeWorkingDate(siteSetup.includeSaturday, siteSetup.includeSunday);
+    const targetDateText = formatBritishDate(targetDate);
+    const targetWeek = getProgrammeWeekForDate(siteSetup.programmeStartDate, targetDateText);
+    const targetDay = targetDate.getUTCDay() || 7;
+    if (!targetWeek || !getWorkingDayNumbers(siteSetup).includes(targetDay)) return { date: targetDateText, rows: [] as Array<{ plot: string; activities: string; trades: string }> };
+
+    const rows = sitePlots.flatMap((plot) => {
+      const activities = getActivitiesForTemplateDay(plot, targetWeek, targetDay, activityDelays, plotTemplates, siteSetup, activityMoves);
+      if (!activities.length) return [];
+      return [{
+        plot: plot.plotNo,
+        activities: activities.map((activity) => activity.displayText || activity.code).join(' / '),
+        trades: [...new Set(activities.map((activity) => activity.trade))].join(', '),
+      }];
+    });
+    return { date: targetDateText, rows };
+  }, [sitePlots, plotTemplates, activityDelays, activityMoves, siteSetup]);
+
   return (
     <AppScreen>
       <View style={styles.header}>
@@ -81,6 +116,18 @@ export default function DabsScreen() {
         <Summary label="Completed" value={String(completedCount)} />
         <Summary label="Today" value={meeting.completed ? 'Done' : 'Open'} danger={!meeting.completed} />
       </View>
+
+      <SectionCard title="Tomorrow from Programme V2" subtitle={`Next working day: ${tomorrowProgramme.date}`}>
+        {tomorrowProgramme.rows.length ? tomorrowProgramme.rows.map((row) => (
+          <View key={row.plot} style={styles.programmeRow}>
+            <Text style={styles.programmePlot}>Plot {row.plot}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.programmeActivity}>{row.activities}</Text>
+              <Text style={styles.programmeTrade}>{row.trades}</Text>
+            </View>
+          </View>
+        )) : <Text style={styles.emptyText}>No activities are programmed for the next working day.</Text>}
+      </SectionCard>
 
       <SectionCard title="PM meeting record" subtitle={`Meeting date: ${meeting.meetingDate}`}>
         <Field label="Chair">
@@ -149,6 +196,11 @@ const styles = StyleSheet.create({
   summaryValueDanger: { color: '#dc2626' },
   summaryLabel: { color: '#64748b', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
   field: { gap: 6, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },
+  programmeRow: { flexDirection: 'row', gap: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10 },
+  programmePlot: { minWidth: 70, color: '#1d4ed8', fontWeight: '900' },
+  programmeActivity: { color: '#0f172a', fontWeight: '900', fontSize: 13 },
+  programmeTrade: { color: '#64748b', fontWeight: '700', fontSize: 11, marginTop: 2 },
+  emptyText: { color: '#64748b', fontWeight: '700' },
   label: { color: '#475569', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
   input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', backgroundColor: '#ffffff' },
   notes: { minHeight: 76, textAlignVertical: 'top' },
