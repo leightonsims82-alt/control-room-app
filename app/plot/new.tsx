@@ -1,68 +1,59 @@
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
 import { GuideBox } from '../../components/GuideBox';
-import { houseTypes } from '../../data/demoData';
+import { ProgrammeDatePicker } from '../../components/ProgrammeDatePicker';
+import { SectionCard } from '../../components/SectionCard';
 import { useProgrammeData } from '../../data/programmeStore';
+import { useSitePlanner } from '../../data/sitePlannerStore';
 import { useSiteSettings } from '../../data/siteSettingsStore';
-import { BuildType, BedroomSize } from '../../types/models';
+import { getHouseTypeTemplates, getHouseTypeLabel } from '../../utils/templateProgramme';
 
-const phases = ['PH1', 'PH2', 'PH3', 'PH4'];
-const bedrooms: BedroomSize[] = ['2 Bed', '3 Bed', '4 Bed', '5 Bed', '6 Bed'];
-const buildTypes: BuildType[] = ['Traditional', 'Timber Frame', 'Steel Frame'];
+type BuildRoute = 'Traditional' | 'Timber Frame';
 
 export default function NewPlotScreen() {
   const { createPlot } = useProgrammeData();
+  const { plotTemplates, siteSetup } = useSitePlanner();
   const { settings } = useSiteSettings();
+  const houseTypes = useMemo(() => getHouseTypeTemplates(plotTemplates), [plotTemplates]);
+
   const [plotName, setPlotName] = useState('');
   const [phase, setPhase] = useState('PH1');
-  const [bedroomSize, setBedroomSize] = useState<BedroomSize>('3 Bed');
-  const [buildType, setBuildType] = useState<BuildType>('Traditional');
+  const [houseTypeId, setHouseTypeId] = useState(houseTypes[0]?.id ?? '');
+  const [buildRoute, setBuildRoute] = useState<BuildRoute>('Traditional');
   const [mode, setMode] = useState<'forward' | 'reverse'>('forward');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const matchingHouseType = useMemo(() => {
-    return houseTypes.find((type) => type.bedroomSize === bedroomSize && type.buildType === buildType) ?? houseTypes[0];
-  }, [bedroomSize, buildType]);
-
-  const plotReference = plotName.trim() ? `${phase}-${plotName.trim().padStart(2, '0')}` : phase;
+  const selectedHouseType = houseTypes.find((item) => item.id === houseTypeId) ?? houseTypes[0];
 
   async function handleGenerate() {
     setError('');
-    if (!plotName.trim()) {
-      setError('Plot name is required.');
-      return;
-    }
-    if (mode === 'forward' && !startDate) {
-      setError('Start date is required for forward mode.');
-      return;
-    }
-    if (mode === 'reverse' && !endDate) {
-      setError('Completion date is required for reverse mode.');
-      return;
-    }
+    if (!plotName.trim()) return setError('Plot number is required.');
+    if (!selectedHouseType) return setError('Create a house type in Site Setup first.');
+    if (mode === 'forward' && !startDate) return setError('Start date is required.');
+    if (mode === 'reverse' && !endDate) return setError('Completion date is required.');
 
     setSaving(true);
     try {
       const plot = await createPlot({
         plotName: plotName.trim(),
         phase,
-        houseTypeId: matchingHouseType.id,
-        bedroomSize,
+        houseTypeId: selectedHouseType.id,
         startDate,
         endDate,
         mode,
         jurisdiction: settings.jurisdiction,
         foundationType: settings.defaultFoundationType,
+        constructionMethod: buildRoute === 'Timber Frame' ? 'timberFrame' : 'traditional',
       });
       router.replace(`/plot/${plot.id}`);
     } catch (err) {
       console.warn(err);
-      setError('Unable to create plot programme. Please try again.');
+      setError(err instanceof Error ? err.message : 'Unable to create plot programme.');
     } finally {
       setSaving(false);
     }
@@ -71,128 +62,113 @@ export default function NewPlotScreen() {
   return (
     <AppScreen>
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>Plot Setup</Text>
+        <Text style={styles.eyebrow}>Programme V2</Text>
         <Text style={styles.title}>New Plot Programme</Text>
-        <Text style={styles.subtitle}>Create a programme from site defaults, build type and schedule dates</Text>
+        <Text style={styles.subtitle}>Create the plot from the same house-type programme used by Master, 2 Week, Trades and QA.</Text>
       </View>
 
       <GuideBox
-        title="How to Create a Plot"
+        title="Single programme source"
         items={[
-          'Assign plots to a phase such as PH1 or PH2.',
-          'Choose bedroom size and build type for the programme and checklists.',
-          'Regulation route and foundation type are inherited from Site Setup.',
-          'Generate from a start date or work backwards from completion.',
+          'Choose a development house type created in Site Setup.',
+          'Choose a start date or a completion date; the opposite date is calculated from that house type.',
+          'The same live activity dates then drive Master, 2 Week, trade lookaheads and inspections.',
         ]}
       />
 
-      <View style={styles.siteRouteBox}>
-        <View style={styles.routeTextWrap}>
-          <Text style={styles.routeTitle}>Inherited from Site Setup</Text>
-          <Text style={styles.routeText}>{settings.siteName} · {settings.jurisdiction} Building Regulations · {settings.defaultFoundationType}</Text>
-        </View>
-        <Link href="/site/setup" style={styles.routeLink}>Edit site setup</Link>
-      </View>
-
-      <View style={styles.card}>
+      <SectionCard title="Plot details" subtitle={`${siteSetup.siteName} · ${siteSetup.workingWeek}`}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Field label="Plot Name / Number">
-          <TextInput value={plotName} onChangeText={setPlotName} placeholder="e.g. 01 or 14" style={styles.input} />
+        <Field label="Plot number">
+          <TextInput value={plotName} onChangeText={setPlotName} placeholder="e.g. 153" style={styles.input} />
         </Field>
 
         <Field label="Phase">
-          <OptionRow values={phases} value={phase} onChange={setPhase} />
-          <Text style={styles.reference}>Reference: {plotReference}</Text>
+          <TextInput value={phase} onChangeText={setPhase} placeholder="PH1" style={styles.input} />
         </Field>
 
-        <Field label="Number of Bedrooms">
-          <OptionRow values={bedrooms} value={bedroomSize} onChange={(value) => setBedroomSize(value)} />
+        <Field label="House type">
+          <View style={styles.chips}>
+            {houseTypes.map((houseType) => (
+              <Pressable
+                key={houseType.id}
+                onPress={() => setHouseTypeId(houseType.id)}
+                style={[styles.chip, selectedHouseType?.id === houseType.id ? styles.chipActive : null]}
+              >
+                <Text style={[styles.chipText, selectedHouseType?.id === houseType.id ? styles.chipTextActive : null]}>
+                  {getHouseTypeLabel(houseType)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </Field>
 
-        <Field label="Build Type">
-          <OptionRow values={buildTypes} value={buildType} onChange={(value) => setBuildType(value)} />
-          <Text style={styles.helpText}>This controls whether traditional, timber frame or steel frame checklists are used.</Text>
+        <Field label="Build route">
+          <View style={styles.chips}>
+            {(['Traditional', 'Timber Frame'] as BuildRoute[]).map((route) => (
+              <Pressable key={route} onPress={() => setBuildRoute(route)} style={[styles.chip, buildRoute === route ? styles.chipActive : null]}>
+                <Text style={[styles.chipText, buildRoute === route ? styles.chipTextActive : null]}>{route}</Text>
+              </Pressable>
+            ))}
+          </View>
         </Field>
 
-        <Field label="Schedule From">
-          <OptionRow values={['forward', 'reverse'] as const} value={mode} onChange={(value) => setMode(value)} labels={{ forward: 'Start Date', reverse: 'Completion Date' }} />
-          <Text style={styles.helpText}>{mode === 'forward' ? 'Set a start date, the programme will run forward.' : 'Set a completion date, the programme will work backwards.'}</Text>
+        <Field label="Generate programme from">
+          <View style={styles.chips}>
+            <Pressable onPress={() => setMode('forward')} style={[styles.chip, mode === 'forward' ? styles.chipActive : null]}>
+              <Text style={[styles.chipText, mode === 'forward' ? styles.chipTextActive : null]}>Start date</Text>
+            </Pressable>
+            <Pressable onPress={() => setMode('reverse')} style={[styles.chip, mode === 'reverse' ? styles.chipActive : null]}>
+              <Text style={[styles.chipText, mode === 'reverse' ? styles.chipTextActive : null]}>Completion date</Text>
+            </Pressable>
+          </View>
         </Field>
 
         {mode === 'forward' ? (
-          <Field label="Start Date">
-            <TextInput value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" style={styles.input} />
+          <Field label="Plot start date">
+            <ProgrammeDatePicker value={startDate} onChange={setStartDate} minimumDate={siteSetup.programmeStartDate} />
           </Field>
         ) : (
-          <Field label="Completion Date">
-            <TextInput value={endDate} onChangeText={setEndDate} placeholder="YYYY-MM-DD" style={styles.input} />
+          <Field label="Plot completion date">
+            <ProgrammeDatePicker value={endDate} onChange={setEndDate} minimumDate={siteSetup.programmeStartDate} />
           </Field>
         )}
 
         <View style={styles.actions}>
-          <Pressable style={[styles.primaryButton, saving ? styles.disabledButton : null]} onPress={handleGenerate} disabled={saving}>
-            <Text style={styles.primaryButtonText}>{saving ? 'Generating...' : 'Generate Programme'}</Text>
+          <Pressable style={[styles.primaryButton, saving ? styles.disabled : null]} disabled={saving} onPress={handleGenerate}>
+            <Text style={styles.primaryText}>{saving ? 'Generating…' : 'Generate Programme'}</Text>
           </Pressable>
           <Pressable style={styles.secondaryButton} onPress={() => router.back()}>
-            <Text style={styles.secondaryButtonText}>Cancel</Text>
+            <Text style={styles.secondaryText}>Cancel</Text>
           </Pressable>
         </View>
-      </View>
+      </SectionCard>
     </AppScreen>
   );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      {children}
-    </View>
-  );
-}
-
-function OptionRow<T extends string>({ values, value, onChange, labels }: { values: readonly T[]; value: T; onChange: (value: T) => void; labels?: Partial<Record<T, string>> }) {
-  return (
-    <View style={styles.optionRow}>
-      {values.map((item) => {
-        const active = item === value;
-        return (
-          <Pressable key={item} onPress={() => onChange(item)} style={[styles.option, active ? styles.optionActive : null]}>
-            <Text style={[styles.optionText, active ? styles.optionTextActive : null]}>{labels?.[item] ?? item}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
+  return <View style={styles.field}><Text style={styles.label}>{label}</Text>{children}</View>;
 }
 
 const styles = StyleSheet.create({
-  header: { gap: 4 },
+  header: { gap: 5 },
   eyebrow: { color: '#2563eb', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
   title: { color: '#0f172a', fontSize: 30, fontWeight: '900' },
-  subtitle: { color: '#64748b', fontSize: 14 },
-  siteRouteBox: { backgroundColor: '#eff6ff', borderRadius: 16, borderWidth: 1, borderColor: '#bfdbfe', padding: 14, gap: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' },
-  routeTextWrap: { flex: 1, minWidth: 220 },
-  routeTitle: { color: '#1d4ed8', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
-  routeText: { color: '#0f172a', fontWeight: '800', marginTop: 3 },
-  routeLink: { color: '#2563eb', fontWeight: '900' },
-  card: { backgroundColor: '#ffffff', borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', padding: 18, gap: 16 },
-  field: { gap: 8 },
-  label: { color: '#475569', fontSize: 13, fontWeight: '900' },
-  input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', backgroundColor: '#ffffff' },
-  optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  option: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: '#ffffff' },
-  optionActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
-  optionText: { color: '#475569', fontSize: 13, fontWeight: '800' },
-  optionTextActive: { color: '#ffffff' },
-  reference: { color: '#2563eb', fontSize: 12, fontWeight: '800' },
-  helpText: { color: '#94a3b8', fontSize: 12 },
-  error: { color: '#dc2626', fontSize: 13, fontWeight: '800' },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingTop: 4 },
+  subtitle: { color: '#64748b', fontSize: 14, lineHeight: 21 },
+  field: { gap: 7, marginBottom: 15 },
+  label: { color: '#334155', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, color: '#0f172a', backgroundColor: '#fff' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: '#fff' },
+  chipActive: { backgroundColor: '#173b5f', borderColor: '#173b5f' },
+  chipText: { color: '#64748b', fontSize: 12, fontWeight: '900' },
+  chipTextActive: { color: '#fff' },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 5 },
   primaryButton: { backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
-  primaryButtonText: { color: '#ffffff', fontWeight: '900' },
-  secondaryButton: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
-  secondaryButtonText: { color: '#475569', fontWeight: '900' },
-  disabledButton: { opacity: 0.6 },
+  primaryText: { color: '#fff', fontWeight: '900' },
+  secondaryButton: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
+  secondaryText: { color: '#334155', fontWeight: '900' },
+  disabled: { opacity: 0.55 },
+  error: { color: '#b91c1c', fontWeight: '800', marginBottom: 12 },
 });
