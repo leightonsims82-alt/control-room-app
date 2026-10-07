@@ -328,29 +328,73 @@ function reindexActivities(activities: TemplateActivity[]) {
  * 8 Patch/decorating/wall tile
  * 9 Finals/close-out
  */
+function canonicalStageForActivity(activity: TemplateActivity): ProgrammeStageNumber {
+  const text = `${activity.code} ${activity.displayText} ${activity.trade}`.trim().toLowerCase();
+
+  const rules: Array<[ProgrammeStageNumber, RegExp[]]> = [
+    [1, [
+      /\bfoundations?\b/, /\bsubstructure\b/, /\bdrainage\b/, /\bqa\s+drainage\b/, /\bnhbc\s+drainage\b/,
+    ]],
+    [2, [
+      /\bband\s+course\b/, /\bslab(?:\s+pour)?\b/, /\bqa\s+slab\b/,
+    ]],
+    [3, [
+      /\b1st\s+(?:lift\s+)?brickwork\b/, /\bbase\s+lift\s+scaffold\b/,
+      /\b2nd\s+lift\s+brickwork\b/, /\b2nd\s+lift\s+scaffold\b/,
+      /\bjoist(?:s)?\b.*\bfloor(?:ing)?\b/, /\b3rd\s+lift\s+brickwork\b/,
+      /\b3rd(?:\s+&\s+bird)?\s+scaffold\b/, /\b4th\s+lift\s+brickwork\b/,
+      /\b4th\s+lift\s+scaffold\b/, /\b5th\s+lift\s+brickwork\b/,
+      /\b5th\s+lift\s+scaffold\b/, /\bwall\s+plate\b/,
+    ]],
+    [4, [
+      /\btruss\b/, /\bgables?\b/, /\bqa\s+ss\b/, /\bnhbc\s+ss\b/,
+      /\bfelt\s+(?:and|&)\s+batten\b/, /\bsolar\s+pv\b/, /\broof\s+tile\b/,
+    ]],
+    [5, [
+      /\bstrip\s+scaffold\b/,
+    ]],
+    [6, [
+      /\b1st\s+fix\s+carp(?:entry)?\b/, /\bwindows?\b/, /\b1st\s+fix\s+plumb(?:ing)?\b/,
+      /\b1st\s+fix\s+electrics?\b/, /\bcavity\s+blown\s+insulation\b/,
+      /\bqa\s+pp\b/, /\bnhbc\s+pp\b/, /\bplasterboard\s+tacking\b/,
+      /\bplasterboard\s+dabbing\b/, /\bplasterboard\s+taping\b/,
+      /\bgroundwork\s+externals\b/, /\bdrying\b/, /\bplasterboard\s+sand\b/,
+      /\bmist\s+coat\b/, /\bloft\s+insulation\b/,
+    ]],
+    [7, [
+      /\b2nd\s+fix\s+carp(?:entry)?\b/, /\b2nd\s+fix\s+plumb(?:ing)?\b/,
+      /\b2nd\s+fix\s+electrics?\b/, /\bkitchen\s+(?:installation|install|fit)\b/,
+    ]],
+    [8, [
+      /^patch\b/, /\bpre\s*paint\s+clean\b/, /^decoration\b/, /\bwall\s+tile\b/,
+    ]],
+    [9, [
+      /\bplumbing\s+finals?\b/, /\bcarpentry\s+finals?\b/, /\belectrical\s+finals?\b/,
+      /\bappliances?\b/, /\bsnag\s+patch\b/, /\bdec(?:oration)?\s+finals?\b/,
+      /\bbuild\s+clean\b/, /\bmastic\b/, /\bsealant\b/, /\bflooring\b/,
+      /\bdoors\s+over\s+carpets\b/, /\btouch\s*ups?\s+after\s+carpets\b/,
+      /\breclean\b/, /\bqa\s+pre\s+handover\b/, /\bhome\s+tour\b/, /\bpre\s*handover\b/,
+    ]],
+  ];
+
+  for (const [stage, patterns] of rules) {
+    if (patterns.some((pattern) => pattern.test(text))) return stage;
+  }
+  return activity.stage;
+}
+
+/**
+ * Canonical activity-to-stage truth for every house type.
+ * Stage is determined by the discipline/task itself, not by where it happens
+ * to sit in a particular house-type programme.
+ */
 export function applyStandardHouseTypeStages(template: PlotTemplate): PlotTemplate {
   if (template.id === 'timberFrame' || template.constructionMethod === 'timberFrame') return template;
-
-  let stage: ProgrammeStageNumber = 1;
-  const activities = template.activities
-    .slice()
-    .sort((a, b) => a.order - b.order)
-    .map((activity) => {
-      const code = activity.code.trim().toLowerCase();
-
-      if (/\bband course\b/.test(code) || /\bslab(?: pour)?\b/.test(code)) stage = 2;
-      if (/\b1st\s+(?:lift\s+)?brickwork\b/.test(code)) stage = 3;
-      if (/\btruss\b/.test(code)) stage = 4;
-      if (/\bstrip\s+scaffold\b/.test(code)) stage = 5;
-      if (/\b1st\s+fix\b/.test(code) || /\bwindows?\b/.test(code)) stage = 6;
-      if (/\b2nd\s+fix\b/.test(code) || /\bkitchen\s+(?:installation|install|fit)\b/.test(code)) stage = 7;
-      if (/\bpatch\b/.test(code) || /\bpre\s*paint\s+clean\b/.test(code) || /\bdecoration\b/.test(code) || /\bwall\s+tile\b/.test(code)) stage = 8;
-      if (/\bfinals?\b/.test(code) || /\bappliances?\b/.test(code) || /\bsnag\s+patch\b/.test(code) || /\bbuild\s+clean\b/.test(code) || /\bmastic\b/.test(code) || /\bhome\s+tour\b/.test(code) || /\bpre\s*handover\b/.test(code)) stage = 9;
-
-      return { ...activity, stage };
-    });
-
-  return { ...template, stageCount: 9, standardVersion: Math.max(2, template.standardVersion ?? 0), activities };
+  const activities = template.activities.map((activity) => ({
+    ...activity,
+    stage: canonicalStageForActivity(activity),
+  }));
+  return { ...template, stageCount: 9, standardVersion: Math.max(3, template.standardVersion ?? 0), activities };
 }
 
 function ordinal(value: number) {
