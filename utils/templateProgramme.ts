@@ -1,4 +1,4 @@
-import { getProgrammeWeekForDate } from './programmeDates';
+import { getProgrammeWeekForDate, getProgrammeWorkingDayIndexForDate } from './programmeDates';
 import { ActivityDelay, BUILD_SEQUENCE, getStageNumberForRelativeWeek, ProgrammeActivity, ProgrammeStageNumber, PROGRAMME_STAGE_SEQUENCE, SitePlot, TRADE_ORDER } from './siteProgrammeEngine';
 
 export type TemplateSitePlot = SitePlot & {
@@ -454,6 +454,26 @@ export function getEffectiveProgrammeWeeks(template: PlotTemplate, setup?: Parti
   return Math.max(template.programmeWeeks, Math.ceil(lastFinish / workingDays));
 }
 
+export function getTemplateProgrammeWorkingDays(template: PlotTemplate) {
+  const ranges = getTemplateActivityRanges(template);
+  return ranges.length ? Math.max(...ranges.map((range) => range.finish)) : Math.max(1, template.programmeWeeks * DEFAULT_WORKING_DAYS_IN_WEEK);
+}
+
+function getPlotActivityBaseOffset(plot: TemplateSitePlot, template: PlotTemplate, setup?: Partial<SiteProgrammeSetup>) {
+  const exactCompletionIndex = plot.plotCompletionDate && setup?.programmeStartDate
+    ? getProgrammeWorkingDayIndexForDate(setup.programmeStartDate, plot.plotCompletionDate, Boolean(setup.includeSaturday), Boolean(setup.includeSunday))
+    : null;
+  if (exactCompletionIndex) return exactCompletionIndex - getTemplateProgrammeWorkingDays(template);
+
+  const exactStartIndex = plot.plotStartDate && setup?.programmeStartDate
+    ? getProgrammeWorkingDayIndexForDate(setup.programmeStartDate, plot.plotStartDate, Boolean(setup.includeSaturday), Boolean(setup.includeSunday))
+    : null;
+  if (exactStartIndex) return exactStartIndex - 1;
+
+  const linearStage1Week = getLinearStage1StartWeekForPlot(plot, [template], setup);
+  return firstProgrammeDayIndexForWeek(linearStage1Week, setup) - 1;
+}
+
 export function getPlotCompletionProgrammeWeek(plot: TemplateSitePlot, setup?: Partial<SiteProgrammeSetup>) {
   const exactWeek = plot.plotCompletionDate && setup?.programmeStartDate
     ? getProgrammeWeekForDate(setup.programmeStartDate, plot.plotCompletionDate)
@@ -516,11 +536,10 @@ function movementOffsetUpTo(plotId: string, activityOrder: number, moves: Activi
 }
 
 export function getActivityProgrammeRange(plot: TemplateSitePlot, template: PlotTemplate, activity: TemplateActivity, delays: ActivityDelay[], moves: ActivityMove[] = [], setup?: Partial<SiteProgrammeSetup>) {
-  const linearStage1Week = getLinearStage1StartWeekForPlot(plot, [template], setup);
   const scheduled = getTemplateActivityRanges(template).find((item) => item.activity.code === activity.code);
   const relativeStart = scheduled?.start ?? 1;
   const relativeFinish = scheduled?.finish ?? relativeStart;
-  const baseOffset = firstProgrammeDayIndexForWeek(linearStage1Week, setup) - 1;
+  const baseOffset = getPlotActivityBaseOffset(plot, template, setup);
   const moveOffset = movementOffsetUpTo(plot.id, activity.order, moves, template.activities);
   return {
     start: baseOffset + relativeStart + delayBefore(plot.id, activity.order, delays, template.activities) + moveOffset,
