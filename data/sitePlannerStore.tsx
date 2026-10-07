@@ -32,6 +32,28 @@ const PROGRAMME_V2_BACKUP_KEY = 'programme-buddy:v2-legacy-snapshot:2026-10-07';
 const SITE_PROGRAMME_SETUP_KEY = 'programme-buddy:programme-setup:v1';
 const PROGRAMME_NOTES_KEY = 'programme-buddy:programme-notes:v1';
 
+const PROGRAMME_V2_FULL_BACKUP_KEYS = [
+  SITE_PLOTS_KEY,
+  SITE_DELAYS_KEY,
+  ACTIVITY_MOVES_KEY,
+  TRADE_CONTACTS_KEY,
+  ISSUE_SETTINGS_KEY,
+  ISSUE_LOGS_KEY,
+  PLOT_TEMPLATES_KEY,
+  SITE_PROGRAMME_SETUP_KEY,
+  PROGRAMME_NOTES_KEY,
+  'siteprog:plot-programmes:v1',
+  'siteprog:plot-stages:v1',
+  'siteprog:inspections:v1',
+  'siteprog:defects:v1',
+  'siteprog:dabs-briefings:v1',
+  'siteprog:8am-walk:v1',
+  'siteprog:8am-walk-notes:v1',
+  'siteprog:dabs-standalone-meetings:v1',
+  'siteprog:handover-readiness:v1',
+  'siteprog:feedback:v1',
+] as const;
+
 export type TradeContact = {
   id: string;
   trade: string;
@@ -360,8 +382,13 @@ export function SitePlannerProvider({ children }: PropsWithChildren) {
           const v2Templates = isV2Migrated ? mergeMissingSystemTemplates(storedTemplates) : migrateTemplatesToV2(storedTemplates);
 
           if (!isV2Migrated) {
+            const rawLegacyStorage = Object.fromEntries(
+              (await AsyncStorage.multiGet([...PROGRAMME_V2_FULL_BACKUP_KEYS]))
+                .filter((entry): entry is [string, string] => entry[1] !== null),
+            );
             const legacySnapshot = {
               createdAt: new Date().toISOString(),
+              rawStorage: rawLegacyStorage,
               plots: storedPlots,
               delays: storedDelays,
               moves: storedMoves,
