@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
@@ -281,6 +282,9 @@ export default function TradesScreen() {
               <Pressable style={styles.primary} onPress={openLive}><Text style={styles.primaryText}>Open Live View</Text></Pressable>
               <Pressable style={styles.secondary} onPress={copyLive}><Text style={styles.secondaryText}>Copy Live Link</Text></Pressable>
               <Pressable style={styles.secondary} onPress={generatePdf}><Text style={styles.secondaryText}>Generate PDF Record</Text></Pressable>
+              <Link href={`/trade-record?trade=${encodeURIComponent(selectedTrade)}`} asChild>
+                <Pressable style={styles.secondary}><Text style={styles.secondaryText}>Open Trade Record</Text></Pressable>
+              </Link>
             </View>
           </View>
         </SectionCard>
