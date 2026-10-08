@@ -264,54 +264,7 @@ function makeTimberFrameTemplate(): PlotTemplate {
   };
 }
 
-const siteStandardTemplate: PlotTemplate = {
-  ...makeTemplate('threeBed', 'Site Standard Programme', 'Locked baseline programme used when creating house types', 25),
-  bedrooms: 3,
-  floors: 2,
-  isHouseType: false,
-  isSystemTemplate: true,
-  standardVersion: 2,
-};
-
-const fourBedroomStandardTemplate = applyStandardHouseTypeStages(makeFourBedroomStandardTemplate());
-
-const timberFrameSystemTemplate: PlotTemplate = {
-  ...makeTimberFrameTemplate(),
-  isHouseType: false,
-  isSystemTemplate: true,
-};
-
-export const DEFAULT_PLOT_TEMPLATES: PlotTemplate[] = [
-  applyStandardHouseTypeStages(siteStandardTemplate),
-  fourBedroomStandardTemplate,
-  timberFrameSystemTemplate,
-];
-
-export function getStandardTemplateIdForBedrooms(bedrooms: number) {
-  return Math.round(Number(bedrooms)) === 4 ? 'fourBedStandard' : 'threeBed';
-}
-
-export const DEFAULT_TEMPLATE_PLOTS: TemplateSitePlot[] = [];
-
-export function isProgrammeStageNumber(value: unknown): value is ProgrammeStageNumber {
-  return PROGRAMME_STAGE_SEQUENCE.some((item) => item.stage === Number(value));
-}
-export function getPlotHoldLabel(plot: TemplateSitePlot) { return plot.holdStage ? `Stage ${plot.holdStage}` : 'Not held'; }
-export function getPlotHoldDetail(plot: TemplateSitePlot) { return plot.holdStage ? `Held at Stage ${plot.holdStage}${plot.holdReason?.trim() ? `: ${plot.holdReason.trim()}` : ''}` : 'Plot is not currently held.'; }
-export function getPlotBuildOrder(plot: TemplateSitePlot, fallbackIndex = 0) { return Number.isFinite(plot.buildOrder) && Number(plot.buildOrder) > 0 ? Number(plot.buildOrder) : fallbackIndex + 1; }
-export function getSortedSitePlots(plots: TemplateSitePlot[]) { return plots.slice().sort((a, b) => getPlotBuildOrder(a, 9999) - getPlotBuildOrder(b, 9999) || a.plotNo.localeCompare(b.plotNo, undefined, { numeric: true })); }
-export function getHouseTypeLabel(template: PlotTemplate) { return template.name.trim() || template.houseTypeCode?.trim() || 'House type'; }
-
-const LEGACY_THREE_STOREY_AUTO_CODES = new Set([
-  '2nd floor joists and flooring',
-  '5th lift brickwork',
-  '5th lift scaffold',
-]);
-
-function reindexActivities(activities: TemplateActivity[]) {
-  return activities.map((activity, index) => ({ ...activity, order: index + 1 }));
-}
-
+// Initialise the stage lookup before constructing templates that use it.
 /**
  * One stage-number standard for every traditional house type.
  * This changes stage ownership only; task names, durations and three-storey
@@ -405,6 +358,56 @@ const HOUSE_TYPE_STAGE_TRUTH: Record<string, ProgrammeStageNumber> = {
   'build clean': 9,
   'mastic': 9,
 };
+
+const siteStandardTemplate: PlotTemplate = {
+  ...makeTemplate('threeBed', 'Site Standard Programme', 'Locked baseline programme used when creating house types', 25),
+  bedrooms: 3,
+  floors: 2,
+  isHouseType: false,
+  isSystemTemplate: true,
+  standardVersion: 2,
+};
+
+const fourBedroomStandardTemplate = applyStandardHouseTypeStages(makeFourBedroomStandardTemplate());
+
+const timberFrameSystemTemplate: PlotTemplate = {
+  ...makeTimberFrameTemplate(),
+  isHouseType: false,
+  isSystemTemplate: true,
+};
+
+export const DEFAULT_PLOT_TEMPLATES: PlotTemplate[] = [
+  applyStandardHouseTypeStages(siteStandardTemplate),
+  fourBedroomStandardTemplate,
+  timberFrameSystemTemplate,
+];
+
+export function getStandardTemplateIdForBedrooms(bedrooms: number) {
+  return Math.round(Number(bedrooms)) === 4 ? 'fourBedStandard' : 'threeBed';
+}
+
+export const DEFAULT_TEMPLATE_PLOTS: TemplateSitePlot[] = [];
+
+export function isProgrammeStageNumber(value: unknown): value is ProgrammeStageNumber {
+  return PROGRAMME_STAGE_SEQUENCE.some((item) => item.stage === Number(value));
+}
+export function getPlotHoldLabel(plot: TemplateSitePlot) { return plot.holdStage ? `Stage ${plot.holdStage}` : 'Not held'; }
+export function getPlotHoldDetail(plot: TemplateSitePlot) { return plot.holdStage ? `Held at Stage ${plot.holdStage}${plot.holdReason?.trim() ? `: ${plot.holdReason.trim()}` : ''}` : 'Plot is not currently held.'; }
+export function getPlotBuildOrder(plot: TemplateSitePlot, fallbackIndex = 0) { return Number.isFinite(plot.buildOrder) && Number(plot.buildOrder) > 0 ? Number(plot.buildOrder) : fallbackIndex + 1; }
+export function getSortedSitePlots(plots: TemplateSitePlot[]) { return plots.slice().sort((a, b) => getPlotBuildOrder(a, 9999) - getPlotBuildOrder(b, 9999) || a.plotNo.localeCompare(b.plotNo, undefined, { numeric: true })); }
+export function getHouseTypeLabel(template: PlotTemplate) { return template.name.trim() || template.houseTypeCode?.trim() || 'House type'; }
+
+const LEGACY_THREE_STOREY_AUTO_CODES = new Set([
+  '2nd floor joists and flooring',
+  '5th lift brickwork',
+  '5th lift scaffold',
+]);
+
+function reindexActivities(activities: TemplateActivity[]) {
+  return activities.map((activity, index) => ({ ...activity, order: index + 1 }));
+}
+
+
 
 function normaliseActivityTruthKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
